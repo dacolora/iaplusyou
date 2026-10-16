@@ -953,11 +953,89 @@ def test_una_campana_sin_tope_que_sigue_bajo_el_minimo_sigue_sin_tope(dos):
 def test_un_tope_que_meta_guarda_distinto_pausa_la_campana_y_no_cambia_el_diario(dos):
     ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
     eid, c_no, c_se = _holgado(dos)
-    meta.tope_distinto = True
-    with pytest.raises(lz.PresupuestoNoCoincide):
+    meta.tope_distinto = {c_se}           # Noruega baja bien; Suecia, la que sube, queda distinta
+    with pytest.raises(lz.PresupuestoNoCoincide, match="quedó en pausa"):
         lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
-    assert ("estado", {"oid": c_no, "status": "PAUSED"}) in meta.llamadas
+    assert ("estado", {"oid": c_se, "status": "PAUSED"}) in meta.llamadas
     assert _diarios_mandados(meta) == [] and _por_pais(ex, eid)["SE"]["presupuesto_dia"] == 100.0
+    # la campaña quedó en pausa en Meta: su país también aquí, y la bitácora dice el tope que sí cambió
+    assert _por_pais(ex, eid)["SE"]["estado"] == "pausado" and _por_pais(ex, eid)["NO"]["estado"] == "activo"
+    eventos = [e["mensaje"] for e in ex.eventos("acme", eid) if e["tipo"] == "presupuesto"]
+    assert any("tope distinto" in m for m in eventos)
+    assert any("HappyFlops Norway" in m and "2.520" in m for m in eventos)
+    assert "repartiendo" not in (ex.obtener("acme", eid)["extra"] or {})
+
+
+def test_un_tope_distinto_que_tampoco_se_puede_pausar_lo_dice(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    meta.tope_distinto = {c_se}
+    original = meta._id
+
+    def no_pausa(tipo, **kw):
+        if tipo == "estado" and kw.get("oid") == c_se:
+            raise RuntimeError("Meta no contestó")
+        return original(tipo, **kw)
+    meta._id = no_pausa
+    _parchar(lz, meta, dos["monkeypatch"])
+    with pytest.raises(lz.PresupuestoNoCoincide, match="NO se pudo pausar"):
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    assert _por_pais(ex, eid)["SE"]["estado"] == "activo"     # sigue «activo»: la vigilancia lo sigue mirando
+
+
+def test_el_margen_de_un_dia_cuenta_como_gastado(dos):
+    """Lo gastado viene de los insights, con retraso: se le suma un día del diario de la campaña. Noruega reporta
+    2 300 y su parte nueva sería 2 520: sin margen cabría, con los 300 del día no."""
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    meta.gastos[c_no] = (2300.0, 0.0)
+    with pytest.raises(ValueError, match="no alcanza"):
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    assert _topes_mandados(meta) == []
+
+
+def test_primero_bajan_despues_estrenan_y_al_final_suben(dos):
+    """Noruega lanzó sin tope (su mínimo es 3 200) y Suecia con 1 050: al subir Noruega a 400, Suecia baja a 840 ANTES
+    de que Noruega estrene su tope de 3 360; si el segundo envío fallara, la suma no pasaría el total."""
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    meta.cuentas[DEF] = {**meta.cuenta, "min_campaign_group_spend_cap": "320000"}
+    eid, c_no, c_se = _holgado(dos)
+    assert meta.topes[c_no] is None and meta.topes[c_se] == 105000
+    lz.cambiar_presupuesto_pais("acme", eid, "NO", 400.0)
+    assert _topes_mandados(meta) == [(c_se, 84000), (c_no, 336000)]
+
+
+def test_dos_cambios_a_la_vez_no_reparten_el_tope_dos_veces(dos):
+    """Un reparto a la vez por experimento, también entre la web y el worker: con otro cambio en curso, subir se niega
+    y bajar sigue sin tocar los topes. Una marca vieja no frena a nadie y la marca se suelta al terminar."""
+    import db
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    ex.actualizar_extra("acme", eid, lambda extra: {**extra, "repartiendo": {"en": db.ahora(), "token": "otro"}})
+    with pytest.raises(ValueError, match="en curso"):
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    lz.cambiar_presupuesto_pais("acme", eid, "NO", 250.0)
+    assert _topes_mandados(meta) == [] and _diarios_mandados(meta) == [25000]
+    assert any("en curso" in e["mensaje"] for e in ex.eventos("acme", eid))
+    assert ex.obtener("acme", eid)["extra"]["repartiendo"]["token"] == "otro"     # la ajena no se toca
+    ex.actualizar_extra("acme", eid, lambda extra: {**extra, "repartiendo": {"en": "2026-01-01T00:00:00", "token": "x"}})
+    lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    assert _topes_mandados(meta)
+    assert "repartiendo" not in ex.obtener("acme", eid)["extra"]
+
+
+def test_bajar_un_diario_no_se_frena_si_otra_cuenta_salio_del_proyecto(dos):
+    """Bajar nunca se frena por el reparto: Suecia salió del proyecto, Noruega baja igual y los topes quedan."""
+    from meta_rendimiento import cuentas
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    cuentas.elegir("acme", [])
+    lz.cambiar_presupuesto_pais("acme", eid, "NO", 250.0)
+    assert _topes_mandados(meta) == [] and _diarios_mandados(meta) == [25000]
+    assert _por_pais(ex, eid)["NO"]["presupuesto_dia"] == 250.0
+    assert any("se dejó como estaba" in e["mensaje"] for e in ex.eventos("acme", eid))
+    with pytest.raises(ValueError):
+        lz.cambiar_presupuesto_pais("acme", eid, "NO", 260.0)     # subir sí se frena
 
 
 def test_el_reparto_no_manda_un_tope_a_una_cuenta_que_cambio_de_moneda(dos):

@@ -37,7 +37,7 @@ class MetaFalsa:
         self.campana_de_conjunto = {}
         self.pixeles = {}        # act_… -> ids de Pixel que esa cuenta puede usar (act_…/adspixels)
         self.apps = {}           # act_… -> ids de app que esa cuenta puede anunciar (act_…/advertisable_applications)
-        self.tope_distinto = False   # Meta guarda otro spend_cap del que se le manda (lectura de vuelta)
+        self.tope_distinto = False   # Meta guarda otro spend_cap (True: en todas; un set: en esas campañas)
 
     def _configurar(self, token, ad_account_id, page_id=None):
         a = str(ad_account_id)
@@ -77,7 +77,8 @@ class MetaFalsa:
         if metodo != "GET":
             self.posts.append((edge, dict(payload or {})))
             if "spend_cap" in (payload or {}):
-                self.topes[edge] = int(payload["spend_cap"]) + (1 if self.tope_distinto else 0)
+                distinto = self.tope_distinto is True or (isinstance(self.tope_distinto, set) and edge in self.tope_distinto)
+                self.topes[edge] = int(payload["spend_cap"]) + (1 if distinto else 0)
             return {"success": True}
         if edge.startswith("act_") and edge.endswith("/adspixels"):
             return {"data": [{"id": i} for i in self.pixeles.get(edge.split("/")[0], [])]}

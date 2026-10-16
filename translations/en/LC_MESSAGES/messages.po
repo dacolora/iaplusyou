@@ -6630,6 +6630,10 @@ msgid "El diagnóstico no se pudo hacer: %(error)s"
 msgstr "The diagnosis couldn't be made: %(error)s"
 
 #, python-format
+msgid "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: %(motivo)s."
+msgstr "The daily budget for %(pais)s went down, but the split of the cap among the accounts was left as it was: %(motivo)s."
+
+#, python-format
 msgid "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: con lo que ya gastó cada una no alcanza para repartirlo otra vez."
 msgstr "The daily budget for %(pais)s went down, but the split of the cap among the accounts was left as it was: what each one has already spent doesn't allow splitting it again."
 
@@ -12605,6 +12609,10 @@ msgid "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(
 msgstr "Meta saved a different daily budget on the ad set than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit): it was paused."
 
 #, python-format
+msgid "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta) y NO se pudo pausar: páusala en Meta ya."
+msgstr "Meta saved a different cap on the campaign than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit) and it could NOT be paused: pause it in Meta now."
+
+#, python-format
 msgid "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta): quedó en pausa."
 msgstr "Meta saved a different spend cap on the campaign than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit): it was paused."
 
@@ -14406,8 +14414,8 @@ msgid "No se subió"
 msgstr "Not uploaded"
 
 #, python-format
-msgid "No se subió el diario de %(pais)s: con lo que ya gastó cada cuenta y el mínimo de Meta para el tope de cada campaña, el tope del experimento (%(tope)s) no alcanza para repartirlo con el diario nuevo. Baja antes el diario de otro país o deja este como está."
-msgstr "The daily budget for %(pais)s wasn't raised: given what each account has already spent and Meta's minimum for each campaign's cap, the experiment's cap (%(tope)s) isn't enough to split it with the new daily budget. Lower another country's daily budget first or leave this one as it is."
+msgid "No se subió el diario de %(pais)s: con lo que ya gastó cada cuenta (más un día de margen) y el mínimo de Meta para el tope de cada campaña, el tope del experimento (%(tope)s) no alcanza para repartirlo con el diario nuevo. Déjalo como está o súbelo menos."
+msgstr "The daily budget for %(pais)s wasn't raised: given what each account has already spent (plus one day of margin) and Meta's minimum for each campaign's cap, the experiment's cap (%(tope)s) isn't enough to split it with the new daily budget. Leave it as it is or raise it less."
 
 msgid "No son referencia del producto: asígnalas a un color para que el modelo las use."
 msgstr "They are not product references: assign them to a color so the model uses them."
@@ -14693,6 +14701,9 @@ msgstr "Other (uses the product description)"
 
 msgid "Otro cambio"
 msgstr "Other change"
+
+msgid "Otro cambio de presupuesto de este experimento está en curso: vuelve a intentarlo en unos minutos."
+msgstr "Another budget change for this experiment is in progress: try again in a few minutes."
 
 msgid "Otro estado"
 msgstr "Other status"
@@ -23089,6 +23100,9 @@ msgstr "original"
 
 msgid "otra estructura"
 msgstr "another structure"
+
+msgid "otro cambio de presupuesto estaba en curso"
+msgstr "another budget change was in progress"
 
 msgid "otro gancho"
 msgstr "another hook"

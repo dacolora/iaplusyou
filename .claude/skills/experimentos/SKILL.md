@@ -178,11 +178,17 @@ su prueba de paridad, y `gruposPorCuenta`; el resumen de Revisar sale de `lineas
 **Reparto vivo del tope** (decisión de quien orquesta, 2026-10-16): con varias campañas, `cambiar_presupuesto_pais`
 («Cambiar presupuesto» y escalar del decisor; agregar piezas no cambia ningún diario) reparte otra vez el tope con los
 diarios nuevos ANTES de tocar el diario: `_plan_reparto` exige cada cuenta, pasa su `comprobar_moneda` y lee gasto, tope
-actual y mínimo de cada campaña; `_reparto_vivo` (pura) da por campaña max(lo gastado hacia arriba, su parte
-proporcional), un tope que ya está en Meta no baja del mínimo de su cuenta, una parte bajo el mínimo de una campaña sin
-tope la deja sin tope (fecha de fin y vigilancia) y la suma nunca pasa el tope; `_aplicar_reparto` manda primero los que
-aprietan y al final los que suben, cada uno leído de vuelta (`_confirmar_tope`). Si no cabe: subir se niega en palabras
-sin tocar nada; bajar sigue y los topes quedan como estaban (evento). Una sola campaña: como antes.
+actual y mínimo de cada campaña; `_reparto_vivo` (pura) da por campaña max(lo gastado hacia arriba MÁS un día del
+diario de esa campaña —los insights llegan con retraso—, su parte proporcional), un tope que ya está en Meta no baja del
+mínimo de su cuenta, una parte bajo el mínimo de una campaña sin tope la deja sin tope (fecha de fin y vigilancia) y la
+suma nunca pasa el tope; `_aplicar_reparto` manda primero los que bajan, después los que estrenan tope y al final los que
+suben (en cada paso la suma no pasa el total), cada uno leído de vuelta (`_confirmar_tope`, que dice «NO se pudo
+pausar» si la pausa falla; si pausó, los países de esa campaña quedan «pausado» y hay evento) y anotado en la bitácora
+aunque uno de después falle. Un reparto a la vez por experimento, también entre la web y el worker: marca
+`extra.repartiendo` (5 min, `_tomar_marca_reparto`), y el plan se arma con el experimento releído ya con la marca. Si no
+cabe o hay otro cambio en curso: subir se niega en palabras sin tocar nada; bajar sigue siempre (un fallo del reparto,
+una cuenta que salió, una lectura que falla) y los topes quedan como estaban (evento con el motivo). Una sola campaña:
+como antes.
 **Pixel y app por cuenta:** antes de crear nada, si el experimento usa otra cuenta además de la de la conexión,
 `_comprobar_activos_por_cuenta` mira que el Pixel (compras) salga en `act_…/adspixels` y la app (instalaciones) en
 `act_…/advertisable_applications` de CADA cuenta; si no, no se lanza nada y el error dice la cuenta y qué compartir en

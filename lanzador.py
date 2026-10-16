@@ -340,7 +340,12 @@ def _plan_reparto(cliente, ex, creds, pais, nuevo, moneda):
         comprobar_moneda(info[act], moneda)
     paises_nuevos = [{**q, "presupuesto_dia": nuevo} if q["pais"] == pais else q for q in ex["paises"]]
     grupos = [[q for q in paises_nuevos if _campana_de_pais(ex, q) == cid] for _, cid in campanas]
-    gastado = [_unidades_arriba(_gasto_campana(cid, "maximum"), moneda) for _, cid in campanas]
+    # Lo gastado sale de los insights, que llegan con retraso: se le suma un día del diario de la campaña (con los
+    # diarios de antes del cambio) para que el tope de una campaña nunca baje hasta lo que Meta todavía no reportó
+    # mientras otra recibe ese margen (ronda de guardian-gasto, 2026-10-16).
+    gastado = [_unidades_arriba(_gasto_campana(cid, "maximum"), moneda)
+               + sum(centavos(q.get("presupuesto_dia") or 0, moneda) for q in ex["paises"] if _campana_de_pais(ex, q) == cid)
+               for _, cid in campanas]
     actuales = [_entero((meta_auth.llamar("GET", cid, params={"fields": "spend_cap"}) or {}).get("spend_cap")) or 0
                 for _, cid in campanas]
     minimos = [_entero(info[act].get("min_campaign_group_spend_cap")) or centavos(minimo_tope_campana(moneda), moneda)
@@ -349,17 +354,62 @@ def _plan_reparto(cliente, ex, creds, pais, nuevo, moneda):
     return {"campanas": campanas, "actuales": actuales, "objetivo": objetivo, "nombres": nombres}
 
 
-def _aplicar_reparto(plan):
+def _aplicar_reparto(plan, mandados):
     """Manda los topes nuevos, cada uno leído de vuelta (`_confirmar_tope`: si Meta guardó otro, la campaña queda en
-    pausa y sale `PresupuestoNoCoincide`). Primero los que aprietan (bajan o estrenan tope) y al final los que suben: en
-    cada paso la suma de los topes en Meta no pasa el tope del experimento. Devuelve [(cuenta, tope)] mandados."""
+    pausa —o lo dice si no pudo— y sale `PresupuestoNoCoincide`). Primero los que bajan, después los que estrenan tope y
+    al final los que suben: como el plan suma a lo sumo el tope y después de las bajadas todo cambio sube, en cada paso
+    la suma de los topes en Meta no pasa el tope del experimento. Cada tope que Meta aceptó va a `mandados` en cuanto
+    se manda ((cuenta, tope)), así quien llama lo anota aunque uno de después falle."""
     cambios = [(act, cid, antes, despues) for (act, cid), antes, despues
                in zip(plan["campanas"], plan["actuales"], plan["objetivo"]) if despues is not None and despues != antes]
-    cambios.sort(key=lambda c: bool(c[2]) and c[3] > c[2])
-    for _act_, cid, _antes, despues in cambios:
+    cambios.sort(key=lambda c: 0 if (c[2] and c[3] < c[2]) else (1 if not c[2] else 2))
+    for act, cid, _antes, despues in cambios:
         meta_auth.llamar("POST", cid, payload={"spend_cap": int(despues)})
+        mandados.append((act, despues))
         _confirmar_tope(cid, despues)
-    return [(act, despues) for act, _cid, _antes, despues in cambios]
+    return mandados
+
+
+# Un solo reparto del tope a la vez por experimento, también entre procesos (la web y el worker tienen cada uno su
+# `_LOCK`): dos cambios de diario intercalados dejaban los topes por encima del total (ronda de guardian-gasto).
+_VENTANA_REPARTO_S = 300
+
+
+def _marca_reciente(marca, segundos):
+    if not marca:
+        return False
+    try:
+        from datetime import datetime
+        return (datetime.now() - datetime.fromisoformat(str(marca))).total_seconds() < segundos
+    except ValueError:
+        return False
+
+
+def _tomar_marca_reparto(cliente, experimento_id):
+    """Marca `extra.repartiendo` bajo el candado de escritura de `experimentos.actualizar_extra`. Devuelve su token, o
+    None si otro cambio de presupuesto del mismo experimento la tiene (de menos de `_VENTANA_REPARTO_S`)."""
+    import secrets
+    token = secrets.token_hex(8)
+    tomada = []
+
+    def tomar(extra):
+        extra = dict(extra or {})
+        if _marca_reciente((extra.get("repartiendo") or {}).get("en"), _VENTANA_REPARTO_S):
+            return extra
+        extra["repartiendo"] = {"en": db.ahora(), "token": token}
+        tomada.append(True)
+        return extra
+    experimentos.actualizar_extra(cliente, experimento_id, tomar)
+    return token if tomada else None
+
+
+def _soltar_marca_reparto(cliente, experimento_id, token):
+    def soltar(extra):
+        extra = dict(extra or {})
+        if (extra.get("repartiendo") or {}).get("token") == token:
+            extra.pop("repartiendo", None)
+        return extra
+    experimentos.actualizar_extra(cliente, experimento_id, soltar)
 
 
 def _tope_y_dias_meta(ex, cuenta, moneda, parte=None):
@@ -413,13 +463,25 @@ def _confirmar_tope(campaign_id, esperado):
     leido = _entero((meta_auth.llamar("GET", campaign_id, params={"fields": "spend_cap"}) or {}).get("spend_cap"))
     if leido == int(esperado):
         return
+    pausada = True
     try:
         meta_campaign.actualizar_estado(campaign_id, "PAUSED")
     except Exception:  # noqa: BLE001
+        pausada = False
         log.warning("No se pudo pausar la campaña %s tras un tope que no coincide", campaign_id)
-    raise PresupuestoNoCoincide(gettext(
-        "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de "
-        "Meta): quedó en pausa.", leido=leido if leido is not None else "?", esperado=int(esperado)))
+    if pausada:
+        error = PresupuestoNoCoincide(gettext(
+            "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de "
+            "Meta): quedó en pausa.", leido=leido if leido is not None else "?", esperado=int(esperado)))
+    else:
+        # PND-148: desde el reparto vivo del tope esto pasa con campañas ACTIVAS: si la pausa falló, se dice.
+        error = PresupuestoNoCoincide(gettext(
+            "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de "
+            "Meta) y NO se pudo pausar: páusala en Meta ya.", leido=leido if leido is not None else "?",
+            esperado=int(esperado)))
+    error.pausado = pausada
+    error.campana = campaign_id
+    raise error
 
 
 def minimo_tope_campana(moneda):
@@ -1418,30 +1480,59 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     # si no, el panel diría un presupuesto y Meta gastaría otro.
     centavos_antes = centavos(p.get("presupuesto_dia") or 0, moneda) // len(ids)
 
-    subir = float(presupuesto_dia) > float(p.get("presupuesto_dia") or 0)
-    reparto = {}
+    anterior = float(p.get("presupuesto_dia") or 0)
+    subir = float(presupuesto_dia) > anterior
+    # Decisión de quien orquesta (2026-10-16): con varias cuentas, el tope se reparte otra vez con los diarios nuevos y
+    # el spend_cap de cada campaña se actualiza ANTES del diario. Si no cabe, subir se niega en palabras sin tocar nada;
+    # bajar sigue (bajar nunca gasta más) y, si el reparto no se puede hacer, los topes quedan como estaban. Una sola
+    # cuenta: como antes. Un reparto a la vez por experimento (`_tomar_marca_reparto`).
+    con_reparto = _varias_campanas(ex) and float(ex.get("tope_total") or 0) > 0
+    marca = _tomar_marca_reparto(cliente, experimento_id) if con_reparto else None
+    if con_reparto and marca is None and subir:
+        raise ValueError(gettext("Otro cambio de presupuesto de este experimento está en curso: vuelve a intentarlo en "
+                                 "unos minutos."))
+    reparto = {"mandados": []}
+
+    def _repartir(creds):
+        vivo = experimentos.obtener(cliente, experimento_id) or ex   # lo que dejó el último reparto, ya con la marca
+        plan = _plan_reparto(cliente, vivo, creds, pais, float(presupuesto_dia), moneda)
+        reparto["nombres"] = plan["nombres"]
+        if plan["objetivo"] is None:
+            if subir:
+                raise ValueError(gettext(
+                    "No se subió el diario de %(pais)s: con lo que ya gastó cada cuenta (más un día de margen) y el "
+                    "mínimo de Meta para el tope de cada campaña, el tope del experimento (%(tope)s) no alcanza para "
+                    "repartirlo con el diario nuevo. Déjalo como está o súbelo menos.",
+                    pais=pais, tope=_dinero(float(ex["tope_total"] or 0), moneda)))
+            reparto["sin_cambio"] = True
+            return
+        try:
+            _aplicar_reparto(plan, reparto["mandados"])
+        except PresupuestoNoCoincide as exc:
+            if getattr(exc, "pausado", False):   # la campaña quedó en pausa en Meta: sus países también aquí
+                for q in vivo["paises"]:
+                    if _campana_de_pais(vivo, q) == getattr(exc, "campana", None):
+                        experimentos.actualizar_pais(cliente, experimento_id, q["pais"], estado="pausado")
+            experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"{pais}: {exc}",
+                                          {"campaign_id": getattr(exc, "campana", None)})
+            raise
 
     def _correr(creds):
         # PND-322: ningún monto sin comprobar la unidad. PND-148: la de la cuenta de ESTE país, que sigue en el proyecto.
         cuenta = _cuenta_de_pais(p, creds["ad_account_id"])
         _exigir_cuentas(cliente, creds["ad_account_id"], [cuenta], moneda)
         comprobar_moneda(_cuenta_meta_de(cuenta), moneda)
-        # Decisión de quien orquesta (2026-10-16): con varias cuentas, el tope se reparte otra vez con los diarios nuevos
-        # y el spend_cap de cada campaña se actualiza ANTES del diario. Si lo gastado no deja repartir, subir se niega
-        # en palabras; bajar sigue (bajar nunca gasta más) y los topes quedan como estaban. Una sola cuenta: como antes.
-        if _varias_campanas(ex) and float(ex.get("tope_total") or 0) > 0:
-            plan = _plan_reparto(cliente, ex, creds, pais, float(presupuesto_dia), moneda)
-            if plan["objetivo"] is None:
-                if subir:
-                    raise ValueError(gettext(
-                        "No se subió el diario de %(pais)s: con lo que ya gastó cada cuenta y el mínimo de Meta para el "
-                        "tope de cada campaña, el tope del experimento (%(tope)s) no alcanza para repartirlo con el diario "
-                        "nuevo. Baja antes el diario de otro país o deja este como está.",
-                        pais=pais, tope=_dinero(float(ex["tope_total"] or 0), moneda)))
-                reparto["sin_cambio"] = True
+        if con_reparto and marca is not None:
+            if subir:
+                _repartir(creds)
             else:
-                reparto["mandados"] = _aplicar_reparto(plan)
-                reparto["nombres"] = plan["nombres"]
+                # Bajar nunca se frena por el reparto (otra cuenta que salió, una lectura que falla): se anota y sigue.
+                try:
+                    _repartir(creds)
+                except Exception as exc:  # noqa: BLE001
+                    reparto["fallo"] = cola.sin_token(str(exc))
+        elif con_reparto and not subir:
+            reparto["fallo"] = gettext("otro cambio de presupuesto estaba en curso")
         cambiados = []
         try:
             for adset_id in ids:
@@ -1484,21 +1575,35 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
                                           {"intentado": float(presupuesto_dia), "unidades": centavos_conjunto})
             raise
 
-    _con_credenciales(cliente, _correr)
-    experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
-    for pz in _piezas_de(ex, pais):
-        experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
-    if reparto.get("mandados"):
-        detalle = ", ".join(f"{reparto['nombres'].get(a) or a}: "
+    def _anotar_topes():
+        if not reparto["mandados"]:
+            return
+        detalle = ", ".join(f"{(reparto.get('nombres') or {}).get(a) or a}: "
                             f"{_dinero(monedas_meta.desde_unidad_meta(t, moneda), moneda)}" for a, t in reparto["mandados"])
         experimentos.registrar_evento(cliente, experimento_id, "presupuesto",
                                       gettext("Tope del experimento repartido otra vez entre las cuentas: %(detalle)s",
                                               detalle=detalle),
                                       {"topes": [[a, t] for a, t in reparto["mandados"]]})
-    elif reparto.get("sin_cambio"):
+
+    try:
+        try:
+            _con_credenciales(cliente, _correr)
+        except Exception:
+            _anotar_topes()   # los topes que Meta ya aceptó quedan en la bitácora aunque algo de después fallara
+            raise
+        experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
+        for pz in _piezas_de(ex, pais):
+            experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
+    finally:
+        if marca is not None:
+            _soltar_marca_reparto(cliente, experimento_id, marca)
+    _anotar_topes()
+    if float(presupuesto_dia) < anterior and (reparto.get("sin_cambio") or reparto.get("fallo")):
         experimentos.registrar_evento(cliente, experimento_id, "presupuesto", gettext(
             "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: con lo que ya "
-            "gastó cada una no alcanza para repartirlo otra vez.", pais=pais))
+            "gastó cada una no alcanza para repartirlo otra vez.", pais=pais) if reparto.get("sin_cambio") else gettext(
+            "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: %(motivo)s.",
+            pais=pais, motivo=reparto["fallo"]), {"motivo": reparto.get("fallo")})
     experimentos.registrar_evento(cliente, experimento_id, "presupuesto",
                                   gettext("Presupuesto diario de %(pais)s: %(presupuesto)s %(moneda)s",
                                           pais=pais, presupuesto=presupuesto_dia, moneda=moneda),
