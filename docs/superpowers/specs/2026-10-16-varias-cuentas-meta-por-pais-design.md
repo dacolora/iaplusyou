@@ -66,3 +66,24 @@ anotadas aquí; las que tocan plata siguen las reglas del repo (regla 1 de `CLAU
 Meta falso con dos cuentas (`MetaFalsa` de `tests/test_lanzador.py` extendida): lanzar con dos países en dos cuentas,
 reintento a mitad, tope repartido, vigilancia que suma, moneda distinta rechazada, experimento viejo sin cambios,
 activar un país solo toca su cuenta, `user_tasks` sin ADVERTISE no aparece en el selector.
+
+## 6. Cambios tras la construcción (2026-10-16)
+
+Nada del spec chocó con el código. Se agregó, por las rondas de guardian-gasto y del revisor:
+
+- **Aislamiento:** una cuenta que es la de lanzamiento (`meta.json`) de OTRO proyecto nunca se ofrece ni se lanza,
+  aunque haya quedado en el `meta_cuenta` de este (R20 solo la frenaba al elegir cuentas para leer).
+- **Toda cuenta que no es la de defecto se vuelve a mirar** antes de lanzar, activar, cambiar un diario y crear piezas
+  nuevas (sigue en el proyecto, puede anunciar, misma moneda); pausar no se frena nunca.
+- **Pausar y vigilar no se frenan por una cuenta que falla:** pausar sigue con todo lo demás y el primer error sale al
+  final; la vigilancia lee cada campaña aparte y juzga con lo que leyó.
+- **La pantalla** dice «Máximo que puede gastar» solo si cada parte del total llega al mínimo de un tope; si no,
+  «Presupuesto planeado» y una línea que lo explica (`PresupuestoExp.faltaTope`, réplica de `_repartir_tope`).
+- **El video se sube una vez por cuenta** (un video de una cuenta no sirve en otra) y `meta_detalle` pide cada campaña
+  en su cuenta.
+
+Límites conocidos, para Daniel: el tope de cada campaña queda fijo al lanzar mientras «Cambiar presupuesto» y escalar
+usan el saldo de todo el experimento (Meta corta la campaña de un país al llegar a su parte, sin gastar de más); el
+Pixel (compras) y la app anunciada no se comprueban por cuenta antes de crear (si no están compartidos con la cuenta,
+Meta rechaza el conjunto y el experimento queda en error); un país sin `ad_account_id` sigue la cuenta que tenga
+`meta.json` en cada momento.
