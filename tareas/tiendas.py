@@ -52,7 +52,7 @@ import notificaciones
 import tiendas
 import trabajos
 from conectores import ErrorConector
-from tareas import registrar
+from tareas import al_interrumpir, registrar
 
 log = logging.getLogger("creatv.tareas.tiendas")
 
@@ -286,6 +286,31 @@ def tienda_sync_pedidos(tarea):
 
 
 # --- importar archivo / URL --------------------------------------------------
+
+@al_interrumpir("catalogo_importar")
+def importar_interrumpida(tarea, mensaje):
+    """Decisión de quien orquesta (2026-10-15): el archivo que el dashboard subió solo para esta tarea
+    (`borrar_al_terminar`) lo borra su `finally`; si la tarea nunca corrió (reinicio, colgada, el respaldo sin saldo),
+    se quedaba en clientes/<c>/importaciones/. Se borra aquí, salvo que la otra corrida de la pareja (la
+    continuación) siga viva y lo necesite. Solo un archivo de la carpeta de importaciones de ESE proyecto."""
+    p = tarea.get("payload") or {}
+    cliente, ruta = p.get("cliente"), p.get("ruta")
+    if not (p.get("borrar_al_terminar") and cliente and ruta):
+        return
+    real = os.path.realpath(ruta)
+    carpeta = os.path.dirname(real)
+    if os.path.basename(carpeta) != "importaciones" or os.path.basename(os.path.dirname(carpeta)) != cliente:
+        log.warning("importación interrumpida de %s: la ruta no es de su carpeta de importaciones; no se borra",
+                    cliente)
+        return
+    job_id = tarea.get("job_id") or ""
+    if job_id and trabajos.en_curso(job_id_continuacion(job_id)):
+        return
+    try:
+        os.remove(real)
+    except OSError:
+        pass
+
 
 @registrar("catalogo_importar")
 def catalogo_importar(tarea):

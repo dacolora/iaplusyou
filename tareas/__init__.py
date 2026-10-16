@@ -100,7 +100,6 @@ TIPOS_EXENTOS_DE_COBRO = {
 SIN_ENTIDAD_AL_INTERRUMPIR = {
     "audio_generar": "Audios lee trabajos.en_curso del job_id; no guarda nada antes de terminar",
     "hablado_voz": "la página sondea el job_id y vuelve a pedir con solo_cache; no guarda nada antes",
-    "voz_propia_crear": "Mis voces lee trabajos.en_curso; la voz solo se guarda al terminar",
     "musica_generar": "Mi música solo mira el job_id vivo; no guarda nada antes de terminar",
     "editor_voz": "el editor sondea el job_id de la voz; la edición no cambia hasta que llega",
     "material_transcribir": "«pendiente» sale de que falten las palabras del material, no de una marca en curso",
@@ -111,7 +110,6 @@ SIN_ENTIDAD_AL_INTERRUMPIR = {
     "sprint_reescribir_idea": "«reescribiendo» sale de trabajos.en_curso",
     "sprint_proponer_ideas": "trabajo_ideas sale de trabajos.en_curso; la idea vieja sigue viva hasta reemplazarse",
     "referentes_sugerir_ia": "trabajo_sugerir_ia sale de trabajos.en_curso; las sugerencias se guardan al terminar",
-    "catalogo_importar": "Catálogo lee trabajos.en_curso del job_id de la importación",
     "producto_vincular": "la ficha lee cola.job_ids_vivos",
 }
 

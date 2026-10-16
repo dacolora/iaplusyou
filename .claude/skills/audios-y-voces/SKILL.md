@@ -129,3 +129,9 @@ que pagó la voz falló después (el worker devolvió el cobro), Mis voces la re
 (`voces_propias.crear` con la ficha de la misma referencia), con el precio que la persona vio al lanzarla, se cobra con
 `gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`). Pendiente propuesto: un botón con su precio para
 cobrar la recuperada por el GET.
+
+**La grabación de un clon que no corrió (decisión de quien orquesta, 2026-10-15).** `voz_propia_crear` tiene gancho
+`AL_INTERRUMPIR` (`tareas/voces_propias.interrumpida`): si la tarea no terminó (reinicio, colgada, el respaldo sin
+saldo), borra la grabación con `voces_propias._borrar_grabacion_si_huerfana` (solo si es una grabación de ese proyecto
+que ninguna voz usa), salvo que fal ya haya devuelto la voz (`gasto` `voz_propia:clonar:t<tarea>` con `voice_id` en
+su ficha: Mis voces la recupera y esa voz usa su grabación). Pruebas: `tests/test_restos_tareas_interrumpidas.py`.
