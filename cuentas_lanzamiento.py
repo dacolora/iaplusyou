@@ -15,6 +15,8 @@ Reglas:
 Quien elige (la ruta de «Nuevo experimento») valida con `validar`; quien gasta (el lanzador: lanzar, activar, cambiar
 un diario) vuelve a mirar con `disponibles` antes de tocar Meta, porque una cuenta puede salir del proyecto o perder
 el permiso después de elegida. Pausar no se frena nunca."""
+import os
+
 from flask_babel import gettext
 
 import meta_conexion
@@ -22,6 +24,14 @@ from meta_rendimiento import cuentas
 
 # Lo que la persona conectada puede hacer en la cuenta (`user_tasks` de la cuenta en Graph) para que Creatv lance ahí.
 TAREAS_QUE_LANZAN = frozenset({"ADVERTISE", "MANAGE"})
+
+
+def activo():
+    """Lanzar en varias cuentas está APAGADO hasta cerrar la carrera del reparto entre la web y el worker (decisión del
+    2026-10-16: la revisión de gasto de la tercera ronda dejó huecos que solo un rediseño cierra, el reparto en un solo
+    carril del worker). Apagado, `disponibles` no ofrece ninguna cuenta aparte de la de `meta.json`: no hay selector, la
+    ruta rechaza una cuenta ajena y el lanzador también. Se prende con `CREATV_VARIAS_CUENTAS=1` en el `.env`."""
+    return os.environ.get("CREATV_VARIAS_CUENTAS", "").strip() == "1"
 
 
 def normalizar(act):
@@ -50,7 +60,7 @@ def disponibles(cliente, moneda, defecto_id=None):
     """Las cuentas de `meta_cuenta` del proyecto, aparte de la de defecto, que pueden lanzar un experimento en
     `moneda`: [{"id", "nombre", "pais", "moneda"}], en el orden de `cuentas.listar` (por nombre). En modo agencia,
     ninguna. `defecto_id` evita releer `meta.json` cuando quien llama ya lo tiene. Una consulta."""
-    if meta_conexion.modo(cliente) == meta_conexion.MODO_AGENCIA:
+    if not activo() or meta_conexion.modo(cliente) == meta_conexion.MODO_AGENCIA:
         return []
     if defecto_id is None:
         d = defecto(cliente)

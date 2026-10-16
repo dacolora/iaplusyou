@@ -17,6 +17,13 @@ PAISES = [{"pais": "NO", "idioma": "no", "presupuesto_dia": 300.0},
           {"pais": "SE", "idioma": "sv", "presupuesto_dia": 100.0, "ad_account_id": SUECIA}]
 
 
+
+@pytest.fixture(autouse=True)
+def _varias_cuentas_prendido(monkeypatch):
+    """Lanzar en varias cuentas está apagado en producción desde el 2026-10-16 (`cuentas_lanzamiento.activo`); estas
+    pruebas lo prenden. Lo apagado lo prueba `tests/test_varias_cuentas_apagado.py`."""
+    monkeypatch.setenv("CREATV_VARIAS_CUENTAS", "1")
+
 def _sembrar(cuentas_=((SUECIA, "HappyFlops Sweden", "SE", "SEK", True),), cliente="acme"):
     """Cuentas de Rendimiento del proyecto (`meta_cuenta`) con lo que la copia guardaría de `user_tasks`."""
     from meta_rendimiento import cuentas

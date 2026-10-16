@@ -500,3 +500,14 @@ al mínimo de tu cuenta de Meta» sin cifra y el JS dice «Presupuesto planeado�
 un máximo que no sabe). Lanzar no cambia: `_tope_y_dias_meta` vuelve a leer la cuenta. Pruebas:
 `tests/test_minimo_tope_cuenta.py`, `test_rutas_exp_nuevo_presupuesto.py` (sus arneses de Node toman el tope que pintó el
 servidor) y `test_meta_agencia.py::test_asignar_guarda_el_minimo_de_tope_de_la_cuenta`.
+
+**Varias cuentas por país: APAGADO en producción (2026-10-16).** Todo lo de PND-148 está en el código pero
+`cuentas_lanzamiento.activo()` lo prende solo con `CREATV_VARIAS_CUENTAS=1` en el `.env`; apagado, `disponibles` no
+ofrece ninguna cuenta aparte de la de `meta.json` (no hay selector, la ruta y el lanzador rechazan otra cuenta) y todo
+experimento se lanza como antes. Por qué: la tercera revisión de gasto dejó huecos en la carrera del reparto del tope
+entre la web y el worker (marca vencida con Meta lento, activar sin releer los `spend_cap`, un error del diario que
+tapa el «NO se pudo pausar»). Antes de prenderlo: el reparto corre solo en el carril de vigilancia del worker (una
+tarea por cambio de diario, `job_id` por experimento), activar relee los `spend_cap` de las campañas que enciende y el
+error del diario suma el aviso de pausa en vez de taparlo (PND-148 en `docs/pendientes.md`). Pruebas del apagado:
+`tests/test_varias_cuentas_apagado.py`; las de `tests/test_varias_cuentas_meta.py` lo prenden con un fixture.
+
