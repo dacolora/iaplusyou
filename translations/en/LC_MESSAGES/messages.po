@@ -7241,6 +7241,10 @@ msgstr "The previous video may have been charged even though %(proveedor)s didn'
 msgid "El video anterior pudo cobrarse aunque %(proveedor)s no respondió. Generarlo otra vez cuesta %(precio)s más: confírmalo en «Reintentar»."
 msgstr "The previous video may have been charged even though %(proveedor)s didn't respond. Generating it again costs %(precio)s more: confirm it in “Retry”."
 
+#, python-format
+msgid "El video anterior puede estar listo: «Recuperar» lo trae. «Reintentar» paga uno nuevo por %(precio)s. ¿Pagar otro?"
+msgstr "The previous video may be ready: “Recover the video” brings it. “Retry” pays for a new one for %(precio)s. Pay for another?"
+
 msgid "El video del link pesa demasiado."
 msgstr "The video at that link is too large."
 

@@ -185,3 +185,12 @@ def test_sin_precio_el_boton_dice_que_se_cobra(app, monkeypatch):
                         lambda *a, **k: {"credits": None, "usd": None})
     html = app["c"].get(f"/cliente/acme/creative_flow/{cid}/detalle").get_data(as_text=True)
     assert "Recuperar el video (se cobra; precio no disponible)" in html and "sin pagar de nuevo" not in html
+
+
+def test_reintentar_con_un_video_recuperable_pregunta_antes_de_pagar_otro(app):
+    """2026-10-16: con «Recuperar» y «Reintentar» a la vista, tocar «Reintentar» pagaba otro video sin aviso."""
+    cid = _pieza_rendida()
+    html = app["c"].get(f"/cliente/acme/creative_flow/{cid}/detalle").get_data(as_text=True)
+    form = html[html.index(f"/creative_flow/{cid}/generar_video"):]
+    form = form[:form.index("</form>")]
+    assert "puede estar listo" in form and "Pagar otro?" in form      # |tojson escapa el «¿»
