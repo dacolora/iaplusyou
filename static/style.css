@@ -4096,6 +4096,14 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 #exp-nuevo input { max-width: 100%; box-sizing: border-box; }
 #exp-nuevo [hidden] { display: none !important; }
 @media (max-width: 760px) { #exp-nuevo .exp-recorrido { gap: 4px; } #exp-nuevo .exp-recorrido span { flex: 1 1 40%; } #exp-nuevo .fe-opciones { flex-wrap: wrap; } #exp-nuevo .exp-resumen { padding: 16px; } }
+/* PND-148 (2026-10-16): en «Dónde», la cuenta publicitaria de cada país marcado (.exp-cuentas, solo con más de una cuenta
+   que pueda anunciar) y su resumen en Revisar (.exp-cuentas-resumen). En el celular el selector baja a su propia línea. */
+#exp-nuevo .exp-cuentas { display: grid; gap: 10px; margin: 16px 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
+#exp-nuevo .exp-cuentas > p { margin: 0; }
+#exp-nuevo .exp-cuenta { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+#exp-nuevo .exp-cuenta span { overflow-wrap: anywhere; }
+#exp-nuevo .exp-cuenta select { flex: 1 1 220px; min-width: 0; max-width: 100%; }
+#exp-nuevo .exp-cuentas-resumen { display: grid; gap: 4px; margin: 0 0 16px; padding: 0 0 0 1.2rem; color: var(--text); overflow-wrap: anywhere; }
 /* ── estilos/pantallas/saldo.css ── */
 /* Cobros: saldo prepagado (spec 2026-10-08 §7 y §9.4). Uso: Configuración › Saldo y recargas (_config_saldo.html y el
    fragmento _saldo_panel.html, clases saldo-*), el chip de la barra lateral (.sidebar-saldo, sobre .sidebar-gasto), la

@@ -81,18 +81,176 @@ def _act(ad_account_id):
     return a if a.startswith("act_") else f"act_{a}"
 
 
+def _cuenta_meta_de(ad_account_id):
+    """La moneda y los mínimos de UNA cuenta publicitaria, leídos de Meta: `currency`, `min_daily_budget` y
+    `min_campaign_group_spend_cap` (los dos últimos en la unidad de Meta). PND-148: cada cuenta de un experimento se
+    lee aparte; el edge lleva la cuenta, no depende de la configurada en `meta_auth`."""
+    return meta_auth.llamar("GET", _act(ad_account_id),
+                            params={"fields": "currency,min_daily_budget,min_campaign_group_spend_cap"}) or {}
+
+
 def _cuenta_meta(creds, cliente=None):
-    """La moneda y los mínimos de la cuenta publicitaria, leídos de Meta: `currency`, `min_daily_budget` y
-    `min_campaign_group_spend_cap` (los dos últimos en la unidad de Meta). Con `cliente`, el mínimo de tope queda
-    guardado con la conexión para el texto de «Nuevo experimento» (PND-323); si no se puede guardar, sigue igual."""
-    cuenta = meta_auth.llamar("GET", _act(creds["ad_account_id"]),
-                              params={"fields": "currency,min_daily_budget,min_campaign_group_spend_cap"}) or {}
+    """La de `_cuenta_meta_de` para la cuenta de la conexión (`meta.json`). Con `cliente`, el mínimo de tope queda
+    guardado con la conexión para el texto de «Nuevo experimento» (PND-323)."""
+    cuenta = _cuenta_meta_de(creds["ad_account_id"])
     if cliente:
-        try:
-            meta_conexion.guardar_tope_minimo(cliente, creds["ad_account_id"], cuenta)
-        except Exception:  # noqa: BLE001 — es para la pantalla; el lanzamiento usa lo recién leído
-            log.warning("No se pudo guardar el mínimo de tope de la cuenta de %s", cliente)
+        _guardar_tope_minimo(cliente, creds["ad_account_id"], cuenta)
     return cuenta
+
+
+def _guardar_tope_minimo(cliente, ad_account_id, cuenta):
+    """PND-323: el mínimo de tope de la cuenta, guardado con la conexión para la pantalla. `meta_conexion` solo escribe
+    si es la cuenta de la conexión (llamarla con otra cuenta del experimento no hace nada); si no se puede guardar, el
+    lanzamiento sigue con lo recién leído."""
+    try:
+        meta_conexion.guardar_tope_minimo(cliente, ad_account_id, cuenta)
+    except Exception:  # noqa: BLE001 — es para la pantalla; el lanzamiento usa lo recién leído
+        log.warning("No se pudo guardar el mínimo de tope de la cuenta de %s", cliente)
+
+
+# ---------- PND-148: varias cuentas publicitarias, una por país (spec 2026-10-16) ----------
+# La cuenta de un país es `paises[i]["ad_account_id"]` o, sin ese campo (todo experimento anterior y los de un proyecto
+# con una sola cuenta), la de `meta.json`. Meta no deja que una campaña tenga conjuntos de dos cuentas: hay una campaña
+# por cuenta, guardada en cada país (`paises[i]["meta_campaign_id"]`); `experimento.meta_campaign_id` es la de la cuenta
+# por defecto (o la primera) y es la única en los experimentos viejos.
+
+def _cuenta_de_pais(p, defecto):
+    """La cuenta publicitaria («act_…») del país `p`: la suya o la de defecto."""
+    return _act((p or {}).get("ad_account_id") or defecto)
+
+
+def _campana_de_pais(ex, p):
+    """La campaña de Meta del país `p`: la de su cuenta o, en un experimento viejo, la del experimento."""
+    return (p or {}).get("meta_campaign_id") or ex.get("meta_campaign_id")
+
+
+def campanas_de(ex):
+    """Las campañas del experimento en Meta, sin repetir y la del experimento primero: una por cuenta."""
+    salida = []
+    for cid in [ex.get("meta_campaign_id")] + [p.get("meta_campaign_id") for p in ex.get("paises") or []]:
+        if cid and cid not in salida:
+            salida.append(cid)
+    return salida
+
+
+def campanas_por_cuenta(ex, defecto):
+    """[(cuenta, campaña)] sin repetir campaña: dónde vive cada campaña del experimento (meta_detalle las pide cada una
+    en su cuenta). Un experimento viejo da [(defecto, su campaña)]."""
+    salida = []
+    for p in ex.get("paises") or []:
+        cid = _campana_de_pais(ex, p)
+        if cid and cid not in [c for _, c in salida]:
+            salida.append((_cuenta_de_pais(p, defecto), cid))
+    if not salida and ex.get("meta_campaign_id"):
+        salida.append((_act(defecto), ex["meta_campaign_id"]))
+    return salida
+
+
+def _varias_campanas(ex):
+    return len(campanas_de(ex)) > 1
+
+
+def _campana_sin_pais_activo(ex, p):
+    """Con varias campañas, la del país `p` puede seguir en pausa en Meta aunque el experimento ya corra por otra
+    cuenta: ningún país de esa campaña está activo. Activar el país tiene que encenderla (si no, su conjunto quedaría
+    ACTIVE dentro de una campaña en pausa y no entregaría). Con una sola campaña, False: manda la regla de siempre."""
+    if not _varias_campanas(ex):
+        return False
+    cid = _campana_de_pais(ex, p)
+    return not any(q.get("estado") == "activo" for q in ex["paises"] if _campana_de_pais(ex, q) == cid)
+
+
+def _usar_cuenta(creds, ad_account_id):
+    """Deja `ad_account_id` como la cuenta de `meta_auth` (bajo el candado de `_con_credenciales`): crear campaña,
+    conjunto, creative o anuncio y subir un video van contra `act_<cuenta>/…`. Los cambios por id (estado,
+    presupuesto) y las lecturas de vuelta no dependen de la cuenta configurada. La Página y el Instagram son los de la
+    conexión en todas las cuentas (spec §2.7)."""
+    meta_auth.configurar(creds["token"], ad_account_id, creds.get("page_id"))
+
+
+def _sin_repetir(valores):
+    salida = []
+    for v in valores:
+        if v and v not in salida:
+            salida.append(v)
+    return salida
+
+
+def _cuentas_de(ex, defecto, pais=None):
+    """Las cuentas de los países del experimento (o solo la de `pais`), sin repetir, en el orden de los países."""
+    return _sin_repetir(_cuenta_de_pais(p, defecto) for p in ex["paises"] if pais is None or p["pais"] == pais)
+
+
+def _exigir_cuentas(cliente, defecto, cuentas_, moneda):
+    """Antes de mandarle un monto a una cuenta o encender algo en ella: toda cuenta que no es la de defecto tiene que
+    seguir entre las que el proyecto puede usar (`cuentas_lanzamiento.disponibles`: en su `meta_cuenta`, con permiso
+    para anunciar y en la moneda del experimento). Una que salió del proyecto pudo pasar a otro (aislamiento) y una sin
+    permiso fallaría a medias en Meta. Sin llamar a Meta: lanza ValueError. Pausar nunca pasa por aquí. Devuelve
+    {cuenta: nombre} de las que pidió (una lectura de la base solo si hay alguna que no es la de defecto)."""
+    defecto = _act(defecto)
+    otras = [a for a in cuentas_ if a != defecto]
+    nombres = {defecto: (meta_conexion.cargar(cliente) or {}).get("ad_account_nombre") or defecto}
+    if not otras:
+        return nombres
+    import cuentas_lanzamiento
+    permitidas = {c["id"]: c["nombre"] for c in cuentas_lanzamiento.disponibles(cliente, moneda, defecto_id=defecto)}
+    malas = [a for a in otras if a not in permitidas]
+    if malas:
+        raise ValueError(gettext(
+            "La cuenta publicitaria %(cuentas)s ya no se puede usar en este proyecto (salió de sus cuentas de Meta, "
+            "perdió el permiso para anunciar o factura en otra moneda): no se manda nada a Meta.",
+            cuentas=", ".join(malas)))
+    nombres.update({a: permitidas[a] for a in otras})
+    return nombres
+
+
+def _ids_de(edge):
+    """Los ids de un listado de Meta (`act_…/adspixels`, `act_…/advertisable_applications`), como texto."""
+    datos = meta_auth.llamar("GET", edge, params={"fields": "id", "limit": 500}) or {}
+    return {str(f.get("id")) for f in datos.get("data") or [] if f.get("id")}
+
+
+def _comprobar_activos_por_cuenta(promoted_object, cuentas_, nombres):
+    """Antes de crear nada en Meta (decisión de quien orquesta, 2026-10-16): con compras, el Pixel del experimento
+    tiene que poder usarse desde CADA cuenta (`act_…/adspixels`); con instalaciones de la app, la app tiene que estar
+    asociada a cada cuenta (`act_…/advertisable_applications`). Si no, Meta rechazaría el conjunto de esa cuenta con la
+    campaña ya creada y cada reintento fallaría igual: no se lanza nada y se dice cuál cuenta y qué compartir. Solo
+    corre cuando el experimento usa una cuenta además de la de la conexión (el Pixel de esa ya lo mira
+    `_promoted_object_para`): un experimento de una sola cuenta hace las mismas llamadas que antes."""
+    if not promoted_object:
+        return
+    if promoted_object.get("pixel_id"):
+        pixel = str(promoted_object["pixel_id"])
+        for act in cuentas_:
+            if pixel not in _ids_de(f"{act}/adspixels"):
+                raise ValueError(gettext(
+                    "La cuenta publicitaria %(cuenta)s no tiene acceso al Pixel %(pixel)s: compártelo con esa cuenta "
+                    "en Meta Business (Configuración del negocio › Orígenes de datos › Píxeles › Asignar cuentas "
+                    "publicitarias) y vuelve a lanzar. No se creó nada en Meta.",
+                    cuenta=nombres.get(act) or act, pixel=pixel))
+    elif promoted_object.get("application_id"):
+        app = str(promoted_object["application_id"])
+        for act in cuentas_:
+            if app not in _ids_de(f"{act}/advertisable_applications"):
+                raise ValueError(gettext(
+                    "La cuenta publicitaria %(cuenta)s no puede anunciar la app %(app)s: autoriza esa cuenta en Meta "
+                    "for Developers (Configuración › Avanzada › Cuentas publicitarias autorizadas) o asígnale la app en "
+                    "Meta Business, y vuelve a lanzar. No se creó nada en Meta.",
+                    cuenta=nombres.get(act) or act, app=app))
+
+
+def _repartir_tope(tope, grupos, moneda):
+    """El tope del experimento en la unidad de Meta repartido entre sus campañas (una por cuenta; `grupos` = los
+    países de cada una) en proporción a la suma de los diarios de sus países, hacia abajo: la suma de las partes nunca
+    pasa el tope (spec §2.5). Con una sola campaña, el tope entero, como siempre."""
+    total = centavos(tope, moneda)
+    if len(grupos) == 1:
+        return [total]
+    pesos = [sum(centavos(p.get("presupuesto_dia") or 0, moneda) for p in g) for g in grupos]
+    suma = sum(pesos)
+    if suma <= 0:
+        return [total // len(grupos)] * len(grupos)
+    return [total * w // suma for w in pesos]
 
 
 def _minimo_diario_esperado(moneda):
@@ -159,19 +317,131 @@ def _dias_que_alcanza(ex):
     return max(1, min(dias, int(tope // diario)))
 
 
-def _tope_y_dias_meta(ex, cuenta, moneda):
+def _reparto_vivo(tope, grupos, moneda, gastado, minimos, con_tope):
+    """El reparto del tope cuando cambia un diario (decisión de quien orquesta, 2026-10-16): por campaña, en la unidad
+    de Meta, max(lo ya gastado hacia arriba, su parte proporcional con los diarios nuevos); una campaña que ya tiene
+    tope en Meta no baja del mínimo de su cuenta (Meta no lo aceptaría). La suma nunca pasa el tope: si no cabe,
+    devuelve None. Si cabe, la lista de topes a dejar en Meta: None = la campaña sigue sin tope (su parte queda bajo el
+    mínimo de su cuenta: la frenan la fecha de fin y la vigilancia, como al lanzar)."""
+    partes = _repartir_tope(tope, grupos, moneda)
+    objetivo = []
+    for parte, ya, minimo, tiene in zip(partes, gastado, minimos, con_tope):
+        p = max(int(parte), int(ya))
+        if tiene and p < minimo:
+            p = minimo
+        objetivo.append(p)
+    if sum(objetivo) > centavos(tope, moneda):
+        return None
+    return [p if (tiene or p >= minimo) else None for p, minimo, tiene in zip(objetivo, minimos, con_tope)]
+
+
+def _unidades_arriba(monto, moneda):
+    """Un monto ya gastado (en la moneda) en la unidad de Meta, redondeado hacia ARRIBA."""
+    return int(math.ceil(round(float(monto or 0) * monedas_meta.factor(moneda), 6)))
+
+
+def _plan_reparto(cliente, ex, creds, pais, nuevo, moneda):
+    """Lee lo necesario para repartir otra vez el tope con el diario nuevo de `pais` (solo lecturas: gasto, tope actual
+    y mínimo de cada campaña). Antes de leer los mínimos, cada cuenta que va a recibir un tope sigue en el proyecto y
+    pasa su `comprobar_moneda`. Devuelve {campanas, actuales, objetivo (None si no cabe), nombres}."""
+    defecto = creds["ad_account_id"]
+    campanas = campanas_por_cuenta(ex, defecto)
+    cuentas_ = _sin_repetir(a for a, _ in campanas)
+    nombres = _exigir_cuentas(cliente, defecto, cuentas_, moneda)
+    info = {}
+    for act in cuentas_:
+        info[act] = _cuenta_meta_de(act)
+        comprobar_moneda(info[act], moneda)
+    paises_nuevos = [{**q, "presupuesto_dia": nuevo} if q["pais"] == pais else q for q in ex["paises"]]
+    grupos = [[q for q in paises_nuevos if _campana_de_pais(ex, q) == cid] for _, cid in campanas]
+    # Lo gastado sale de los insights, que llegan con retraso: se le suma un día del diario de la campaña (con los
+    # diarios de antes del cambio) para que el tope de una campaña nunca baje hasta lo que Meta todavía no reportó
+    # mientras otra recibe ese margen (ronda de guardian-gasto, 2026-10-16).
+    gastado = [_unidades_arriba(_gasto_campana(cid, "maximum"), moneda)
+               + sum(centavos(q.get("presupuesto_dia") or 0, moneda) for q in ex["paises"] if _campana_de_pais(ex, q) == cid)
+               for _, cid in campanas]
+    actuales = [_entero((meta_auth.llamar("GET", cid, params={"fields": "spend_cap"}) or {}).get("spend_cap")) or 0
+                for _, cid in campanas]
+    minimos = [_entero(info[act].get("min_campaign_group_spend_cap")) or centavos(minimo_tope_campana(moneda), moneda)
+               for act, _ in campanas]
+    objetivo = _reparto_vivo(float(ex["tope_total"] or 0), grupos, moneda, gastado, minimos, [a > 0 for a in actuales])
+    return {"campanas": campanas, "actuales": actuales, "objetivo": objetivo, "nombres": nombres}
+
+
+def _aplicar_reparto(plan, mandados):
+    """Manda los topes nuevos, cada uno leído de vuelta (`_confirmar_tope`: si Meta guardó otro, la campaña queda en
+    pausa —o lo dice si no pudo— y sale `PresupuestoNoCoincide`). Primero los que bajan, después los que estrenan tope y
+    al final los que suben: como el plan suma a lo sumo el tope y después de las bajadas todo cambio sube, en cada paso
+    la suma de los topes en Meta no pasa el tope del experimento. Cada tope que Meta aceptó va a `mandados` en cuanto
+    se manda ((cuenta, tope)), así quien llama lo anota aunque uno de después falle."""
+    cambios = [(act, cid, antes, despues) for (act, cid), antes, despues
+               in zip(plan["campanas"], plan["actuales"], plan["objetivo"]) if despues is not None and despues != antes]
+    cambios.sort(key=lambda c: 0 if (c[2] and c[3] < c[2]) else (1 if not c[2] else 2))
+    for act, cid, _antes, despues in cambios:
+        meta_auth.llamar("POST", cid, payload={"spend_cap": int(despues)})
+        mandados.append((act, despues))
+        _confirmar_tope(cid, despues)
+    return mandados
+
+
+# Un solo reparto del tope a la vez por experimento, también entre procesos (la web y el worker tienen cada uno su
+# `_LOCK`): dos cambios de diario intercalados dejaban los topes por encima del total (ronda de guardian-gasto).
+_VENTANA_REPARTO_S = 300
+
+
+def _marca_reciente(marca, segundos):
+    if not marca:
+        return False
+    try:
+        from datetime import datetime
+        return (datetime.now() - datetime.fromisoformat(str(marca))).total_seconds() < segundos
+    except ValueError:
+        return False
+
+
+def _tomar_marca_reparto(cliente, experimento_id):
+    """Marca `extra.repartiendo` bajo el candado de escritura de `experimentos.actualizar_extra`. Devuelve su token, o
+    None si otro cambio de presupuesto del mismo experimento la tiene (de menos de `_VENTANA_REPARTO_S`)."""
+    import secrets
+    token = secrets.token_hex(8)
+    tomada = []
+
+    def tomar(extra):
+        extra = dict(extra or {})
+        if _marca_reciente((extra.get("repartiendo") or {}).get("en"), _VENTANA_REPARTO_S):
+            return extra
+        extra["repartiendo"] = {"en": db.ahora(), "token": token}
+        tomada.append(True)
+        return extra
+    experimentos.actualizar_extra(cliente, experimento_id, tomar)
+    return token if tomada else None
+
+
+def _soltar_marca_reparto(cliente, experimento_id, token):
+    def soltar(extra):
+        extra = dict(extra or {})
+        if (extra.get("repartiendo") or {}).get("token") == token:
+            extra.pop("repartiendo", None)
+        return extra
+    experimentos.actualizar_extra(cliente, experimento_id, soltar)
+
+
+def _tope_y_dias_meta(ex, cuenta, moneda, parte=None):
     """(spend_cap en la unidad de Meta o None, días con que se crean los conjuntos). El tope va a la campaña cuando
     Meta lo acepta: desde el `min_campaign_group_spend_cap` de la cuenta (si no se pudo leer, desde
     `minimo_tope_campana`). Si no lo acepta, ningún freno de Meta respetaría el tope; entonces los conjuntos se crean
     con la fecha de fin a la que alcanza el tope con el diario de todos los países (al menos un día), y Meta los
-    apaga solo (PND-322: los experimentos 3 y 5 de colorado_forja gastaron 24 y 2,5 veces su tope)."""
+    apaga solo (PND-322: los experimentos 3 y 5 de colorado_forja gastaron 24 y 2,5 veces su tope).
+    PND-148: con varias cuentas, `parte` es lo que le toca a esta campaña (`_repartir_tope`, en la unidad de Meta) y
+    se compara con el mínimo de ESTA cuenta; los días siguen siendo los del experimento entero."""
     dias = int(ex["dias"] or 7)
     tope = float(ex["tope_total"] or 0)
     if tope <= 0:
         return None, dias
-    tope_meta = centavos(tope, moneda)
+    tope_meta = centavos(tope, moneda) if parte is None else int(parte)
+    tope_moneda = tope if parte is None else monedas_meta.desde_unidad_meta(tope_meta, moneda)
     minimo = _entero(cuenta.get("min_campaign_group_spend_cap"))
-    if (tope_meta >= minimo) if minimo else (tope >= minimo_tope_campana(moneda)):
+    if tope_meta > 0 and ((tope_meta >= minimo) if minimo else (tope_moneda >= minimo_tope_campana(moneda))):
         return tope_meta, dias
     return None, _dias_que_alcanza(ex)
 
@@ -207,13 +477,25 @@ def _confirmar_tope(campaign_id, esperado):
     leido = _entero((meta_auth.llamar("GET", campaign_id, params={"fields": "spend_cap"}) or {}).get("spend_cap"))
     if leido == int(esperado):
         return
+    pausada = True
     try:
         meta_campaign.actualizar_estado(campaign_id, "PAUSED")
     except Exception:  # noqa: BLE001
+        pausada = False
         log.warning("No se pudo pausar la campaña %s tras un tope que no coincide", campaign_id)
-    raise PresupuestoNoCoincide(gettext(
-        "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de "
-        "Meta): quedó en pausa.", leido=leido if leido is not None else "?", esperado=int(esperado)))
+    if pausada:
+        error = PresupuestoNoCoincide(gettext(
+            "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de "
+            "Meta): quedó en pausa.", leido=leido if leido is not None else "?", esperado=int(esperado)))
+    else:
+        # PND-148: desde el reparto vivo del tope esto pasa con campañas ACTIVAS: si la pausa falló, se dice.
+        error = PresupuestoNoCoincide(gettext(
+            "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de "
+            "Meta) y NO se pudo pausar: páusala en Meta ya.", leido=leido if leido is not None else "?",
+            esperado=int(esperado)))
+    error.pausado = pausada
+    error.campana = campaign_id
+    raise error
 
 
 def minimo_tope_campana(moneda):
@@ -346,19 +628,21 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
     igual en cada llamada, así la segunda pieza nueva con el mismo pieza_id
     ve el video que subió la primera en la misma corrida. Las imágenes
     (`pz["es_imagen"]`) usan `crear_creative_imagen` (sin subida ni
-    miniatura): el creative lleva directo la URL pública de la imagen."""
+    miniatura): el creative lleva directo la URL pública de la imagen.
+    PND-148: `creds["ad_account_id"]` es la cuenta por defecto; cada anuncio se crea en la cuenta de su país
+    (`_usar_cuenta` antes de subir, crear el creative y el anuncio)."""
     experimento_id = ex["id"]
+    defecto = creds["ad_account_id"]
+    cuenta_de = {p["pais"]: _cuenta_de_pais(p, defecto) for p in ex["paises"]}
     # M4 + Bloque 5: la misma pieza (mismo pieza_id) clonada a dos países
     # comparte la SUBIDA del video (hasta 180s bajo _LOCK) pero NO el
     # creative: el link lleva utm_content=<experimento_pieza.id>, distinto
     # por país, así que cada ep necesita su propio creative (una llamada
-    # barata, sin subida). El cache es pieza_id -> meta_video_id dentro de
-    # esta corrida, sembrado con lo que ya esté guardado de corridas previas.
+    # barata, sin subida). El cache es (cuenta, pieza_id) -> meta_video_id dentro de
+    # esta corrida, sembrado con lo que ya esté guardado de corridas previas: un video subido a una cuenta no sirve
+    # en otra (PND-148), así que dos países en dos cuentas suben cada uno el suyo.
     videos_por_pieza = {} if cache is None else cache
-    for pz in ex["piezas"]:
-        video_guardado = (pz.get("extra") or {}).get("meta_video_id")
-        if video_guardado:
-            videos_por_pieza.setdefault(pz["pieza_id"], video_guardado)
+    _sembrar_videos(ex, defecto, videos_por_pieza)
     creadas = 0
     # Triple Whale conectado: cada creative lleva sus parámetros de rastreo
     # (tw_source / tw_adid). Se fijan al crear: cambiarlos después manda el
@@ -380,6 +664,8 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
         # En apps la misma pieza tiene un anuncio por tienda: el sufijo « · iOS» /
         # « · Android» los distingue en el Administrador de anuncios de Meta.
         nombre_anuncio = f"{pz['nombre']} — {pz['pais']}" + (f" · {app_tiendas.OS_META[plat]}" if plat else "")
+        cuenta = cuenta_de.get(pz["pais"], _act(defecto))
+        _usar_cuenta(creds, cuenta)
         experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adset_id)
         creative_id = pz["meta_creative_id"]
         if not creative_id:
@@ -391,10 +677,10 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
             else:
                 video_id = (pz.get("extra") or {}).get("meta_video_id")
                 if not video_id:
-                    video_id = videos_por_pieza.get(pz["pieza_id"])
+                    video_id = videos_por_pieza.get((cuenta, pz["pieza_id"]))
                     if not video_id:
                         video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
-                        videos_por_pieza[pz["pieza_id"]] = video_id
+                        videos_por_pieza[(cuenta, pz["pieza_id"])] = video_id
                     experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=video_id)
                 mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
                 creative_id = meta_creative.crear_creative_video(
@@ -409,6 +695,16 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
                                       {"ad_id": ad_id}, ep_id=pz["id"])
         creadas += 1
     return creadas
+
+
+def _sembrar_videos(ex, defecto, cache):
+    """Siembra el caché de videos (cuenta, pieza_id) -> meta_video_id con lo ya subido en corridas anteriores, cada
+    video en la cuenta del país de su fila (PND-148: un video de una cuenta no sirve en otra)."""
+    cuenta_de = {p["pais"]: _cuenta_de_pais(p, defecto) for p in ex["paises"]}
+    for pz in ex["piezas"]:
+        video_guardado = (pz.get("extra") or {}).get("meta_video_id")
+        if video_guardado:
+            cache.setdefault((cuenta_de.get(pz["pais"], _act(defecto)), pz["pieza_id"]), video_guardado)
 
 
 def _avisar_error_lanzamiento(cliente, ex, experimento_id, mensaje):
@@ -519,33 +815,75 @@ def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
 
     def _correr(creds):
         etapa(ETAPAS_LANZAR[0][0])
-        # PND-322: la moneda y su unidad se comprueban contra la cuenta ANTES de mandar ningún monto.
-        cuenta = _cuenta_meta(creds, cliente)
-        comprobar_moneda(cuenta, moneda)
-        cap, dias_meta = _tope_y_dias_meta(ex, cuenta, moneda)
-        campaign_id = ex["meta_campaign_id"]
-        if not campaign_id:
-            campaign_id = meta_campaign.crear_campaign(ex["nombre"], ex["objetivo_meta"], spend_cap_centavos=cap)["id"]
-            experimentos.actualizar(cliente, experimento_id, meta_campaign_id=campaign_id)
-            experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", gettext("Campaña creada en Meta (en pausa)"),
-                                          {"campaign_id": campaign_id, "spend_cap": cap})
-            if dias_meta < int(ex["dias"] or 7):
-                from tablero import dinero as _dinero
-                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", ngettext(
-                    "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
-                    "%(num)s día.",
-                    "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
-                    "%(num)s días.", dias_meta, tope=_dinero(float(ex["tope_total"] or 0), moneda)),
-                    {"dias_meta": dias_meta})
-        if cap:
-            _confirmar_tope(campaign_id, cap)
+        # PND-148: una campaña por cuenta, la de defecto primero (su campaña es la del experimento). Toda cuenta que no
+        # es la de defecto tiene que seguir en el proyecto, poder anunciar y facturar en la moneda: antes de llamar a Meta.
+        defecto = _act(creds["ad_account_id"])
+        grupos = [(a, [p for p in ex["paises"] if _cuenta_de_pais(p, defecto) == a])
+                  for a in _sin_repetir([defecto] + _cuentas_de(ex, defecto))]
+        grupos = [(a, ps) for a, ps in grupos if ps]
+        varias = len(grupos) > 1
+        nombres = _exigir_cuentas(cliente, defecto, [a for a, _ in grupos], moneda)
+        # PND-322: la moneda y su unidad se comprueban contra CADA cuenta ANTES de mandar ningún monto a ninguna.
+        cuentas_meta = {}
+        for act, _ in grupos:
+            cuentas_meta[act] = _cuenta_meta_de(act)
+            _guardar_tope_minimo(cliente, act, cuentas_meta[act])   # PND-323: solo la de la conexión
+            comprobar_moneda(cuentas_meta[act], moneda)
+        if [a for a, _ in grupos] != [defecto]:
+            _comprobar_activos_por_cuenta(promoted_object, [a for a, _ in grupos], nombres)
+        tope = float(ex["tope_total"] or 0)
+        partes = _repartir_tope(tope, [ps for _, ps in grupos], moneda) if tope > 0 else [None] * len(grupos)
+        from tablero import dinero as _dinero
+        campanas = {}   # cuenta -> (campaña, días de los conjuntos)
+        for (act, paises_g), parte in zip(grupos, partes):
+            _usar_cuenta(creds, act)
+            cap, dias_meta = _tope_y_dias_meta(ex, cuentas_meta[act], moneda, parte if varias else None)
+            campaign_id = next((p["meta_campaign_id"] for p in paises_g if p.get("meta_campaign_id")), None)
+            if not campaign_id and (act == defecto or not varias):
+                # Un experimento viejo (sin campaña por país) o con una sola cuenta: su campaña es la del experimento.
+                campaign_id = ex["meta_campaign_id"]
+            if not campaign_id:
+                nombre = f"{ex['nombre']} — {nombres.get(act) or act}" if varias else ex["nombre"]
+                campaign_id = meta_campaign.crear_campaign(nombre, ex["objetivo_meta"], spend_cap_centavos=cap)["id"]
+                experimentos.fijar_campana(cliente, experimento_id, [p["pais"] for p in paises_g], campaign_id)
+                if varias:
+                    experimentos.registrar_evento(
+                        cliente, experimento_id, "lanzamiento",
+                        gettext("Campaña creada en Meta en %(cuenta)s (en pausa)", cuenta=nombres.get(act) or act),
+                        {"campaign_id": campaign_id, "spend_cap": cap, "ad_account_id": act})
+                    if cap is None and tope > 0:
+                        experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", gettext(
+                            "En %(cuenta)s Meta no acepta un tope tan bajo como %(parte)s (su parte del total): esa "
+                            "campaña va sin tope en Meta y la frenan la fecha de fin y la vigilancia del gasto del "
+                            "experimento.", cuenta=nombres.get(act) or act,
+                            parte=_dinero(monedas_meta.desde_unidad_meta(parte or 0, moneda), moneda)),
+                            {"ad_account_id": act, "parte": parte})
+                else:
+                    experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
+                                                  gettext("Campaña creada en Meta (en pausa)"),
+                                                  {"campaign_id": campaign_id, "spend_cap": cap})
+                if dias_meta < int(ex["dias"] or 7):
+                    experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", ngettext(
+                        "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
+                        "%(num)s día.",
+                        "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
+                        "%(num)s días.", dias_meta,
+                        tope=_dinero(monedas_meta.desde_unidad_meta(parte or 0, moneda) if varias else tope, moneda)),
+                        {"dias_meta": dias_meta})
+            if cap:
+                _confirmar_tope(campaign_id, cap)
+            campanas[act] = (campaign_id, dias_meta)
         etapa(ETAPAS_LANZAR[1][0])
         adsets = {}
         plataformas = experimentos.plataformas_de(ex.get("extra")) or [None]
-        for p in ex["paises"]:
-            for plat in plataformas:
-                adsets[_clave_adset(p["pais"], plat)] = _conjunto_de(cliente, ex, p, plat, len(plataformas),
-                                                                      campaign_id, promoted_object, moneda, dias_meta)
+        for act, paises_g in grupos:
+            _usar_cuenta(creds, act)
+            campaign_id, dias_meta = campanas[act]
+            for p in paises_g:
+                for plat in plataformas:
+                    adsets[_clave_adset(p["pais"], plat)] = _conjunto_de(cliente, ex, p, plat, len(plataformas),
+                                                                          campaign_id, promoted_object, moneda,
+                                                                          dias_meta)
         etapa(ETAPAS_LANZAR[2][0])
         _crear_anuncios(cliente, ex, creds, adsets)
 
@@ -663,33 +1001,49 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
         raise ValueError(gettext("Ese experimento está cerrado."))
     local = "activo" if status == "ACTIVE" else "pausado"
     saltadas = []
+    fallos = []
+
+    def _intentar(fn, *args):
+        """Activar se corta en el primer error (lo que alcanzó a encenderse lo repausa quien llama). Pausar NO: con una
+        campaña por cuenta (PND-148), que Meta rechace la pausa en una cuenta no puede dejar a las otras gastando; se
+        sigue con todo y el primer error sale al final. True si Meta lo hizo."""
+        if status == "ACTIVE":
+            fn(*args)
+            return True
+        try:
+            fn(*args)
+            return True
+        except Exception as e:  # noqa: BLE001 — se relanza al final
+            fallos.append(e)
+            return False
 
     def _correr(_creds):
         if status == "ACTIVE":
             if pais is not None and not any(p["pais"] == pais and _adsets_de_pais(p) for p in ex["paises"]):   # apps: meta_adsets
                 raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
-            _confirmar_antes_de_activar(_creds, ex, pais)
+            _confirmar_antes_de_activar(_creds, ex, pais, cliente=cliente)
             _preparar_fin_primera_activacion(cliente, ex)
         if pais is None:
-            meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
+            for cid in campanas_de(ex):   # PND-148: una campaña por cuenta
+                _intentar(meta_campaign.actualizar_estado, cid, status)
             for p in ex["paises"]:
                 ids = _adsets_de_pais(p)
-                for adset_id in ids:
-                    meta_adset.actualizar_estado(adset_id, status)
-                if ids:
+                hechos = [_intentar(meta_adset.actualizar_estado, adset_id, status) for adset_id in ids]
+                if ids and all(hechos):
                     experimentos.actualizar_pais(cliente, experimento_id, p["pais"], estado=local)
         else:
             p = next((p for p in ex["paises"] if p["pais"] == pais), None)
             ids = _adsets_de_pais(p) if p else []
             if not ids:
                 raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
-            if status == "ACTIVE" and ex["estado"] != "corriendo":
+            if status == "ACTIVE" and (ex["estado"] != "corriendo" or _campana_sin_pais_activo(ex, p)):
                 # Activar un solo país no sirve de nada si la campaña sigue en pausa
                 # en Meta: sin ella, el conjunto no entrega aunque quede ACTIVE local.
-                meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
-            for adset_id in ids:
-                meta_adset.actualizar_estado(adset_id, status)
-            experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
+                # PND-148: la campaña de SU cuenta, que puede seguir en pausa aunque el experimento ya corra por otra.
+                meta_campaign.actualizar_estado(_campana_de_pais(ex, p), status)
+            hechos = [_intentar(meta_adset.actualizar_estado, adset_id, status) for adset_id in ids]
+            if all(hechos):
+                experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
         for pz in _piezas_de(ex, pais):
             if status == "ACTIVE" and pieza_retirada(pz):
                 # I-1: lo que el decisor ya retiró (perdedora rescatada,
@@ -698,12 +1052,15 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
                 # de rescate" volvería a gastar en las que ya perdieron.
                 saltadas.append(pz)
                 continue
-            meta_ad.actualizar_estado(pz["meta_ad_id"], status)
+            if not _intentar(meta_ad.actualizar_estado, pz["meta_ad_id"], status):
+                continue
             if local == "activo":
                 experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
                 experimentos.marcar_pieza(cliente, pz["id"], activado_en=db.ahora())
             else:
                 experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
+        if fallos:
+            raise fallos[0]
 
     # PND-322: la marca «activando» cubre desde antes de tocar Meta hasta que el estado ya dice «corriendo»; mientras
     # tanto la vigilancia no confunde un experimento a medio activar con uno pausado que sigue activo en Meta.
@@ -739,15 +1096,20 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
                                   {"saltadas": [p["id"] for p in saltadas]} if saltadas else None)
 
 
-def _confirmar_antes_de_activar(creds, ex, pais=None):
+def _confirmar_antes_de_activar(creds, ex, pais=None, cliente=None):
     """PND-322: antes de ENCENDER, la cuenta pasa `comprobar_moneda` y cada conjunto que se va a activar tiene en Meta
     el diario que se ve en pantalla. Uno lanzado antes del arreglo, con 100 veces más, no se enciende: queda en pausa
-    (el país entero) y sale el aviso."""
+    (el país entero) y sale el aviso. PND-148: cada cuenta que se enciende (la del país, o todas las del experimento)
+    sigue en el proyecto y pasa su `comprobar_moneda`; el tope se compara con el gasto SUMADO de todas las campañas."""
     moneda = ex["moneda"] or "USD"
-    comprobar_moneda(_cuenta_meta(creds), moneda)
+    defecto = _act(creds["ad_account_id"])
+    cuentas_ = _cuentas_de(ex, defecto, pais) or [defecto]
+    _exigir_cuentas(cliente or ex.get("cliente"), defecto, cuentas_, moneda)
+    for act in cuentas_:
+        comprobar_moneda(_cuenta_meta_de(act), moneda)
     tope = float(ex.get("tope_total") or 0)
-    if tope > 0 and ex.get("meta_campaign_id"):
-        gastado = _gasto_campana(ex["meta_campaign_id"], "maximum")
+    if tope > 0 and campanas_de(ex):
+        gastado = sum(_gasto_campana(cid, "maximum") for cid in campanas_de(ex))
         if gastado >= tope:
             from tablero import dinero as _dinero
             raise ValueError(gettext("Ya gastó %(gasto)s de un tope de %(tope)s en Meta: sube el tope antes de activarlo.",
@@ -833,17 +1195,37 @@ def _marcar_activando(cliente, experimento_id, marcar):
 
 def _pausar_campana_ya(cliente, ex):
     """Corta la entrega en el acto: la campaña en PAUSED por la llamada directa (sin esperar el candado). Después,
-    `cambiar_estado`/`_pausar_todo_en_meta` dejan en pausa conjuntos, anuncios y el estado local."""
-    _meta_directo(cliente, "POST", ex["meta_campaign_id"], payload={"status": "PAUSED"})
+    `cambiar_estado`/`_pausar_todo_en_meta` dejan en pausa conjuntos, anuncios y el estado local. PND-148: todas las
+    campañas del experimento (una por cuenta); si una falla se intentan las demás y sale el primer error."""
+    error = None
+    for cid in campanas_de(ex):
+        try:
+            _meta_directo(cliente, "POST", cid, payload={"status": "PAUSED"})
+        except Exception as e:  # noqa: BLE001 — las demás campañas también se cortan
+            error = error or e
+    if error is not None:
+        raise error
 
 
 def _repausar_si_sigue_activo(cliente, ex):
     """Un experimento pausado (o en error) en Creatv cuya campaña sigue ACTIVA en Meta —una pausa que falló a medias—
     se vuelve a pausar entero (PND-322, revisión de gasto). Solo lee el estado de la campaña: un GET. No toca uno que
     alguien está activando en este momento (`_activando`)."""
-    estado = _meta_directo(cliente, "GET", ex["meta_campaign_id"], params={"fields": "effective_status"}).get(
-        "effective_status")
-    if estado != "ACTIVE":
+    # PND-148: basta con que UNA campaña del experimento siga activa en Meta; cada una se lee aparte (una cuenta que no
+    # se puede leer no tapa a las demás) y, si ninguna está activa, el primer error de lectura sale al final.
+    activa, error_lectura = False, None
+    for cid in campanas_de(ex):
+        try:
+            estado = _meta_directo(cliente, "GET", cid, params={"fields": "effective_status"}).get("effective_status")
+        except Exception as e:  # noqa: BLE001
+            error_lectura = error_lectura or e
+            continue
+        if estado == "ACTIVE":
+            activa = True
+            break
+    if not activa:
+        if error_lectura is not None:
+            raise error_lectura
         return None
     actual = experimentos.obtener(cliente, ex["id"])
     if not actual or actual["estado"] not in ("pausado", "error") or _activando(actual):
@@ -877,17 +1259,30 @@ def vigilar_gasto(cliente, experimento_id):
         return _repausar_si_sigue_activo(cliente, ex)
     if ex["estado"] not in ("corriendo", "decidido"):
         return None
-    cid = ex["meta_campaign_id"]
-    total = _spend(_meta_directo(cliente, "GET", f"{cid}/insights",
-                                 params={"fields": "spend", "date_preset": "maximum"}))
-    hoy = {}
-    for fila in (_meta_directo(cliente, "GET", f"{cid}/insights",
-                               params={"fields": "adset_id,spend", "date_preset": "today", "level": "adset"})
-                 .get("data") or []):
+    # PND-148: el gasto de TODAS las campañas del experimento (una por cuenta) se suma contra el tope; el ritmo se
+    # mira conjunto por conjunto en cada una.
+    # Cada campaña se lee en su propio try: que no se pueda leer una cuenta no apaga el freno de las demás (se juzga con
+    # lo leído, que es un mínimo del gasto real); si nada justifica pausar, el primer error de lectura sale al final.
+    total, hoy, error_lectura = 0.0, {}, None
+    for cid in campanas_de(ex):
         try:
-            hoy[str(fila.get("adset_id"))] = float(fila.get("spend") or 0)
-        except (TypeError, ValueError):
+            gasto = _spend(_meta_directo(cliente, "GET", f"{cid}/insights",
+                                         params={"fields": "spend", "date_preset": "maximum"}))
+            filas = (_meta_directo(cliente, "GET", f"{cid}/insights",
+                                   params={"fields": "adset_id,spend", "date_preset": "today", "level": "adset"})
+                     .get("data") or [])
+        except Exception as e:  # noqa: BLE001
+            error_lectura = error_lectura or e
             continue
+        total += gasto
+        for fila in filas:
+            try:
+                hoy[str(fila.get("adset_id"))] = float(fila.get("spend") or 0)
+            except (TypeError, ValueError):
+                continue
+    if error_lectura is not None:
+        log.warning("Vigilancia de %s, exp %s: una campaña no se pudo leer (%s); se juzga con las demás",
+                    cliente, experimento_id, type(error_lectura).__name__)
     if total > float(ex["gasto_acumulado"] or 0):
         experimentos.actualizar(cliente, experimento_id, gasto_acumulado=round(total, 2))
     from tablero import dinero as _dinero
@@ -907,6 +1302,8 @@ def vigilar_gasto(cliente, experimento_id):
                 datos.update(conjunto=adset_id, gasto_hoy=gastado, diario=diario)
                 break
     if not motivo:
+        if error_lectura is not None:
+            raise error_lectura
         return None
     _pausar_campana_ya(cliente, ex)   # la entrega se corta ya; lo de abajo puede esperar el candado
     cambiar_estado(cliente, experimento_id, "PAUSED")
@@ -985,17 +1382,30 @@ def _pausar_todo_en_meta(cliente, ex):
     de un experimento, sin mirar su estado local (cerrar o repausar uno en «error» o «lanzando» tiene que poder
     pausar lo que haya). Deja en pausa el estado local de países y piezas. Lanza la excepción de Meta si falla."""
     def _correr(_creds):
-        meta_campaign.actualizar_estado(ex["meta_campaign_id"], "PAUSED")
+        # PND-148: todas las campañas (una por cuenta). Si Meta rechaza algo se sigue con lo demás (campañas, conjuntos
+        # y anuncios de todas las cuentas): lo que se pueda apagar se apaga, el estado local solo cambia en lo que Meta
+        # pausó y el primer error sale al final.
+        fallos = []
+
+        def pausar(fn, oid):
+            try:
+                fn(oid, "PAUSED")
+                return True
+            except Exception as e:  # noqa: BLE001 — se relanza al final
+                fallos.append(e)
+                return False
+        for cid in campanas_de(ex):
+            pausar(meta_campaign.actualizar_estado, cid)
         for p in ex["paises"]:
             ids = _adsets_de_pais(p)
-            for adset_id in ids:
-                meta_adset.actualizar_estado(adset_id, "PAUSED")
-            if ids:
+            hechos = [pausar(meta_adset.actualizar_estado, adset_id) for adset_id in ids]
+            if ids and all(hechos):
                 experimentos.actualizar_pais(cliente, ex["id"], p["pais"], estado="pausado")
         for pz in ex["piezas"]:
-            if pz["meta_ad_id"]:
-                meta_ad.actualizar_estado(pz["meta_ad_id"], "PAUSED")
+            if pz["meta_ad_id"] and pausar(meta_ad.actualizar_estado, pz["meta_ad_id"]):
                 experimentos.actualizar_pieza(cliente, pz["id"], estado="pausado")
+        if fallos:
+            raise fallos[0]
     _con_credenciales(cliente, _correr)
 
 
@@ -1100,8 +1510,59 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     # si no, el panel diría un presupuesto y Meta gastaría otro.
     centavos_antes = centavos(p.get("presupuesto_dia") or 0, moneda) // len(ids)
 
+    anterior = float(p.get("presupuesto_dia") or 0)
+    subir = float(presupuesto_dia) > anterior
+    # Decisión de quien orquesta (2026-10-16): con varias cuentas, el tope se reparte otra vez con los diarios nuevos y
+    # el spend_cap de cada campaña se actualiza ANTES del diario. Si no cabe, subir se niega en palabras sin tocar nada;
+    # bajar sigue (bajar nunca gasta más) y, si el reparto no se puede hacer, los topes quedan como estaban. Una sola
+    # cuenta: como antes. Un reparto a la vez por experimento (`_tomar_marca_reparto`).
+    con_reparto = _varias_campanas(ex) and float(ex.get("tope_total") or 0) > 0
+    marca = _tomar_marca_reparto(cliente, experimento_id) if con_reparto else None
+    if con_reparto and marca is None and subir:
+        raise ValueError(gettext("Otro cambio de presupuesto de este experimento está en curso: vuelve a intentarlo en "
+                                 "unos minutos."))
+    reparto = {"mandados": []}
+
+    def _repartir(creds):
+        vivo = experimentos.obtener(cliente, experimento_id) or ex   # lo que dejó el último reparto, ya con la marca
+        plan = _plan_reparto(cliente, vivo, creds, pais, float(presupuesto_dia), moneda)
+        reparto["nombres"] = plan["nombres"]
+        if plan["objetivo"] is None:
+            if subir:
+                raise ValueError(gettext(
+                    "No se subió el diario de %(pais)s: con lo que ya gastó cada cuenta (más un día de margen) y el "
+                    "mínimo de Meta para el tope de cada campaña, el tope del experimento (%(tope)s) no alcanza para "
+                    "repartirlo con el diario nuevo. Déjalo como está o súbelo menos.",
+                    pais=pais, tope=_dinero(float(ex["tope_total"] or 0), moneda)))
+            reparto["sin_cambio"] = True
+            return
+        try:
+            _aplicar_reparto(plan, reparto["mandados"])
+        except PresupuestoNoCoincide as exc:
+            if getattr(exc, "pausado", False):   # la campaña quedó en pausa en Meta: sus países también aquí
+                for q in vivo["paises"]:
+                    if _campana_de_pais(vivo, q) == getattr(exc, "campana", None):
+                        experimentos.actualizar_pais(cliente, experimento_id, q["pais"], estado="pausado")
+            experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"{pais}: {exc}",
+                                          {"campaign_id": getattr(exc, "campana", None)})
+            raise
+
     def _correr(creds):
-        comprobar_moneda(_cuenta_meta(creds), moneda)   # PND-322: ningún monto sin comprobar la unidad
+        # PND-322: ningún monto sin comprobar la unidad. PND-148: la de la cuenta de ESTE país, que sigue en el proyecto.
+        cuenta = _cuenta_de_pais(p, creds["ad_account_id"])
+        _exigir_cuentas(cliente, creds["ad_account_id"], [cuenta], moneda)
+        comprobar_moneda(_cuenta_meta_de(cuenta), moneda)
+        if con_reparto and marca is not None:
+            if subir:
+                _repartir(creds)
+            else:
+                # Bajar nunca se frena por el reparto (otra cuenta que salió, una lectura que falla): se anota y sigue.
+                try:
+                    _repartir(creds)
+                except Exception as exc:  # noqa: BLE001
+                    reparto["fallo"] = cola.sin_token(str(exc))
+        elif con_reparto and not subir:
+            reparto["fallo"] = gettext("otro cambio de presupuesto estaba en curso")
         cambiados = []
         try:
             for adset_id in ids:
@@ -1144,10 +1605,35 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
                                           {"intentado": float(presupuesto_dia), "unidades": centavos_conjunto})
             raise
 
-    _con_credenciales(cliente, _correr)
-    experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
-    for pz in _piezas_de(ex, pais):
-        experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
+    def _anotar_topes():
+        if not reparto["mandados"]:
+            return
+        detalle = ", ".join(f"{(reparto.get('nombres') or {}).get(a) or a}: "
+                            f"{_dinero(monedas_meta.desde_unidad_meta(t, moneda), moneda)}" for a, t in reparto["mandados"])
+        experimentos.registrar_evento(cliente, experimento_id, "presupuesto",
+                                      gettext("Tope del experimento repartido otra vez entre las cuentas: %(detalle)s",
+                                              detalle=detalle),
+                                      {"topes": [[a, t] for a, t in reparto["mandados"]]})
+
+    try:
+        try:
+            _con_credenciales(cliente, _correr)
+        except Exception:
+            _anotar_topes()   # los topes que Meta ya aceptó quedan en la bitácora aunque algo de después fallara
+            raise
+        experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
+        for pz in _piezas_de(ex, pais):
+            experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
+    finally:
+        if marca is not None:
+            _soltar_marca_reparto(cliente, experimento_id, marca)
+    _anotar_topes()
+    if float(presupuesto_dia) < anterior and (reparto.get("sin_cambio") or reparto.get("fallo")):
+        experimentos.registrar_evento(cliente, experimento_id, "presupuesto", gettext(
+            "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: con lo que ya "
+            "gastó cada una no alcanza para repartirlo otra vez.", pais=pais) if reparto.get("sin_cambio") else gettext(
+            "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: %(motivo)s.",
+            pais=pais, motivo=reparto["fallo"]), {"motivo": reparto.get("fallo")})
     experimentos.registrar_evento(cliente, experimento_id, "presupuesto",
                                   gettext("Presupuesto diario de %(pais)s: %(presupuesto)s %(moneda)s",
                                           pais=pais, presupuesto=presupuesto_dia, moneda=moneda),
@@ -1188,10 +1674,12 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
         # solo piezas_nuevas), para cubrir también el caso de una pieza nueva
         # cuyo pieza_id ya subió video en una pieza vieja de otra corrida.
         cache = {}
-        for pz_ in ex["piezas"]:
-            video_guardado = (pz_.get("extra") or {}).get("meta_video_id")
-            if video_guardado:
-                cache.setdefault(pz_["pieza_id"], video_guardado)
+        _sembrar_videos(ex, creds["ad_account_id"], cache)   # PND-148: (cuenta, pieza_id), un video por cuenta
+        # PND-148: cada anuncio se crea en la cuenta de su país, que tiene que seguir en el proyecto.
+        por_pais = {p["pais"]: p for p in ex["paises"]}
+        _exigir_cuentas(cliente, creds["ad_account_id"],
+                        _sin_repetir(_cuenta_de_pais(por_pais.get(pz["pais"]), creds["ad_account_id"])
+                                     for pz in piezas_nuevas), ex["moneda"] or "USD")
         modo = meta_conexion.modo(cliente)
         for pz in piezas_nuevas:
             try:
@@ -1267,11 +1755,14 @@ def activar_pieza(cliente, ep_id):
     else:
         adsets_a_activar = [pais["meta_adset_id"]] if pais and pais.get("meta_adset_id") else []
 
+    # PND-148: la campaña de la cuenta del país, que puede seguir en pausa aunque el experimento ya corra por otra.
+    activar_campana = campaña_pausada or (pais is not None and _campana_sin_pais_activo(ex, pais))
+
     def _correr(_creds):
-        _confirmar_antes_de_activar(_creds, ex, pz["pais"])
+        _confirmar_antes_de_activar(_creds, ex, pz["pais"], cliente=cliente)
         _preparar_fin_primera_activacion(cliente, ex)
-        if campaña_pausada:
-            meta_campaign.actualizar_estado(ex["meta_campaign_id"], "ACTIVE")
+        if activar_campana:
+            meta_campaign.actualizar_estado(_campana_de_pais(ex, pais), "ACTIVE")
         if reactivar_conjunto:
             for adset_id in adsets_a_activar:
                 meta_adset.actualizar_estado(adset_id, "ACTIVE")

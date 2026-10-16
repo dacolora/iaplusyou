@@ -1737,6 +1737,10 @@ msgid "%(p)s se queda 3 s"
 msgstr "%(p)s stay 3 s"
 
 #, python-format
+msgid "%(pais)s · se lanza en %(cuenta)s"
+msgstr "%(pais)s · launches in %(cuenta)s"
+
+#, python-format
 msgid "%(palabras)s palabras · unos %(segundos)s s leído completo a ritmo natural."
 msgstr "%(palabras)s words · about %(segundos)s s read in full at a natural pace."
 
@@ -4015,6 +4019,10 @@ msgid "Cada marca necesita un nombre."
 msgstr "Each brand needs a name."
 
 #, python-format
+msgid "Cada país se lanza en una cuenta publicitaria de Meta, con su propia campaña. Solo salen las cuentas que pueden anunciar en %(moneda)s."
+msgstr "Each country launches in a Meta ad account, with its own campaign. Only accounts that can advertise in %(moneda)s are listed."
+
+#, python-format
 msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que tu cuenta de Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
 msgstr "Each country has its own daily budget. The total is also sent to Meta as the campaign cap from %(minimo)s up, the minimum your Meta account accepts for a cap; with a smaller total, the limit comes from the daily budgets and the end date."
 
@@ -4191,6 +4199,10 @@ msgstr "Campaign added."
 
 msgid "Campaña creada en Meta (en pausa)"
 msgstr "Campaign created on Meta (paused)"
+
+#, python-format
+msgid "Campaña creada en Meta en %(cuenta)s (en pausa)"
+msgstr "Campaign created on Meta in %(cuenta)s (paused)"
 
 msgid "Campaña eliminada"
 msgstr "Campaign deleted"
@@ -4978,6 +4990,10 @@ msgstr "With a reference image this model doesn't choose a format: it follows th
 
 msgid "Con una tienda los experimentos atribuyen ventas reales. Conéctala en Configuración › Conectar tu tienda."
 msgstr "With a store, experiments attribute real sales. Connect it in Settings › Connect your store."
+
+#, python-format
+msgid "Con varias cuentas el total se reparte entre sus campañas, y alguna parte queda por debajo de %(tope)s, el mínimo de Meta para un tope duro: Creatv reparte %(total)s en presupuestos diarios por país (≈ %(dia)s al día) y la vigilancia del gasto frena el total."
+msgstr "With several accounts the total is split among their campaigns, and some share falls below %(tope)s, Meta's minimum for a hard cap: Creatv splits %(total)s into daily budgets per country (≈ %(dia)s a day) and the spend watch holds back the total."
 
 msgid "Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30."
 msgstr "With reference videos (Wan 3.0), their seconds plus the result's can't add up to more than 30."
@@ -6749,6 +6765,14 @@ msgstr "The Meta details were left incomplete by the time limit."
 msgid "El diagnóstico no se pudo hacer: %(error)s"
 msgstr "The diagnosis couldn't be made: %(error)s"
 
+#, python-format
+msgid "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: %(motivo)s."
+msgstr "The daily budget for %(pais)s went down, but the split of the cap among the accounts was left as it was: %(motivo)s."
+
+#, python-format
+msgid "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: con lo que ya gastó cada una no alcanza para repartirlo otra vez."
+msgstr "The daily budget for %(pais)s went down, but the split of the cap among the accounts was left as it was: what each one has already spent doesn't allow splitting it again."
+
 msgid "El documento no tiene la forma esperada."
 msgstr "The document doesn't have the expected shape."
 
@@ -7655,6 +7679,10 @@ msgstr "Get started today"
 #, python-format
 msgid "Empieza por las campañas con más conjuntos limitados: %(campanas)s."
 msgstr "Start with the campaigns with the most limited ad sets: %(campanas)s."
+
+#, python-format
+msgid "En %(cuenta)s Meta no acepta un tope tan bajo como %(parte)s (su parte del total): esa campaña va sin tope en Meta y la frenan la fecha de fin y la vigilancia del gasto del experimento."
+msgstr "In %(cuenta)s Meta doesn't accept a cap as low as %(parte)s (its share of the total): that campaign runs without a cap on Meta and is held back by the end date and the experiment's spend watch."
 
 #, python-format
 msgid "En %(moneda)s, la moneda de la cuenta de Meta"
@@ -11336,11 +11364,27 @@ msgstr "The account isn’t active in Meta"
 msgid "La cuenta publicitaria %(cuenta)s no está entre las que ve el Business de la agencia."
 msgstr "The ad account %(cuenta)s isn't among the ones the agency's Business can see."
 
+#, python-format
+msgid "La cuenta publicitaria %(cuenta)s no puede anunciar la app %(app)s: autoriza esa cuenta en Meta for Developers (Configuración › Avanzada › Cuentas publicitarias autorizadas) o asígnale la app en Meta Business, y vuelve a lanzar. No se creó nada en Meta."
+msgstr "The ad account %(cuenta)s can't advertise the app %(app)s: authorize that account in Meta for Developers (Settings › Advanced › Authorized ad accounts) or assign the app to it in Meta Business, then launch again. Nothing was created on Meta."
+
+#, python-format
+msgid "La cuenta publicitaria %(cuenta)s no tiene acceso al Pixel %(pixel)s: compártelo con esa cuenta en Meta Business (Configuración del negocio › Orígenes de datos › Píxeles › Asignar cuentas publicitarias) y vuelve a lanzar. No se creó nada en Meta."
+msgstr "The ad account %(cuenta)s has no access to the Pixel %(pixel)s: share it with that account in Meta Business (Business settings › Data sources › Pixels › Assign ad accounts), then launch again. Nothing was created on Meta."
+
+#, python-format
+msgid "La cuenta publicitaria %(cuentas)s ya no se puede usar en este proyecto (salió de sus cuentas de Meta, perdió el permiso para anunciar o factura en otra moneda): no se manda nada a Meta."
+msgstr "The ad account %(cuentas)s can no longer be used in this project (it left its Meta accounts, lost permission to advertise or bills in another currency): nothing is sent to Meta."
+
 msgid "La cuenta publicitaria cambió: los experimentos anteriores de ese proyecto dejan de refrescarse."
 msgstr "The ad account changed: that project's previous experiments stop refreshing."
 
 msgid "La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."
 msgstr "The ad account changed: previous experiments stop refreshing."
+
+#, python-format
+msgid "La cuenta publicitaria elegida para %(paises)s no puede lanzar en este proyecto (no está en sus cuentas de Meta, no tiene permiso para anunciar o factura en otra moneda)."
+msgstr "The ad account chosen for %(paises)s can't launch in this project (it isn't among its Meta accounts, has no permission to advertise or bills in another currency)."
 
 msgid "La cuenta publicitaria necesita un método de pago en business.facebook.com › Facturación: sin él Meta no activa ningún anuncio."
 msgstr "The ad account needs a payment method at business.facebook.com › Billing: without one, Meta won't activate any ad."
@@ -12781,6 +12825,10 @@ msgstr "Meta saved a different daily budget on the ad set than the one sent (%(l
 #, python-format
 msgid "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta): quedó en pausa."
 msgstr "Meta saved a different daily budget on the ad set than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit): it was paused."
+
+#, python-format
+msgid "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta) y NO se pudo pausar: páusala en Meta ya."
+msgstr "Meta saved a different cap on the campaign than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit) and it could NOT be paused: pause it in Meta now."
 
 #, python-format
 msgid "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta): quedó en pausa."
@@ -14594,6 +14642,10 @@ msgstr "It won't renew or be charged again. Until then you keep the member price
 msgid "No se subió"
 msgstr "Not uploaded"
 
+#, python-format
+msgid "No se subió el diario de %(pais)s: con lo que ya gastó cada cuenta (más un día de margen) y el mínimo de Meta para el tope de cada campaña, el tope del experimento (%(tope)s) no alcanza para repartirlo con el diario nuevo. Déjalo como está o súbelo menos."
+msgstr "The daily budget for %(pais)s wasn't raised: given what each account has already spent (plus one day of margin) and Meta's minimum for each campaign's cap, the experiment's cap (%(tope)s) isn't enough to split it with the new daily budget. Leave it as it is or raise it less."
+
 msgid "No son referencia del producto: asígnalas a un color para que el modelo las use."
 msgstr "They are not product references: assign them to a color so the model uses them."
 
@@ -14881,6 +14933,9 @@ msgstr "Other (uses the product description)"
 
 msgid "Otro cambio"
 msgstr "Other change"
+
+msgid "Otro cambio de presupuesto de este experimento está en curso: vuelve a intentarlo en unos minutos."
+msgstr "Another budget change for this experiment is in progress: try again in a few minutes."
 
 msgid "Otro estado"
 msgstr "Other status"
@@ -19414,6 +19469,10 @@ msgstr "Included cap (cost/month)"
 msgid "Tope de lo incluido en US$ de costo por mes"
 msgstr "Included cap in US$ of cost per month"
 
+#, python-format
+msgid "Tope del experimento repartido otra vez entre las cuentas: %(detalle)s"
+msgstr "Experiment cap split again among the accounts: %(detalle)s"
+
 msgid "Tope del presupuesto diario al escalar (en la moneda de la cuenta)"
 msgstr "Daily budget cap when scaling (in the account currency)"
 
@@ -23435,6 +23494,9 @@ msgstr "original"
 msgid "otra estructura"
 msgstr "another structure"
 
+msgid "otro cambio de presupuesto estaba en curso"
+msgstr "another budget change was in progress"
+
 msgid "otro gancho"
 msgstr "another hook"
 
@@ -23960,6 +24022,13 @@ msgstr "generated automatically"
 
 msgid "se guardan 10 min; si acabas de asignar un activo en Business Manager, actualiza"
 msgstr "kept for 10 min; if you just assigned an asset in Business Manager, refresh"
+
+msgid "se lanza en"
+msgstr "launches in"
+
+#, python-format
+msgid "se lanza en %(cuenta)s"
+msgstr "launches in %(cuenta)s"
 
 msgid "se leen las métricas de la cuenta; sin Página no se pueden lanzar anuncios ni publicar"
 msgstr "the account's metrics are read; without a Page you can't launch ads or publish"

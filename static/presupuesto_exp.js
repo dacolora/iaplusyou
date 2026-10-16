@@ -46,7 +46,51 @@
     });
   }
 
-  var api = {EN_ENTEROS: EN_ENTEROS, ATAJOS: ATAJOS, factor: factor, repartir: repartir, atajos: atajos};
+  // PND-148: lo que le toca a cada campaña (una por cuenta publicitaria) del total. Réplica de `lanzador._repartir_tope`:
+  // `grupos` son los diarios de los países de cada cuenta ([[300, 50], [100]]); cada parte es proporcional a la suma de
+  // los diarios de su cuenta, hacia abajo en la unidad de la moneda, así la suma nunca pasa del total. Con una sola
+  // cuenta, el total. La pantalla la usa para no decir «Máximo que puede gastar» si alguna parte no llega al tope mínimo.
+  function partesTope(total, grupos, moneda) {
+    var f = factor(moneda), t = Math.round(limpio(total * f));
+    if (grupos.length === 1) return [t / f];
+    var pesos = grupos.map(function (g) {
+      return g.reduce(function (a, d) { return a + Math.round(limpio(d * f)); }, 0);
+    });
+    var s = pesos.reduce(function (a, w) { return a + w; }, 0);
+    if (s <= 0) return pesos.map(function () { return Math.floor(t / pesos.length) / f; });
+    return pesos.map(function (w) { return Math.floor(t * w / s) / f; });
+  }
+
+  // Los diarios de los países agrupados por cuenta, en el orden en que aparece cada cuenta: `filas` = [[cuenta, diario]].
+  function gruposPorCuenta(filas) {
+    var orden = [], grupos = {};
+    filas.forEach(function (f) {
+      if (!(f[0] in grupos)) { grupos[f[0]] = []; orden.push(f[0]); }
+      grupos[f[0]].push(Number(f[1]) || 0);
+    });
+    return orden.map(function (k) { return grupos[k]; });
+  }
+
+  // Por qué la pantalla NO puede decir «Máximo que puede gastar»: 'total' si el total queda bajo el mínimo de Meta para
+  // un tope de campaña, 'partes' si con varias cuentas alguna parte (partesTope) queda bajo ese mínimo, null si toda
+  // campaña lleva tope duro.
+  function faltaTope(total, grupos, moneda, minimo) {
+    if (total < minimo) return 'total';
+    if (grupos.length > 1 && partesTope(total, grupos, moneda).some(function (x) { return x < minimo; })) return 'partes';
+    return null;
+  }
+
+  // Las líneas de Revisar («🇸🇪 Suecia · se lanza en HappyFlops Sweden»): `filas` = [[país en palabras, cuenta]]. El
+  // reemplazo va por función: un nombre de cuenta de Meta con «$&» no se interpreta.
+  function lineasCuentas(plantilla, filas) {
+    return filas.map(function (f) {
+      return plantilla.replace('{pais}', function () { return f[0]; }).replace('{nombre}', function () { return f[1]; });
+    });
+  }
+
+  var api = {EN_ENTEROS: EN_ENTEROS, ATAJOS: ATAJOS, factor: factor, repartir: repartir, atajos: atajos,
+             partesTope: partesTope, gruposPorCuenta: gruposPorCuenta, faltaTope: faltaTope,
+             lineasCuentas: lineasCuentas};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.PresupuestoExp = api;
 })(typeof window !== 'undefined' ? window : this);

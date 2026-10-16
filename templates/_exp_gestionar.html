@@ -119,7 +119,7 @@
     {% set info = paises_fe.get(p.pais, {}) %}
     <li class="exp-pais">
       <div class="exp-pais-cab">
-        <span>{{ info.bandera }} <strong>{{ info.nombre|traducir if info.nombre else p.pais }}</strong> · {{ _('%(presupuesto)s %(moneda)s/día', presupuesto=p.presupuesto_dia, moneda=e.moneda) }} <span class="tag-estado">{{ etiquetas_exp.pieza.get(p.estado, p.estado)|traducir }}</span></span>
+        <span>{{ info.bandera }} <strong>{{ info.nombre|traducir if info.nombre else p.pais }}</strong> · {{ _('%(presupuesto)s %(moneda)s/día', presupuesto=p.presupuesto_dia, moneda=e.moneda) }}{% if nombres_cuentas_exp %}{% set act_pais = p.ad_account_id or cuenta_defecto_id_exp %} · {{ _('se lanza en %(cuenta)s', cuenta=nombres_cuentas_exp.get(act_pais, act_pais or '')) }}{% endif %} <span class="tag-estado">{{ etiquetas_exp.pieza.get(p.estado, p.estado)|traducir }}</span></span>
         {% if (p.meta_adset_id or p.meta_adsets) and e.estado in ("pausado", "corriendo") %}
         <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}" class="inline">
           <input type="hidden" name="pais" value="{{ p.pais }}">

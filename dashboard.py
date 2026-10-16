@@ -54,6 +54,7 @@ import idiomas
 import llaves
 import alertas
 import cuentas
+import cuentas_lanzamiento
 import meta_conexion
 import app_tiendas
 import meta_agencia
@@ -2091,6 +2092,9 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
                 trabajos_exp[e["id"]] = {"job_id": jid}
     datos_meta_exp = meta_conexion.cargar(cliente) or {}
     moneda_exp = datos_meta_exp.get("moneda") or "USD"
+    # PND-148: la gestión dice en qué cuenta publicitaria se lanzó cada país, solo si algún experimento usa una cuenta
+    # aparte de la de meta.json (una lectura más, y solo entonces).
+    con_cuentas = any(p.get("ad_account_id") for e in gestion for p in e["paises"])
     # Bloque 4: propuestas pendientes por experimento (una consulta por
     # experimento con contador > 0), reglas y modos para los formularios.
     propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in gestion if e["propuestas_pendientes"]}
@@ -2112,6 +2116,8 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         "tope_campana_min_exp": lanzador.minimo_tope_de_cuenta(datos_meta_exp, moneda_exp),   # PND-323
         "moneda_exp": moneda_exp,
+        "nombres_cuentas_exp": cuentas_lanzamiento.nombres(cliente) if con_cuentas else {},
+        "cuenta_defecto_id_exp": cuentas_lanzamiento.normalizar(datos_meta_exp.get("ad_account_id")),
         "propuestas_exp": propuestas_exp,
         "reglas_defecto_exp": decisor.REGLAS_DEFECTO,
         "reglas_enteras_exp": decisor.ENTEROS,
@@ -5535,6 +5541,12 @@ def exp_nuevo(cliente):
     if meta_conexion.estado(cliente).get("estado") != "conectado":
         return _volver_exp(cliente)
     ctx = _contexto_experimentos(cliente, con_elegibles=True, con_organico=False)
+    # PND-148: en qué cuenta publicitaria se lanza cada país. Solo hay selector si además de la de meta.json hay otra
+    # cuenta del proyecto que puede anunciar en la moneda del experimento; si no, todo queda como antes.
+    defecto = cuentas_lanzamiento.defecto(cliente)
+    otras = cuentas_lanzamiento.disponibles(cliente, ctx["moneda_exp"], defecto_id=defecto["id"]) if defecto else []
+    ctx["cuentas_exp"] = [defecto] + otras if otras else []
+    ctx["cuenta_sugerida_exp"] = cuentas_lanzamiento.sugeridas(fe_tipos.PAISES, otras, defecto["id"]) if otras else {}
     # token_form: de un solo uso por formulario pintado; exp_probar lo consume (un reenvío no crea ni activa otro).
     return render_template("exp_nuevo.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            paises_fe=fe_tipos.PAISES, token_form=secrets.token_urlsafe(16), **ctx,
@@ -5767,6 +5779,16 @@ def exp_probar(cliente):
     if error:
         flash(error, "error")
         return volver
+    # PND-148: la cuenta publicitaria de cada país (`cuenta_<PAÍS>`; sin el campo, la de meta.json). Solo una del
+    # proyecto que puede anunciar en la moneda del experimento; se guarda solo la que no es la de defecto.
+    try:
+        elegidas = cuentas_lanzamiento.validar(cliente, moneda, {p: request.form.get(f"cuenta_{p}") or "" for p in codigos})
+    except ValueError as e:
+        flash(str(e), "error")
+        return volver
+    for p in paises:
+        if p["pais"] in elegidas:
+            p["ad_account_id"] = elegidas[p["pais"]]
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
         modo = "manual"
@@ -5848,7 +5870,8 @@ def _clave_formulario_experimento(token, datos, combinaciones):
     if token and len(token) <= 64 and token.replace("-", "").replace("_", "").isalnum():
         return "t:" + token
     huella = {"combinaciones": sorted([int(pid), pais or ""] for pid, pais in combinaciones),
-              "paises": sorted([p["pais"], float(p.get("presupuesto_dia") or 0)] for p in datos["paises"]),
+              "paises": sorted([p["pais"], float(p.get("presupuesto_dia") or 0)]
+                               + ([p["ad_account_id"]] if p.get("ad_account_id") else []) for p in datos["paises"]),
               "dias": int(datos["dias"]), "tope": float(datos["tope_total"]), "objetivo": datos["objetivo_meta"],
               "destino": datos["destino_url"], "app": datos.get("app")}
     return "h:" + hashlib.sha256(json.dumps(huella, sort_keys=True, default=str).encode()).hexdigest()[:32]

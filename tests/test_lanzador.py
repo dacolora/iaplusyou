@@ -8,7 +8,10 @@ from tests.test_experimentos_db import PAISES, _pieza
 class MetaFalsa:
     """Sustituye los módulos meta_ads.* usados por lanzador con contadores. PND-322: también contesta lo que lanzador
     lee de vuelta en Meta: la cuenta (`cuenta`: moneda y mínimos, en la unidad de Meta), el diario guardado de cada
-    conjunto, el tope de cada campaña y el gasto de cada campaña (`gastos[campaign_id] = (total, hoy)`)."""
+    conjunto, el tope de cada campaña y el gasto de cada campaña (`gastos[campaign_id] = (total, hoy)`).
+    PND-148: varias cuentas. `configurar` deja puesta la cuenta activa (`cuenta_actual`); cada objeto creado anota
+    en qué cuenta nació (`cuenta_de[id]`); `cuentas[act]` es lo que contesta cada cuenta (sin entrada, `cuenta`);
+    `leidas` son las cuentas cuya moneda y mínimos se leyeron; un video subido a otra cuenta tiene otro id."""
     def __init__(self, fallar_en=None, moneda="COP"):
         self.llamadas = []
         self.fallar_en = fallar_en
@@ -25,11 +28,34 @@ class MetaFalsa:
         self.estados_meta = {}   # id de campaña -> effective_status que contesta Meta
         self.gastos_conjuntos = {}   # id de conjunto -> gasto de hoy (insights level=adset)
         self.posts = []          # (edge, payload) de cada POST directo por meta_auth (p. ej. end_time)
+        self.cuentas = {}        # PND-148: act_… -> moneda y mínimos de ESA cuenta
+        self.cuenta_actual = None
+        self.cuenta_de = {}      # id del objeto creado -> cuenta en que se creó
+        self.objetos = []        # (tipo, id, kw, cuenta) de cada llamada que salió bien, en orden
+        self.leidas = []         # cuentas leídas con GET act_… (comprobar_moneda)
+        self.subidas = []        # (url, cuenta) de cada video subido
+        self.campana_de_conjunto = {}
+        self.pixeles = {}        # act_… -> ids de Pixel que esa cuenta puede usar (act_…/adspixels)
+        self.apps = {}           # act_… -> ids de app que esa cuenta puede anunciar (act_…/advertisable_applications)
+        self.tope_distinto = False   # Meta guarda otro spend_cap (True: en todas; un set: en esas campañas)
+
+    def _configurar(self, token, ad_account_id, page_id=None):
+        a = str(ad_account_id)
+        self.cuenta_actual = a if a.startswith("act_") else f"act_{a}"
+
+    def _limpiar(self):
+        self.cuenta_actual = None
+
+    def _subir(self, url):
+        self.subidas.append((url, self.cuenta_actual))
+        # El de siempre en la cuenta por defecto (las pruebas viejas lo esperan); otro id en otra cuenta.
+        return "vid_1" if self.cuenta_actual in (None, "act_1") else f"vid_{self.cuenta_actual}"
 
     def _adset(self, nombre, cid, obj, targeting, centavos, dias, dry_run=False, promoted_object=None):
         r = self._id("adset", nombre=nombre, objetivo=obj, targeting=targeting, centavos=centavos, dias=dias,
                      promoted_object=promoted_object)
         self.presupuestos[r["id"]] = int(centavos)
+        self.campana_de_conjunto[r["id"]] = cid
         return r
 
     def _presupuesto(self, oid, c, dry_run=False):
@@ -50,11 +76,21 @@ class MetaFalsa:
         params = params or {}
         if metodo != "GET":
             self.posts.append((edge, dict(payload or {})))
+            if "spend_cap" in (payload or {}):
+                distinto = self.tope_distinto is True or (isinstance(self.tope_distinto, set) and edge in self.tope_distinto)
+                self.topes[edge] = int(payload["spend_cap"]) + (1 if distinto else 0)
             return {"success": True}
+        if edge.startswith("act_") and edge.endswith("/adspixels"):
+            return {"data": [{"id": i} for i in self.pixeles.get(edge.split("/")[0], [])]}
+        if edge.startswith("act_") and edge.endswith("/advertisable_applications"):
+            return {"data": [{"id": i} for i in self.apps.get(edge.split("/")[0], [])]}
         if edge.startswith("act_"):
-            return dict(self.cuenta)
+            self.leidas.append(edge)
+            return dict(self.cuentas.get(edge, self.cuenta))
         if edge.endswith("/insights") and params.get("level") == "adset":
-            return {"data": [{"adset_id": k, "spend": str(v)} for k, v in self.gastos_conjuntos.items()]}
+            cid = edge.split("/")[0]
+            return {"data": [{"adset_id": k, "spend": str(v)} for k, v in self.gastos_conjuntos.items()
+                             if self.campana_de_conjunto.get(k, cid) == cid]}
         if edge.endswith("/insights"):
             total, hoy = self.gastos.get(edge.split("/")[0], (0.0, 0.0))
             return {"data": [{"spend": str(total if params.get("date_preset") == "maximum" else hoy)}]}
@@ -72,6 +108,8 @@ class MetaFalsa:
         if self.fallar_en == tipo:
             raise RuntimeError(f"Meta falló en {tipo}")
         self.n += 1
+        self.cuenta_de[f"{tipo}_{self.n}"] = self.cuenta_actual
+        self.objetos.append((tipo, f"{tipo}_{self.n}", kw, self.cuenta_actual))
         return {"id": f"{tipo}_{self.n}"}
 
     def modulos(self):
@@ -79,7 +117,7 @@ class MetaFalsa:
                                          actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         adset = types.SimpleNamespace(crear_adset=self._adset, actualizar_presupuesto=self._presupuesto,
                                       actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
-        creative = types.SimpleNamespace(subir_video=lambda url, titulo="", dry_run=False, esperar_seg=180: "vid_1",
+        creative = types.SimpleNamespace(subir_video=lambda url, titulo="", dry_run=False, esperar_seg=180: self._subir(url),
                                          crear_creative_video=lambda nombre, vid, mini, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
                                          self._id("creative", nombre=nombre, link=link, url_tags=url_tags, cta_type=cta_type),
                                          crear_creative_imagen=lambda nombre, imagen_url, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
@@ -90,7 +128,7 @@ class MetaFalsa:
                                          {"impresiones": 100, "reach": 90, "alcance": 90, "clics_enlace": 4, "ctr": 4.0, "cpc": 0.5,
                                           "gasto_usd": 2.0, "thruplay": 10, "thruplay_rate": 0.1, "compras": 0, "ingresos": 0.0,
                                           "roas": 0.0, "estado_meta": "ACTIVE", "estado_meta_texto": "Activo", "motivo_rechazo": None})
-        auth = types.SimpleNamespace(configurar=lambda *a, **k: None, limpiar=lambda: None, llamar=self._llamar)
+        auth = types.SimpleNamespace(configurar=self._configurar, limpiar=self._limpiar, llamar=self._llamar)
         return campaign, adset, creative, ad, insights, auth
 
 
