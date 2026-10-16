@@ -119,3 +119,6 @@ idioma=)` (clips y refinador `video`+`gancho`, recorte `gancho`, imágenes solo 
 llamada directa del refinador. Límites: un diagnóstico por veredicto; nada se aplica solo salvo lo que el modo ya
 ejecutaba; sin migraciones (todo vive en `extra` y en `proyecto.json`). Con esto los cuatro bloques del spec original
 (§14) están en `main`.
+
+**Pedidos anota antes de guardar (PND-336, 2026-10-15).** `pedidos.resumir(..., on_usage=)` avisa el uso apenas Claude
+responde y la tarea `producto_pedidos` lo anota antes de `reemplazar_abiertos` (si guardar fallaba, el gasto se perdía).

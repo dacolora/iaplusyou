@@ -87,11 +87,13 @@ def _mensaje(fila, faltantes):
     return "\n\n".join(partes)
 
 
-def resumir(cliente, producto_id):
+def resumir(cliente, producto_id, on_usage=None):
     """Pide a Claude los pedidos y reemplaza los abiertos. Devuelve
     (pedidos_abiertos_nuevos, tokens_entrada, tokens_salida). Sin faltantes
     no llama a Claude (0, 0, 0). Una respuesta que no sirve lanza
-    ErrorPedidos con los tokens puestos y deja los pedidos que había."""
+    ErrorPedidos con los tokens puestos y deja los pedidos que había.
+    `on_usage(ent, sal)` se llama apenas Claude responde, antes de guardar
+    (PND-336: si guardar fallaba, lo pagado no se anotaba)."""
     import tiendas
     fila = tiendas.producto(cliente, producto_id)
     if not fila:
@@ -103,6 +105,8 @@ def resumir(cliente, producto_id):
     crudo, ent, sal = _llamar(_mensaje(fila, faltantes),
                               doctrina.bloque_system(extra=INSTRUCCIONES_PEDIDOS.replace(
                                   "__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma=idioma))
+    if on_usage:
+        on_usage(ent, sal)
     try:
         t = (crudo or "").strip()
         ini, fin = t.find("{"), t.rfind("}")

@@ -118,3 +118,9 @@ Segunda ronda lote 7 (2026-10-09, encargo de Daniel): fotos del producto exigen 
 PND-209/032 (2026-10-09, decisión del lote 8): sprint-link-campo reemplaza el width en línea; los filtros de sprint_revision viven en sprint-filtros separados de las acciones, con campaña a todo el ancho en celular. CSS en pantallas/sprints.css, hoja generada con estilos.py. Los avisos largos envuelven; tests/test_lote8_ui.py, capturas a cargo de Claude.
 
 Enmienda PND-032/210 (2026-10-10, pedido de Daniel): sprint-filtros tiene margen superior para separar las acciones a 375 px. La guardia de Detenida comprueba su propio párrafo; la de filtros exige grilla de escritorio y reglas dentro de @media max-width. Capturas en es/en a 375/1280 px por Claude.
+
+**Reescribir idea anota antes de guardar (PND-336, decisión 2026-10-15, lote 3).** `ideas.reescribir(..., on_usage=)`
+llama a `on_usage(ent, sal)` apenas Claude responde, antes de leer y de guardar la idea: la tarea
+`sprint_reescribir_idea` anota ahí su gasto (antes, si guardar fallaba, lo pagado no quedaba). Si después la respuesta no
+sirve se vuelve a anotar con `entregado=False` (un reverso); si falla el guardado, el worker devuelve el cobro.
+Pruebas: `tests/test_claude_anota_antes_de_guardar.py`.

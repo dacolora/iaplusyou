@@ -226,8 +226,15 @@ def ejecutar_reescribir_idea(tarea):
     p = tarea["payload"]
     cliente, cp_id = p["cliente"], int(p["cp_id"])
     referencia = f"idea:reescribir:{cp_id}{ref_sufijo(tarea)}"
+
+    def _anotar(ent, sal):
+        # PND-336: apenas Claude responde, antes de guardar la idea; si guardar falla, el worker devuelve el cobro.
+        if ent or sal:
+            gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
+                                    detalle=gettext("reescribir idea desde su ángulo"),
+                                    extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     try:
-        ent, sal = ideas.reescribir(cliente, cp_id)
+        ent, sal = ideas.reescribir(cliente, cp_id, on_usage=_anotar)
     except ideas.AnalisisInvalido as e:
         ent, sal = getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0
         detalle = (gettext("reescribir idea · la idea ya tenía pieza") if isinstance(e, ideas.IdeaConPieza)
@@ -237,9 +244,7 @@ def ejecutar_reescribir_idea(tarea):
                                     detalle=detalle, entregado=False,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
-    gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
-                            detalle=gettext("reescribir idea desde su ángulo"),
-                            extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+    _anotar(ent, sal)
     return gettext("Idea reescrita desde su ángulo.")
 
 

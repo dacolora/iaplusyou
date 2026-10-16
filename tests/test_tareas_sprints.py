@@ -527,12 +527,12 @@ def test_reescribir_idea_registra_el_gasto_real(base_temporal, monkeypatch):
     import tareas
     from sprints import datos, ideas
     tareas.cargar_todas()
-    monkeypatch.setattr(ideas, "reescribir", lambda cliente, cp_id: (1000, 2000))
+    monkeypatch.setattr(ideas, "reescribir", lambda cliente, cp_id, on_usage=None: (1000, 2000))
     tareas.REGISTRO["sprint_reescribir_idea"]({"id": 7, "payload": {"cliente": "acme", "cp_id": 3}})
     g = gastos.historial("acme", limite=1)[0]
     assert g["tipo"] == "ideas" and g["referencia"] == "idea:reescribir:3:t7" and g["usd"] > 0
 
-    def falla(cliente, cp_id):
+    def falla(cliente, cp_id, on_usage=None):
         e = ideas.AnalisisInvalido("Claude no devolvió JSON.")
         e.tokens_entrada, e.tokens_salida = 400, 50
         raise e
@@ -552,7 +552,7 @@ def test_reescribir_idea_con_pieza_registra_su_propio_detalle(base_temporal, mon
     from sprints import ideas
     tareas.cargar_todas()
 
-    def con_pieza(cliente, cp_id):
+    def con_pieza(cliente, cp_id, on_usage=None):
         e = ideas.IdeaConPieza("La idea ya tiene una pieza generada; no se reescribió.")
         e.tokens_entrada, e.tokens_salida = 400, 50
         raise e

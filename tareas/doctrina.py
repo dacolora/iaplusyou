@@ -50,7 +50,9 @@ def ejecutar_pedidos(tarea):
     cliente, producto_id = p["cliente"], int(p["producto_id"])
     referencia = f"producto:pedidos:{producto_id}{ref_sufijo(tarea)}"
     try:
-        n, ent, sal = pedidos.resumir(cliente, producto_id)
+        # PND-336: lo cobrado se anota apenas Claude responde, antes de guardar los pedidos.
+        n, ent, sal = pedidos.resumir(cliente, producto_id, on_usage=lambda ent, sal: _gasto(
+            cliente, referencia, ent, sal, gettext("pedidos al cliente")))
     except pedidos.ErrorPedidos as e:
         _gasto(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
                gettext("pedidos al cliente · respuesta inválida"), entregado=False)

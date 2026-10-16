@@ -134,3 +134,10 @@ formulario y la reserva de `encolar_barrer`; «Clasificar pendientes»; y la res
 no está en inglés y en un barrido global, la de 0,012 en inglés. Motivo: 938 clasificaciones reales costaron
 0,0133–0,0138 por anuncio y el precio a la vista no puede quedarse corto. La clasificación de un proyecto sigue saliendo
 en un solo idioma (`salida_para`); solo cambian el precio y la reserva. Pruebas `tests/test_rutas_referentes.py::*pnd243*`.
+
+**Lo que cobra Claude se anota antes de escribir (PND-336, decisión 2026-10-15, lote 3).** Clasificar:
+`tareas/referentes._clasificar_uno(..., anotar=)` anota (con `entregado=ok`) apenas Claude responde y recién después
+escribe el referente; copycoders anota la traducción de firmas y la descripción de familias antes de
+`marcar_traducidas`/`familia_actualizar`. «Sugerir con IA»: un `elegidos` que no es una lista es `SugerenciaInvalida`
+con sus tokens (antes un TypeError los perdía) y un elegido que no es un objeto se descarta. Pruebas:
+`tests/test_claude_anota_antes_de_guardar.py`.
