@@ -79,8 +79,10 @@ Detalles que ya costaron una duda:
   skill es traducir al calcular. Un elemento roto (tipo desconocido, huella que no es sha256, algo que no es un dict)
   se ignora. **Solo un admin la descarta o la restaura** (PND-270, 2026-10-15, la regla de PND-124: hablan de la plata
   de la pauta y el descarte es del proyecto): el cliente la ve con `puede_descartar` falso y las rutas le responden 403
-  por el prefijo `PREFIJOS_DESCARTE_ADMIN = ("meta_rendimiento:",)`, también si la alerta ya salió del cálculo. Una copia que falla deja lo guardado, y las alertas
-  guardadas no caducan (PND-262); quitar la cuenta borra su fila y con ella sus alertas.
+  por el prefijo `PREFIJOS_DESCARTE_ADMIN = ("meta_rendimiento:",)`, también si la alerta ya salió del cálculo. Una copia que falla deja lo guardado, pero solo vale
+  `HORAS_ALERTA_META_VIGENTE` (48) horas desde `ultima_copia` (PND-262, 2026-10-15, como los desgloses): una cuenta
+  que dejó de copiarse no deja su alerta para siempre, y sin fecha legible no sale; quitar la cuenta borra su fila y
+  con ella sus alertas.
 
 ## Quién ve qué: `solo_admin` (2026-10-02)
 

@@ -420,6 +420,10 @@ TEXTOS_META_RENDIMIENTO = {
                                           "Administrador de anuncios desde el Diagnóstico de la pestaña Rendimiento.")),
 }
 _ACT_VALIDA = r"act_[0-9]{1,30}"
+# PND-262 (decisión 2026-10-13): lo que guardó la última copia buena de una cuenta vale 48 horas, como los desgloses
+# (`meta_rendimiento.panel.HORAS_DESGLOSE_VIGENTE`). Una cuenta que dejó de copiarse no puede dejar en Alertas, para
+# siempre, una recomendación que ya no sabemos si es cierta.
+HORAS_ALERTA_META_VIGENTE = 48
 
 
 def _fuente_meta_rendimiento(cliente, ahora):
@@ -429,13 +433,15 @@ def _fuente_meta_rendimiento(cliente, ahora):
     `atencion`, a la pestaña Rendimiento (el «Diagnóstico» llega por fetch: no hay ancla en la página). La huella es la de la
     recomendación (tipo + cuenta + nivel en las que juntan toda la cuenta): un descarte vale hasta que la situación
     cambie. El título lleva el nombre de la cuenta (dato de Meta, pasado por `_limpio`) y se arma aquí, en el idioma
-    de quien mira. Un elemento roto (otro tipo, otra huella, algo que no es un dict) se ignora."""
+    de quien mira. Un elemento roto (otro tipo, otra huella, algo que no es un dict) se ignora. Lo guardado por una
+    cuenta sin copia buena en `HORAS_ALERTA_META_VIGENTE` horas (o sin fecha legible) no sale (PND-262)."""
     from meta_rendimiento import cuentas  # noqa: PLC0415
     out = []
     for c in cuentas.listar(cliente):
         act = c.get("ad_account_id") or ""
         guardadas = (c.get("extra") or {}).get("alertas")
-        if not re.fullmatch(_ACT_VALIDA, act) or not isinstance(guardadas, list):
+        if not re.fullmatch(_ACT_VALIDA, act) or not isinstance(guardadas, list) \
+                or not _copia_vigente(c.get("ultima_copia"), ahora):
             continue
         nombre = _limpio(c.get("nombre") or act, 120)
         for g in guardadas:
@@ -446,6 +452,16 @@ def _fuente_meta_rendimiento(cliente, ahora):
             out.append(_alerta(f"meta_rendimiento:{g['tipo']}:{act}", g["huella"], "atencion", "decision",
                                gettext(titulo, cuenta=nombre), gettext(detalle), "rendimiento", entidad=act))
     return out
+
+
+def _copia_vigente(ultima_copia, ahora):
+    """¿La última copia buena (`db.ahora()`, hora local sin zona) tiene a lo sumo HORAS_ALERTA_META_VIGENTE horas?"""
+    try:
+        copia = datetime.fromisoformat(str(ultima_copia)[:19])
+        hoy = datetime.fromisoformat(str(ahora)[:19])
+    except ValueError:
+        return False
+    return hoy - copia <= timedelta(hours=HORAS_ALERTA_META_VIGENTE)
 
 
 # ---------- fuentes: faltantes del proyecto ----------

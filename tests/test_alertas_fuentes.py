@@ -1441,12 +1441,16 @@ def test_r7_sprint_vivo_ajeno_no_oculta_error_con_mismo_cf_id(base_temporal):
 H1, H2, H3 = "1" * 64, "2" * 64, "3" * 64
 
 
-def _cuenta_meta(act, nombre, alertas_=None, cliente="acme", moneda="SEK"):
+def _cuenta_meta(act, nombre, alertas_=None, cliente="acme", moneda="SEK", copia="2026-10-02T07:00:00"):
+    """Una cuenta de Meta del proyecto; con `alertas_`, lo que guardó su última copia buena, hecha en `copia` (por
+    defecto 3 horas antes de AHORA: PND-262 ignora lo guardado por una copia de hace más de 48 horas)."""
     from meta_rendimiento import cuentas
     cuentas.elegir(cliente, [*({"id": c["ad_account_id"], "name": c["nombre"], "currency": c["moneda"]}
                                for c in cuentas.listar(cliente)), {"id": act, "name": nombre, "currency": moneda}])
     if alertas_ is not None:
         cuentas.actualizar_extra(cliente, act, {"alertas": alertas_})
+        if copia:
+            cuentas.actualizar(cliente, act, ultima_copia=copia)
 
 
 def test_meta_rendimiento_una_alerta_por_recomendacion_alta_guardada(base_temporal):
@@ -1549,6 +1553,22 @@ def test_meta_rendimiento_la_huella_no_depende_del_idioma_y_el_texto_si(base_tem
     assert all(en[c]["huella"] == es[c]["huella"] for c in en)
     assert [(c, campo) for c in en for campo in ("titulo", "detalle") if en[c][campo] == es[c][campo]] == []
     assert en["meta_rendimiento:cuenta_roas_bajo:act_1"]["titulo"] == "“Norway” sells less than it spends"
+
+
+@__import__("pytest").mark.parametrize("copia, sale", [("2026-09-30T10:00:00", True), ("2026-09-30T09:59:59", False),
+                                         ("2026-09-20T10:00:00", False), (None, False), ("no es fecha", False)])
+def test_pnd262_lo_guardado_por_una_copia_de_hace_mas_de_48_horas_no_sale(base_temporal, copia, sale):
+    """PND-262 (decisión 2026-10-13): una cuenta que dejó de copiarse no deja su última recomendación «alta» en
+    Alertas para siempre. Vale 48 horas desde la última copia buena, como los desgloses; sin fecha legible, nada."""
+    import alertas
+    from meta_rendimiento import cuentas
+    _cuenta_meta("act_1", "Norway", [{"tipo": "cuenta_roas_bajo", "huella": H1}], copia=None)
+    _cuenta_meta("act_2", "Sweden", [{"tipo": "perdedores_gastando", "huella": H2}])   # al día: sale siempre
+    if copia:
+        cuentas.actualizar("acme", "act_1", ultima_copia=copia)
+    claves = _claves(alertas._fuente_meta_rendimiento("acme", AHORA))
+    assert ("meta_rendimiento:cuenta_roas_bajo:act_1" in claves) is sale
+    assert "meta_rendimiento:perdedores_gastando:act_2" in claves
 
 
 def test_meta_rendimiento_esta_registrada_y_la_pestana_meta_tiene_nombre():
