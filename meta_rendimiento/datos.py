@@ -189,9 +189,13 @@ def marcar_sin_estado(cliente, act, nivel, vistos, estados=None):
     return n
 
 
-def guardar_alcance(cliente, act, filas):
+def guardar_alcance(cliente, act, filas, completa=False):
     """Alcance y frecuencia de una ventana (gente única: no se suma por días). Upsert por
-    (cliente, objeto_id, ventana). Claves: nivel, objeto_id, ventana, alcance, frecuencia. Devuelve cuántas."""
+    (cliente, objeto_id, ventana). Claves: nivel, objeto_id, ventana, alcance, frecuencia. Devuelve cuántas.
+
+    `completa=True` (la copia, con la lectura ENTERA de cada ventana que trae `filas`): en la misma transacción borra
+    las campañas de esa cuenta y esa ventana que no vinieron. Meta no devuelve fila de una campaña sin entrega en la
+    ventana, y sin esto su alcance se quedaba en el último valor para siempre (PND-199)."""
     t = db.meta_alcance
     ahora = db.ahora()
     registros = [dict(cliente=cliente, ad_account_id=act, nivel=f["nivel"], objeto_id=str(f["objeto_id"]),
@@ -205,6 +209,15 @@ def guardar_alcance(cliente, act, filas):
     with db.conectar() as con:
         con.execute(nuevo.on_conflict_do_update(index_elements=["cliente", "objeto_id", "ventana"], set_=set_),
                     registros)
+        if completa:
+            for ventana in {r["ventana"] for r in registros}:
+                vinieron = {r["objeto_id"] for r in registros if r["ventana"] == ventana and r["nivel"] == "campana"}
+                cond = (t.c.cliente == cliente, t.c.ad_account_id == act, t.c.ventana == ventana,
+                        t.c.nivel == "campana")
+                guardadas = con.execute(sa.select(t.c.objeto_id).where(*cond)).scalars().all()
+                sobran = [i for i in guardadas if i not in vinieron]
+                for i in range(0, len(sobran), _TANDA_IDS):
+                    con.execute(t.delete().where(*cond, t.c.objeto_id.in_(sobran[i:i + _TANDA_IDS])))
     return len(registros)
 
 

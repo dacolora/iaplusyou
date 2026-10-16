@@ -336,7 +336,8 @@ def _alcance_de_ventana(act, token, w):
         return {"nivel": nivel, "objeto_id": objeto_id, "ventana": w, "alcance": int(_n(f.get("reach"))),
                 "frecuencia": None if frec in (None, "") else _n(frec)}
 
-    # Sin entrega en la ventana Meta no devuelve fila: es alcance 0, y se escribe para no dejar el de antes.
+    # Sin entrega en la ventana Meta no devuelve fila: en la cuenta es alcance 0, y se escribe para no dejar el de
+    # antes; una campaña que no vino se borra al guardar (`guardar_alcance(completa=True)`, PND-199).
     filas = [fila("cuenta", act, (cuenta.get("data") or [{}])[0])]
     filas += [fila("campana", str(f["campaign_id"]), f) for f in campanas if f.get("campaign_id")]
     return filas
@@ -453,7 +454,7 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     for w in VENTANAS_ALCANCE:
         filas = _alcance_de_ventana(act, token, w)
         if filas:
-            datos.guardar_alcance(cliente, act, filas)
+            datos.guardar_alcance(cliente, act, filas, completa=True)
 
     # 6. Tasas de cambio a USD (nunca lanza). Desde el día más viejo YA guardado de la cuenta, no solo desde esta
     # corrida: si el relleno se hizo en varias corridas, los días de las primeras también necesitan su tasa.

@@ -130,7 +130,8 @@ class FakeGraph:
             return self.anuncios
         assert edge == f"{ACT}/insights"
         if params["level"] == "campaign":
-            return [{"campaign_id": "c1", "reach": str(int(params["date_preset"][5:-1]) * 10), "frequency": "2.0"}]
+            return [{"campaign_id": c, "reach": str(int(params["date_preset"][5:-1]) * 10), "frequency": "2.0"}
+                    for c in getattr(self, "campanas_alcance", ["c1"])]
         assert params["level"] == "account" and params["time_increment"] == 1
         if self.falla_cuenta_n and len(self.de("paginar", "/insights")) - self._de_campana() == self.falla_cuenta_n:
             raise graph.ErrorGraph("Meta pidió esperar", codigo=17)
@@ -377,6 +378,37 @@ def test_alcance_por_ventana_a_nivel_de_cuenta_y_de_campana(cuenta, monkeypatch)
     for w in (7, 14, 30, 90):
         assert datos.alcance(CLI, [ACT], w, "cuenta")[ACT] == {"alcance": w * 100, "frecuencia": 1.5}
         assert datos.alcance(CLI, [ACT], w, "campana")["c1"] == {"alcance": w * 10, "frecuencia": 2.0}
+
+
+def test_pnd199_una_campana_que_dejo_de_entregar_pierde_su_alcance(cuenta, monkeypatch):
+    """PND-199 (decisión 2026-10-13): Meta no devuelve fila de una campaña sin entrega en la ventana; su alcance no
+    puede quedarse en el último valor. Lo de otra cuenta y otro proyecto no se toca."""
+    datos.guardar_alcance("otro", "act_9", [{"nivel": "campana", "objeto_id": "c9", "ventana": 7, "alcance": 5,
+                                            "frecuencia": 1.0}])
+    datos.guardar_alcance(CLI, "act_2", [{"nivel": "campana", "objeto_id": "c8", "ventana": 7, "alcance": 6,
+                                         "frecuencia": 1.0}])
+    g = FakeGraph(monkeypatch)
+    g.campanas_alcance = ["c1", "c2"]
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert set(datos.alcance(CLI, [ACT], 7, "campana")) == {"c1", "c2"}
+    g.campanas_alcance = ["c1"]                      # c2 ya no entrega
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    for w in (7, 14, 30, 90):
+        assert set(datos.alcance(CLI, [ACT], w, "campana")) == {"c1"}
+        assert datos.alcance(CLI, [ACT], w, "cuenta")[ACT]["alcance"] == w * 100
+    assert set(datos.alcance("otro", ["act_9"], 7, "campana")) == {"c9"}
+    assert set(datos.alcance(CLI, ["act_2"], 7, "campana")) == {"c8"}
+
+
+def test_pnd199_una_ventana_que_meta_no_acepta_no_borra_su_alcance(cuenta, monkeypatch):
+    g = FakeGraph(monkeypatch)
+    g.campanas_alcance = ["c1", "c2"]
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    g = FakeGraph(monkeypatch, falla_ventana=("last_14d", graph.ErrorGraph("parámetro inválido", codigo=100)))
+    g.campanas_alcance = ["c1"]
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert set(datos.alcance(CLI, [ACT], 14, "campana")) == {"c1", "c2"}     # sin lectura, nada se borra
+    assert set(datos.alcance(CLI, [ACT], 30, "campana")) == {"c1"}
 
 
 def test_una_ventana_con_parametro_invalido_se_salta_y_las_demas_siguen(cuenta, monkeypatch):
