@@ -71,6 +71,16 @@
 </div>
 {% endif %}
 
+{% if not clave_reciente %}
+<div class="flash warn" id="cobros-clave">
+  {{ _('Para prender o apagar «Cobrar», cambiar el pospago, un margen, el saldo de bienvenida o un plan, o mover saldo a mano, escribe tu clave: vale 10 minutos.') }}
+  <form method="post" action="{{ url_for('cobros.admin_clave') }}" class="cobros-admin-linea">
+    <label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>
+    <button type="submit" class="btn-sm">{{ _('Confirmar mi clave') }}</button>
+  </form>
+</div>
+{% endif %}
+
 <section class="admin-bloque aparece" id="cobros-avisos">
   <div class="admin-cabecera">
     <h2>{{ _('Avisos de plata') }}</h2>
@@ -159,6 +169,7 @@
   <form method="post" action="{{ url_for('cobros.admin_margen') }}" class="cobros-admin-linea">
     <label>{{ _('Margen (de %(min)s a %(max)s)', min=margen_min_texto, max=margen_max_texto) }}
       <input type="text" inputmode="decimal" name="margen" value="{{ margen_global_campo }}" required></label>
+    {% if not clave_reciente %}<label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
     <button type="submit" class="btn-generar">{{ _('Guardar margen') }}</button>
   </form>
   <div class="admin-cabecera" id="cobros-bienvenida">
@@ -168,6 +179,7 @@
   <form method="post" action="{{ url_for('cobros.admin_bienvenida') }}" class="cobros-admin-linea">
     <label>{{ _('Dólares (hasta %(max)s)', max=bienvenida_max_texto) }}
       <input type="text" inputmode="decimal" name="bienvenida" value="{{ bienvenida_campo }}" required></label>
+    {% if not clave_reciente %}<label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
     <button type="submit" class="btn-generar">{{ _('Guardar saldo de bienvenida') }}</button>
   </form>
   {# PND-347 y PND-348: los dos controles de plata piden la clave (vale 10 minutos) y avisan a todos los admins. #}
@@ -326,6 +338,7 @@
                 <label>{{ _('Orden en la pantalla del cliente') }}
                   <input type="text" inputmode="numeric" name="orden" value="{{ pl.orden }}"></label>
                 <p class="cobros-admin-nota">{{ _('El margen y el tope valen desde el próximo periodo de cada suscripción mensual: el periodo en curso guarda los suyos. En una anual, desde su próximo pago: sus doce meses copian la foto del primero.') }}</p>
+                {% if not clave_reciente %}<label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
                 <button type="submit" class="btn-generar">{{ _('Guardar plan') }}</button>
               </form>
             </details>
@@ -354,6 +367,7 @@
       <label>{{ _('Orden en la pantalla del cliente') }}
         <input type="text" inputmode="numeric" name="orden" value="0"></label>
       <label class="cobros-admin-casilla"><input type="checkbox" name="activo" value="1"> {{ _('Ofrecerlo ya a los proyectos que cobran (si no, nace archivado)') }}</label>
+      {% if not clave_reciente %}<label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
       <button type="submit" class="btn-generar">{{ _('Crear plan') }}</button>
     </form>
   </details>

@@ -950,6 +950,24 @@ def _clave_para_mover_plata():
     return False
 
 
+@bp.post("/admin/cobros/clave")
+@_solo_admin
+def admin_clave():
+    """La caja «Tu clave» de arriba de /admin/cobros: confirma la clave por 10 minutos para los interruptores de cada
+    proyecto («Cobrar», pospago, margen propio), que no tienen campo propio (decisión de quien orquesta, 2026-10-15)."""
+    if _clave_para_mover_plata():
+        flash(gettext("Listo: durante 10 minutos no te volvemos a pedir la clave."), "ok")
+    return _volver_admin()
+
+
+def _avisar_control(cliente, cuerpo):
+    """Un control de plata cambió (`control_plata`): a todos los admins, con quién lo hizo. `cuerpo(usuario)` arma el
+    texto dentro de cada aviso (en el idioma de cada admin)."""
+    usuario = str(session.get("usuario") or "")
+    _avisar_a_los_admins("control_plata", cliente or "", lambda: gettext("Cambió un control de plata"),
+                         lambda: cuerpo(usuario) + " " + gettext("Si no fuiste tú ni otro admin, cambia la clave."))
+
+
 def _avisar_a_los_admins(tipo, cliente, asunto, cuerpo):
     """A TODOS los admins (correo a cada uno con correo verificado y la bitácora, que /admin/cobros muestra en
     «Avisos de plata»), por la vía de siempre de cobros. Nunca lanza."""
@@ -1036,12 +1054,16 @@ def admin_tope_manual():
 @bp.post("/admin/cobros/margen")
 @_solo_admin
 def admin_margen():
+    if not _clave_para_mover_plata():   # decisión de quien orquesta (2026-10-15): los controles de plata, con clave
+        return _volver_admin()
     try:
         valor = _margen(request.form.get("margen"))
         libro.guardar_margen_global(valor, session.get("usuario"))
     except ValueError as e:
         flash(str(e), "error")
         return _volver_admin()
+    _avisar_control("", lambda u: gettext("%(usuario)s puso el margen global en %(margen)s.", usuario=u,
+                                          margen=idiomas.numero(valor, 2)))
     flash(gettext("Margen global guardado: %(margen)s.", margen=idiomas.numero(valor, 2)), "ok")
     return _volver_admin()
 
@@ -1050,7 +1072,9 @@ def admin_margen():
 @_solo_admin
 def admin_bienvenida():
     """El saldo de bienvenida de los proyectos nuevos (PND-299), junto al margen global: dólares con hasta 2
-    decimales, de 0 (apagado) al tope del libro."""
+    decimales, de 0 (apagado) al tope del libro. Con la clave y aviso a todos los admins (2026-10-15)."""
+    if not _clave_para_mover_plata():
+        return _volver_admin()
     valor = _decimal(request.form.get("bienvenida"))
     try:
         if valor is None or abs(valor) > Decimal(str(libro.BIENVENIDA_MAX * 2)) \
@@ -1061,9 +1085,28 @@ def admin_bienvenida():
     except ValueError as e:
         flash(str(e), "error")
         return _volver_admin()
+    _avisar_control("", lambda u: gettext("%(usuario)s puso el saldo de bienvenida en %(monto)s.", usuario=u,
+                                          monto=gastos.formatear(guardado)))
     flash(gettext("Saldo de bienvenida guardado: %(monto)s para cada proyecto nuevo, al confirmar su correo.",
                   monto=gastos.formatear(guardado)), "ok")
     return _volver_admin()
+
+
+def _avisar_cuenta(cliente, sensibles):
+    nombre = proyectos.nombre_visible(cliente)
+
+    def cuerpo(usuario):
+        partes = []
+        if "cobrar" in sensibles:
+            partes.append(gettext("prendió «Cobrar»") if sensibles["cobrar"] else gettext("apagó «Cobrar»"))
+        if "pospago" in sensibles:
+            partes.append(gettext("lo pasó a pospago") if sensibles["pospago"] else gettext("lo volvió a prepago"))
+        if "margen" in sensibles:
+            partes.append(gettext("puso su margen propio en %(margen)s", margen=idiomas.numero(sensibles["margen"], 2))
+                          if sensibles["margen"] is not None else gettext("le quitó el margen propio (usa el global)"))
+        return gettext("%(usuario)s cambió %(proyecto)s: %(cambios)s.", usuario=usuario, proyecto=nombre,
+                       cambios="; ".join(partes))
+    _avisar_control(cliente, cuerpo)
 
 
 @bp.post("/admin/cobros/<cliente>/cuenta")
@@ -1085,11 +1128,20 @@ def admin_cuenta(cliente):
             cambios["margen"] = _margen(texto) if texto else None
         if "umbral" in request.form:
             cambios["umbral"] = _umbral(request.form.get("umbral"))
+        # Decisión de quien orquesta (2026-10-15): «Cobrar», el pospago y el margen propio son controles de plata:
+        # cambiarlos pide la clave (el umbral del aviso, no). Solo lo que de verdad cambia.
+        antes = libro.cuenta(cliente)
+        sensibles = {k: v for k, v in cambios.items() if k in ("cobrar", "pospago", "margen")
+                     and v != (antes.get("margen_propio") if k == "margen" else antes.get(k))}
+        if sensibles and not _clave_para_mover_plata():
+            return _volver_admin(cliente)
         if cambios:
             libro.configurar(cliente, usuario=session.get("usuario"), **cambios)
     except ValueError as e:
         flash(str(e), "error")
         return _volver_admin(cliente)
+    if sensibles:
+        _avisar_cuenta(cliente, sensibles)
     nombre = proyectos.nombre_visible(cliente)
     if "cobrar" in cambios:
         if cambios["cobrar"]:
@@ -1221,12 +1273,17 @@ def _campos_plan():
 @bp.post("/admin/cobros/planes")
 @_solo_admin
 def admin_plan_crear():
-    """Un plan nuevo. Nace archivado si no se marca «Ofrecerlo»: así se revisa antes de que lo vean los clientes."""
+    """Un plan nuevo. Nace archivado si no se marca «Ofrecerlo»: así se revisa antes de que lo vean los clientes.
+    Con la clave y aviso a todos los admins (2026-10-15): su precio es lo que acredita «Activar a mano»."""
+    if not _clave_para_mover_plata():
+        return _volver_planes()
     try:
-        planes.crear_plan(**_campos_plan(), activo=request.form.get("activo") == "1", usuario=session.get("usuario"))
+        plan_id = planes.crear_plan(**_campos_plan(), activo=request.form.get("activo") == "1",
+                                    usuario=session.get("usuario"))
     except planes.ErrorPlan as e:
         flash(str(e), "error")
         return _volver_planes()
+    _avisar_plan(plan_id, creado=True)
     flash(gettext("Plan creado: %(plan)s.", plan=(request.form.get("nombre") or "").strip()), "ok")
     return _volver_planes()
 
@@ -1235,15 +1292,35 @@ def admin_plan_crear():
 @_solo_admin
 def admin_plan_editar(plan_id):
     """Cambia nombre, precios, margen, tope y orden. El precio nuevo solo vale para suscripciones nuevas (cada
-    suscripción renueva al precio que aceptó); margen y tope, desde el próximo periodo."""
+    suscripción renueva al precio que aceptó); margen y tope, desde el próximo periodo. Con la clave y aviso a
+    todos los admins (2026-10-15)."""
+    if not _clave_para_mover_plata():
+        return _volver_planes(f"plan-{plan_id}")
     try:
         planes.editar_plan(plan_id, usuario=session.get("usuario"), **_campos_plan())
     except planes.ErrorPlan as e:
         flash(str(e), "error")
         return _volver_planes(f"plan-{plan_id}")
+    _avisar_plan(plan_id, creado=False)
     flash(gettext("Plan guardado. Quien ya está suscrito sigue con el precio que aceptó; el margen y el tope "
                   "valen desde su próximo periodo (en un plan anual, desde su próximo pago)."), "ok")
     return _volver_planes(f"plan-{plan_id}")
+
+
+def _avisar_plan(plan_id, creado):
+    p = planes.leer_plan(plan_id) or {}
+    nombre, precio, margen = p.get("nombre") or "—", int(p.get("precio_usd") or 0), float(p.get("margen") or 0)
+    tope = float(p.get("tope_incluido_usd") or 0)
+
+    def cuerpo(usuario):
+        datos = {"usuario": usuario, "plan": nombre, "precio": vista.usd_entero(precio),
+                 "margen": idiomas.numero(margen, 2), "tope": gastos.formatear(tope)}
+        if creado:
+            return gettext("%(usuario)s creó el plan «%(plan)s»: %(precio)s al mes, margen %(margen)s, tope de lo "
+                           "incluido %(tope)s.", **datos)
+        return gettext("%(usuario)s editó el plan «%(plan)s»: ahora %(precio)s al mes, margen %(margen)s, tope de lo "
+                       "incluido %(tope)s.", **datos)
+    _avisar_control("", cuerpo)
 
 
 @bp.post("/admin/cobros/planes/<int(max=9223372036854775807):plan_id>/activo")

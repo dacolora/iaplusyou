@@ -4,6 +4,7 @@ Un proyecto que cobra con `pospago` prendido paga cada generación a su margen c
 libro), pero nada lo frena por saldo: el saldo puede quedar negativo y eso es lo que debe. Ni `exigir` ni el
 respaldo del worker lo detienen, no recibe «sin saldo» ni «saldo bajo», y lo que ve dice «Por pagar»."""
 import re
+import time
 
 import pytest
 import sqlalchemy as sa
@@ -197,6 +198,7 @@ def http(libro, monkeypatch, tmp_path):
     with c.session_transaction() as s:
         s["usuario"] = "admin"; s["rol"] = USUARIOS_PRUEBA["admin"]["rol"]
         s["cliente"] = USUARIOS_PRUEBA["admin"]["cliente"]; s["sv"] = 1
+        s["clave_confirmada_en"] = time.time()   # la clave de los controles de plata, recién escrita (2026-10-15)
     return c
 
 

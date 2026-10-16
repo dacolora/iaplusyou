@@ -58,6 +58,11 @@ def http(entorno):
                 s["rol"] = USUARIOS_PRUEBA[usuario]["rol"]
                 s["cliente"] = USUARIOS_PRUEBA[usuario]["cliente"]
                 s["sv"] = 1
+                if USUARIOS_PRUEBA[usuario]["rol"] == "admin":
+                    # La clave de los controles de plata, recién escrita (2026-10-15); sin ella lo prueban
+                    # tests/test_cobros_controles_plata.py.
+                    import time
+                    s["clave_confirmada_en"] = time.time()
         return c
     c.como = como
     return c

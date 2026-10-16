@@ -357,3 +357,68 @@ def test_fijar_el_ancla_invalida_la_tasa_guardada_fuera_de_la_banda(trm):  # noq
     trm.respuesta["r"] = _Respuesta(200, _fila("4180.00"))
     assert trm.actual() == 4180.0
 
+
+
+# ------------------------------------- 2026-10-15, quien orquesta: los demás controles de plata con clave ---
+
+def _sin_clave(http):
+    with http.session_transaction() as s:
+        s.pop("clave_confirmada_en", None)
+
+
+def test_los_controles_de_plata_piden_la_clave_y_el_umbral_no(http, entorno):
+    from cobros import libro, planes
+    libro.configurar("acme", usuario="admin", cobrar=False)
+    pid = planes.crear_plan("Pro", 1000, 1.25, 25, usuario="admin")
+    margen_antes, bienvenida_antes = libro.margen_global(), libro.bienvenida_usd()
+    intentos = [
+        ("/admin/cobros/margen", {"margen": "3"}),
+        ("/admin/cobros/bienvenida", {"bienvenida": "15"}),
+        ("/admin/cobros/acme/cuenta", {"cobrar": "1"}),
+        ("/admin/cobros/acme/cuenta", {"pospago": "1"}),
+        ("/admin/cobros/acme/cuenta", {"margen": "1,1", "umbral": "5"}),
+        ("/admin/cobros/planes", {"nombre": "Regalo", "precio_usd": "900000", "margen": "1", "tope_incluido_usd": "0"}),
+        (f"/admin/cobros/planes/{pid}", {"nombre": "Pro", "precio_usd": "900000", "margen": "1", "tope_incluido_usd": "0"}),
+    ]
+    for ruta, datos in intentos:
+        r = http.post(ruta, data=datos, headers=MISMO)
+        assert r.status_code == 302, ruta
+        assert any("escribe tu clave otra vez" in m for m in _flashes(http)), ruta
+    c = libro.cuenta("acme")
+    assert (c["cobrar"], c["pospago"], c["margen_propio"]) == (False, False, None)
+    assert libro.margen_global() == margen_antes and libro.bienvenida_usd() == bienvenida_antes
+    assert [p["nombre"] for p in planes.listar(activos=False)] == ["Pro"] and planes.leer_plan(pid)["precio_usd"] == 1000
+    assert not [a for a in entorno.admins if a[0] == "control_plata"]
+    # El umbral del aviso no es un control de plata: se guarda sin clave (el margen que no cambia tampoco la pide).
+    http.post("/admin/cobros/acme/cuenta", data={"margen": "", "umbral": "7"}, headers=MISMO)
+    assert libro.cuenta("acme")["umbral"] == 7_000
+
+
+def test_con_la_clave_de_arriba_cambian_y_avisan_a_todos_los_admins(http, entorno):
+    from cobros import libro, planes
+    libro.configurar("acme", usuario="admin", cobrar=False)
+    html = http.get("/admin/cobros").get_data(as_text=True)
+    assert 'id="cobros-clave"' in html
+    http.post("/admin/cobros/clave", data={"clave": "mala"}, headers=MISMO)
+    assert any("Esa no es tu clave" in m for m in _flashes(http))
+    http.post("/admin/cobros/clave", data={"clave": PASSWORD_PRUEBA}, headers=MISMO)
+    assert any("10 minutos" in m for m in _flashes(http))
+    assert 'id="cobros-clave"' not in http.get("/admin/cobros").get_data(as_text=True)
+    http.post("/admin/cobros/acme/cuenta", data={"cobrar": "1"}, headers=MISMO)
+    http.post("/admin/cobros/acme/cuenta", data={"pospago": "1"}, headers=MISMO)
+    http.post("/admin/cobros/acme/cuenta", data={"margen": "1,1", "umbral": "5"}, headers=MISMO)
+    http.post("/admin/cobros/margen", data={"margen": "2,5"}, headers=MISMO)
+    http.post("/admin/cobros/bienvenida", data={"bienvenida": "3"}, headers=MISMO)
+    http.post("/admin/cobros/planes", data={"nombre": "Pro", "precio_usd": "1000", "margen": "1,25",
+                                             "tope_incluido_usd": "25"}, headers=MISMO)
+    (pid,) = [p["id"] for p in planes.listar(activos=False)]
+    http.post(f"/admin/cobros/planes/{pid}", data={"nombre": "Pro", "precio_usd": "1200", "margen": "1,25",
+                                                   "tope_incluido_usd": "25"}, headers=MISMO)
+    c = libro.cuenta("acme")
+    assert (c["cobrar"], c["pospago"], c["margen_propio"]) == (True, True, 1.1)
+    assert libro.margen_global() == 2.5 and libro.bienvenida_usd() == 3 and planes.leer_plan(pid)["precio_usd"] == 1200
+    cuerpos = [a[3] for a in entorno.admins if a[0] == "control_plata"]
+    assert len(cuerpos) == 7 and all("admin" in c_ and "cambia la clave" in c_ for c_ in cuerpos)
+    assert "prendió «Cobrar»" in cuerpos[0] and "pospago" in cuerpos[1] and "1,10" in cuerpos[2]
+    assert "2,50" in cuerpos[3] and "US$ 3,00" in cuerpos[4] and "creó el plan «Pro»" in cuerpos[5]
+    assert "editó el plan «Pro»" in cuerpos[6] and "US$ 1.200" in cuerpos[6]

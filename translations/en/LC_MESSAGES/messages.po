@@ -1985,8 +1985,28 @@ msgid "%(usuario)s anotó una recarga manual de %(monto)s en %(proyecto)s. Nota:
 msgstr "%(usuario)s recorded a manual top-up of %(monto)s in %(proyecto)s. Note: %(nota)s. In the last 24 hours %(hoy)s has been added by hand, with a cap of %(tope)s. If it wasn't you or another admin, change the password."
 
 #, python-format
+msgid "%(usuario)s cambió %(proyecto)s: %(cambios)s."
+msgstr "%(usuario)s changed %(proyecto)s: %(cambios)s."
+
+#, python-format
+msgid "%(usuario)s creó el plan «%(plan)s»: %(precio)s al mes, margen %(margen)s, tope de lo incluido %(tope)s."
+msgstr "%(usuario)s created the plan “%(plan)s”: %(precio)s per month, markup %(margen)s, included cap %(tope)s."
+
+#, python-format
+msgid "%(usuario)s editó el plan «%(plan)s»: ahora %(precio)s al mes, margen %(margen)s, tope de lo incluido %(tope)s."
+msgstr "%(usuario)s edited the plan “%(plan)s”: now %(precio)s per month, markup %(margen)s, included cap %(tope)s."
+
+#, python-format
 msgid "%(usuario)s fijó la tasa de referencia de la TRM en %(valor)s COP por dólar. Si no fuiste tú ni otro admin, cambia la clave."
 msgstr "%(usuario)s set the TRM reference rate to %(valor)s COP per dollar. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s puso el margen global en %(margen)s."
+msgstr "%(usuario)s set the global markup to %(margen)s."
+
+#, python-format
+msgid "%(usuario)s puso el saldo de bienvenida en %(monto)s."
+msgstr "%(usuario)s set the welcome balance to %(monto)s."
 
 #, python-format
 msgid "%(usuario)s puso el tope diario de lo que se suma a mano en %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
@@ -4072,6 +4092,9 @@ msgstr "The daily cap for manual top-ups changed"
 msgid "Cambió la tasa de referencia de la TRM"
 msgstr "The TRM reference rate changed"
 
+msgid "Cambió un control de plata"
+msgstr "A money control changed"
+
 msgid "Camisa manga corta"
 msgstr "Short-sleeve shirt"
 
@@ -5089,6 +5112,9 @@ msgstr "Confirmed"
 
 msgid "Confirmar guion"
 msgstr "Confirm script"
+
+msgid "Confirmar mi clave"
+msgstr "Confirm my password"
 
 msgid "Confirmar mi correo"
 msgstr "Confirm my email"
@@ -11957,6 +11983,9 @@ msgstr "Done: Creatv received your request and will email you once it's connecte
 msgid "Listo: Creatv ya gestiona tu Meta con %(cuenta)s · %(pagina)s."
 msgstr "Done: Creatv now manages your Meta with %(cuenta)s · %(pagina)s."
 
+msgid "Listo: durante 10 minutos no te volvemos a pedir la clave."
+msgstr "Done: we won't ask for your password again for 10 minutes."
+
 msgid "Listo: edítalo a tu gusto antes de generar."
 msgstr "Done: edit it to your liking before generating."
 
@@ -14861,6 +14890,9 @@ msgstr "To launch and test new pieces: Test ads →"
 msgid "Para mover plata a mano escribe tu clave otra vez (vale 10 minutos)."
 msgstr "To move money by hand, type your password again (it lasts 10 minutes)."
 
+msgid "Para prender o apagar «Cobrar», cambiar el pospago, un margen, el saldo de bienvenida o un plan, o mover saldo a mano, escribe tu clave: vale 10 minutos."
+msgstr "To turn “Charge usage” on or off, change postpaid, a markup, the welcome balance or a plan, or move balance by hand, type your password: it lasts 10 minutes."
+
 msgid "Para probar ángulos nuevos cada semana y encontrar a tus ganadores."
 msgstr "To test new angles every week and find your winners."
 
@@ -17649,6 +17681,9 @@ msgstr "If the person paid and it was not credited, use «Search in Wompi»: it 
 
 msgid "Si lo eliges, Claude escribe con ese nivel en ideas, guiones y adaptaciones de este producto."
 msgstr "If you choose it, Claude writes at that level in this product's ideas, scripts and adaptations."
+
+msgid "Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "If it wasn't you or another admin, change the password."
 
 msgid "Si no quieres cerrarla, revísala en Meta; si sí, quítala de las cuentas del proyecto."
 msgstr "If you don’t want to close it, check it in Meta; if you do, remove it from the project’s accounts."
@@ -21346,6 +21381,9 @@ msgstr "ad by ad, winners and AI evaluation"
 msgid "anuncios"
 msgstr "ads"
 
+msgid "apagó «Cobrar»"
+msgstr "turned “Charge usage” off"
+
 msgid "aprobada"
 msgstr "approved"
 
@@ -22816,6 +22854,9 @@ msgstr "format families"
 msgid "le faltan %(n)s impresiones para que el motor decida"
 msgstr "%(n)s impressions to go before the engine decides"
 
+msgid "le quitó el margen propio (usa el global)"
+msgstr "removed its own markup (it uses the global one)"
+
 #, python-format
 msgid "lectura · %(familia)s"
 msgstr "reading · %(familia)s"
@@ -22839,6 +22880,9 @@ msgstr "ready to generate"
 msgid "lo grave primero"
 msgstr "most serious first"
 
+msgid "lo pasó a pospago"
+msgstr "moved it to postpaid"
+
 #, python-format
 msgid "lo que se puede sumar a mano en 24 horas, entre recargas manuales y ajustes positivos de todos los proyectos. En las últimas 24 horas van %(hoy)s de %(tope)s."
 msgstr "what can be added by hand in 24 hours, counting manual top-ups and positive adjustments across all projects. In the last 24 hours: %(hoy)s of %(tope)s."
@@ -22858,6 +22902,9 @@ msgstr "the next version uses it"
 
 msgid "lo visual no da creencia"
 msgstr "the visuals don't build belief"
+
+msgid "lo volvió a prepago"
+msgstr "moved it back to prepaid"
 
 #, python-format
 msgid "los avatares costarían %(costo)s y quedan %(tope)s aprobados: genera con el botón cuando quieras"
@@ -23334,6 +23381,9 @@ msgstr "post %(n)s of %(total)s"
 msgid "precio no disponible"
 msgstr "price not available"
 
+msgid "prendió «Cobrar»"
+msgstr "turned “Charge usage” on"
+
 msgid "presencia marca"
 msgstr "brand presence"
 
@@ -23466,6 +23516,10 @@ msgstr "dotted = experiment average"
 
 msgid "punteadas: días en que el motor actuó (pasa el mouse para ver qué hizo)"
 msgstr "dotted: days the engine acted (hover to see what it did)"
+
+#, python-format
+msgid "puso su margen propio en %(margen)s"
+msgstr "set its own markup to %(margen)s"
 
 msgid "pícnic"
 msgstr "picnic"
