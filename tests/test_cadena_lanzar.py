@@ -33,21 +33,23 @@ def lanzar(monkeypatch):
     return correr
 
 
-def test_wan_escena_siguiente_lleva_el_cuadro_y_sus_imagenes_como_referencias(lanzar):
+def test_wan_escena_siguiente_lleva_el_cuadro_y_solo_su_lugar(lanzar):
+    """PND-330: desde la segunda escena, el último cuadro (Image 1) y el lugar de la escena; ni retratos ni producto."""
     v, s = lanzar(cadena.WAN, 2)
-    imgs = escenas.imagenes_para_crear(v, 2)
+    assert [x["clave"] for x in escenas.imagenes_para_crear(v, 2)] == ["r1", "r2", "r4"]
     assert s["modelo"] == "wan3" and "imagen_inicial" not in s and "elementos" not in s
-    assert s["referencias_urls"][0] == "https://r2/cuadro1.jpg" and len(s["referencias_urls"]) == len(imgs) + 1
-    assert [r["token"] for r in s["referencias"]] == [f"Image {i}" for i in range(1, len(imgs) + 2)]
+    assert s["referencias_urls"] == ["https://r2/cuadro1.jpg", "https://pub/sala"]
+    assert [r["token"] for r in s["referencias"]] == ["Image 1", "Image 2"]
     assert "@Imagen" not in s["prompt_relleno"]                      # tokens de Wan, no menciones de Crear
     assert s["prompt_relleno"].startswith("The video starts exactly on Image 1.")
+    assert "Image 3" not in s["prompt_relleno"]
 
 
-def test_wan_primera_escena_sin_cuadro(lanzar):
+def test_wan_primera_escena_sin_cuadro_y_con_el_lugar_primero(lanzar):
     v, s = lanzar(cadena.WAN, 1)
-    assert s["referencias_urls"] == [f"https://pub/{x['imagen'].get('activo_id') or x['imagen'].get('url')}"
-                                     for x in escenas.imagenes_para_crear(v, 1)]
-    assert "@Imagen" not in s["prompt_relleno"] and "Image 1 =" in s["prompt_relleno"]
+    assert s["referencias_urls"] == ["https://pub/https://r2/c.jpg", "https://pub/hf", "https://pub/https://r2/x.jpg"]
+    assert "@Imagen" not in s["prompt_relleno"] and "Image 2 = hero object" in s["prompt_relleno"]
+    assert "Image 3 lifts Image 2 near Image 1." in s["prompt_relleno"]
 
 
 def test_kling_primera_escena_ya_no_manda_menciones_de_crear(lanzar):

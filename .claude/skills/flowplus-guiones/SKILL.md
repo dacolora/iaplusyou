@@ -128,7 +128,15 @@ y la cadena lo guarda (`cadena.modelo_de`; una vieja sin modelo es Kling). «Reh
 aunque el cuerpo pida otro. Wan no tiene imagen a video ni elementos en WaveSpeed: cada escena va por
 reference-to-video; desde la segunda, el último cuadro de la anterior es `@Imagen 1` (`cadena.prompt_escena_wan`,
 `ARRANQUE_WAN`) y las de la escena corren un número (máximo 10 en total: `revisar` pide 9 en las siguientes); sin
-elementos ni aviso de cambio de lugar. `tareas.cadena.lanzar_escena` cambia las menciones de Crear por el token del
+elementos ni aviso de cambio de lugar. **Qué imágenes recibe Wan (PND-330, decisión 2026-10-15, lote 2):** en la
+prueba real del 2026-10-15 (Podcast de HappyCozy, 2 escenas, US$ 1,50) Wan intercaló los retratos de referencia como
+planos. `cadena.imagenes_wan`: en la primera escena van todas con el lugar primero (el entorno es Image 1 y los retratos
+después); en las siguientes, solo el cuadro y el lugar de la escena (el cuadro ya trae las caras). No se agrega texto
+al prompt: lo que no va se nombra en palabras (`escenas.prompt_para_crear`, que ahora también renumera una mención
+pegada «@Image N» dentro de una descripción si la escena la lleva —el entorno del Podcast dice «Woman from @Image 1»—
+y ordena el REFERENCE MAP por número). `avisos` con Wan dice quién aparece por primera vez en una escena siguiente
+(sale del texto). Pendiente: la prueba real con una cadena de 2 escenas (≈ US$ 1,50) cuando Daniel la apruebe; ojo, en
+ese guion los «entornos» son una mujer sentada a la mesa, que Wan también podría intercalar. `tareas.cadena.lanzar_escena` cambia las menciones de Crear por el token del
 modelo (`flowplus_prompt.asignar_tokens`/`sustituir_tokens`); hasta este cambio la primera escena de Kling le llegaba al
-modelo con «@Imagen n» literal. Pendiente: probar con una cadena real corta que Wan arranca de verdad en el cuadro y
-mantiene las caras (detener después de dos escenas si no).
+modelo con «@Imagen n» literal. Probado en real el 2026-10-15: arranca en el cuadro y mantiene las caras, pero
+intercalaba los retratos (PND-330, arriba).

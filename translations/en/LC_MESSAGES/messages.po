@@ -3298,6 +3298,10 @@ msgstr "Approve or reject each one from the sprint; the approved ones go into th
 msgid "Apruebas una cifra y el sistema busca productos del nicho en las tiendas del país, elige los que son del nicho, trae sus reseñas y arma los avatares. Nadie marca nada a mano."
 msgstr "You approve a figure and the system searches for niche products in the country's stores, picks out the ones that are really in the niche, pulls their reviews and builds the avatars. Nobody marks anything by hand."
 
+#, python-format
+msgid "Aquí aparece %(lista)s, que no estaba en la escena anterior: con Wan 3.0 las escenas siguientes solo reciben el último cuadro y el lugar, así que sale de lo que dice el texto."
+msgstr "%(lista)s appears here and wasn't in the previous scene: with Wan 3.0 the following scenes only get the last frame and the setting, so it comes from what the text says."
+
 msgid "Aquí el ROAS de cada anuncio solo cuenta las ventas de esta tienda."
 msgstr "Here each ad's ROAS only counts this store's sales."
 
@@ -20580,8 +20584,8 @@ msgstr "Wan 3.0"
 msgid "Wan 3.0 (referencia, no edición)"
 msgstr "Wan 3.0 (reference, no editing)"
 
-msgid "Wan 3.0 es la más barata: cada escena recibe el último cuadro de la anterior y sus imágenes como referencias. Kling O3 Pro arranca exactamente en ese cuadro y fija las caras con «elementos», pero cuesta más."
-msgstr "Wan 3.0 is the cheapest: each scene gets the previous one's last frame and its images as references. Kling O3 Pro starts exactly on that frame and locks faces with “elements”, but costs more."
+msgid "Wan 3.0 es la más barata: la primera escena recibe sus imágenes (el lugar primero) y cada siguiente, el último cuadro de la anterior y su lugar, sin los retratos. Kling O3 Pro arranca exactamente en ese cuadro y fija las caras con «elementos», pero cuesta más."
+msgstr "Wan 3.0 is the cheapest: the first scene gets its images (the setting first) and each following one gets the previous one's last frame and its setting, without the portraits. Kling O3 Pro starts exactly on that frame and locks faces with “elements”, but costs more."
 
 msgid "Wan-2.2 Animate Replace"
 msgstr "Wan-2.2 Animate Replace"

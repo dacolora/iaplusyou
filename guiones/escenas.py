@@ -250,6 +250,21 @@ def texto_por_clip(video, url_de=None):
 _LINEA_MAPA = re.compile(r"^Image (\d+) = ")
 _MENCION_IMAGE = re.compile(r"(?<![\w@])Image (\d+)\b")
 _ARRANQUE = re.compile(r"^Start image = last frame of Clip \d+\.?$")
+_LINEA_MAPA_CREAR = re.compile(r"^\s*@Imagen (\d+) = ")
+# Una mención pegada dentro de una descripción («Woman from @Image 1 sitting at…», el entorno del guion «Podcast»):
+# también habla de la Image N de la versión. Si la escena la lleva, se renumera como las demás; si no, se deja como
+# estaba (Crear la lee como siempre). Sin esto, con el lugar primero (cadena con Wan, PND-330) «@Image 1» apuntaba al
+# propio lugar en vez de a Anna.
+_MENCION_PEGADA = re.compile(r"(?<![\w.])@(?:Image|Imagen) ?(\d+)\b", re.IGNORECASE)
+
+
+def _por_numero(lineas):
+    """Las líneas del REFERENCE MAP en el orden de sus números (`@Imagen k`). Con las imágenes en su orden de siempre
+    no cambia nada; la cadena con Wan pone el lugar primero (PND-330) y así el mapa lo dice en orden."""
+    def clave(linea):
+        m = _LINEA_MAPA_CREAR.match(linea)
+        return int(m.group(1)) if m else 10 ** 6
+    return sorted(lineas, key=clave)
 
 
 def imagenes_para_crear(video, indice):
@@ -282,7 +297,11 @@ def prompt_para_crear(texto, video, imagenes):
         def cambiar(m):
             n = int(m.group(1))
             return f"@Imagen {nuevo[n]}" if n in nuevo else nombres.get(n, m.group(0))
-        return _MENCION_IMAGE.sub(cambiar, linea)
+
+        def cambiar_pegada(m):
+            n = int(m.group(1))
+            return f"@Imagen {nuevo[n]}" if n in nuevo else m.group(0)
+        return _MENCION_IMAGE.sub(cambiar, _MENCION_PEGADA.sub(cambiar_pegada, linea))
 
     extras = [f"@Imagen {nuevo[x['numero']]} = extra reference — {x['nombre'] or 'image'}."
               for x in imagenes if x["tipo"] == "extra"]
@@ -302,10 +321,10 @@ def prompt_para_crear(texto, video, imagenes):
             en_mapa = False
             mapa += extras
             if mapa:
-                salida += ["REFERENCE MAP"] + mapa
+                salida += ["REFERENCE MAP"] + _por_numero(mapa)
             elif not linea.strip():
                 continue  # sin imágenes: fuera el mapa y su línea en blanco
         salida.append(renumerar(linea))
     if en_mapa and (mapa or extras):
-        salida += ["REFERENCE MAP"] + mapa + extras
+        salida += ["REFERENCE MAP"] + _por_numero(mapa + extras)
     return "\n".join(salida).strip()

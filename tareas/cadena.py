@@ -100,8 +100,10 @@ def lanzar_escena(cliente, video_id, k):
     imagenes = escenas.imagenes_para_crear(v, k)
     primera = k == cadena.indices(v)[0]
     if modelo == cadena.WAN:
-        # Wan 3.0: todas por referencias; desde la segunda, el último cuadro de
-        # la anterior va primero (`@Imagen 1`) y las de la escena después.
+        # Wan 3.0: todas por referencias. La primera, con el lugar primero; desde la segunda, el último cuadro de la
+        # anterior va primero (`@Imagen 1`) y después solo el lugar de la escena (PND-330: los retratos se colaban como
+        # planos).
+        imagenes = cadena.imagenes_wan(v, k)
         prompt = cadena.prompt_escena_wan(_prompt_vigente(video_id, k), v, k, imagenes)
         urls = [medios.url_publica(cliente, x["imagen"]) for x in imagenes]
         referencias = [{"tipo": "imagen", "url": u, "frame_url": u,

@@ -152,13 +152,41 @@ def test_wan_revisar_cuenta_el_cuadro_anterior_y_no_tiene_tope_de_elementos():
                                     escena=2)
     assert cadena.revisar(_video(est), PROMPTS, modelo=cadena.WAN) == []      # 4 elementos: a Wan no le importa
     n = 2
-    while len(escenas.imagenes_para_crear(_video(est), 2)) < 10:   # el tope de una escena
+    while len(escenas.imagenes_para_crear(_video(est), 2)) < escenas.MAX_POR_ESCENA:   # el tope de una escena
         est = escenas.agregar_extra(est, _video(est), dict(FOTO, material_id=50 + n, url=f"https://r2/x{n}.jpg"),
                                     escena=2)
         n += 1
-    n2 = len(escenas.imagenes_para_crear(_video(est), 2))
-    motivos = cadena.revisar(_video(est), PROMPTS, modelo=cadena.WAN)
-    assert n2 == 10 and [m["indice"] for m in motivos] == [2] and "9" in motivos[0]["motivo"]  # 10 + el cuadro
+    # PND-330: las siguientes solo llevan su lugar (más el cuadro): 10 imágenes elegidas no pasan del tope de Wan
+    assert len(escenas.imagenes_para_crear(_video(est), 2)) == 10
+    assert [x["clave"] for x in cadena.imagenes_wan(_video(est), 2)] == ["r4"]
+    assert cadena.revisar(_video(est), PROMPTS, modelo=cadena.WAN) == []
+
+
+def test_wan_primera_escena_pone_el_lugar_primero_y_las_siguientes_solo_el_lugar():
+    """PND-330 (prueba real del 2026-10-15: Wan intercaló los retratos como planos): en la primera escena el entorno
+    es Image 1 y los retratos van después; en las siguientes solo va el lugar (el último cuadro ya trae las caras)."""
+    v = _completo()
+    assert [x["clave"] for x in escenas.imagenes_para_crear(v, 1)] == ["r1", "r2", "r3"]
+    assert [x["clave"] for x in cadena.imagenes_wan(v, 1)] == ["r3", "r1", "r2"]
+    assert [x["clave"] for x in cadena.imagenes_wan(v, 2)] == ["r4"]
+    p1 = cadena.prompt_escena_wan(TEXTO, v, 1, cadena.imagenes_wan(v, 1))
+    # «Image 2 lifts Image 1 near Image 3» con el lugar primero: el lugar es @Imagen 1, el producto 2, el personaje 3
+    assert "0.0–3.0s  @Imagen 3 lifts @Imagen 2 near @Imagen 1." in p1
+    assert p1.index("@Imagen 2 = hero object") < p1.index("@Imagen 3 = character")   # el mapa sale en orden
+    p2 = cadena.prompt_escena_wan(TEXTO, v, 2, cadena.imagenes_wan(v, 2))
+    # los que no van se nombran en palabras: ningún número suelto que el modelo pueda tomar por otra imagen
+    assert "the AI podiatrist, adult British man (~45) lifts HappyFlops Original near modern bright podiatry clinic." in p2
+    assert "@Imagen 3" not in p2 and "hero object" not in p2 and "character —" not in p2
+
+
+def test_wan_avisa_quien_aparece_por_primera_vez_en_una_escena_siguiente():
+    """PND-330: desde la segunda escena Wan no recibe retratos; alguien que no estaba en la anterior sale del texto."""
+    v = _completo()
+    est = escenas.agregar_extra(escenas.estado(v), v, dict(FOTO, material_id=60, url="https://r2/nuevo.jpg",
+                                                          nombre="la vecina"), escena=2)
+    avisos = cadena.avisos(_video(est), cadena.WAN)
+    assert [a["indice"] for a in avisos] == [2] and "la vecina" in avisos[0]["motivo"]
+    assert cadena.avisos(v, cadena.WAN) == []
 
 
 def test_wan_precio_sin_elementos_ni_avisos_de_lugar():

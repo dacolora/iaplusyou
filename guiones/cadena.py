@@ -3,7 +3,8 @@ Cadena de escenas de Flow Plus (spec 2026-09-30, «Generar todas las escenas»):
 la escena 1 se genera con sus imágenes de referencia y cada siguiente arranca en
 el último fotograma de la anterior: con Kling O3 Pro, imagen a video y sus
 personajes/productos como «elementos» de Kling; con Wan 3.0 (desde el
-2026-10-15), referencias con ese fotograma primero. Puro: revisión previa, precio,
+2026-10-15), referencias con ese fotograma primero y, desde PND-330, solo el
+lugar de la escena (`imagenes_wan`). Puro: revisión previa, precio,
 nombres y prompts de cada escena, y los cambios de estado. El estado vive en
 `guion_video.extra["cadena"]`; el único escritor es
 `datos.modificar_cadena`; el worker (`tareas/cadena.py`) lo avanza.
@@ -27,8 +28,9 @@ MODELO = "kling_o3_pro"
 # Wan 3.0 (2026-10-15, pedido de Daniel: Kling con sonido cuesta US$ 0,14/s y Wan
 # US$ 0,10/s). Wan no tiene imagen a video ni elementos en WaveSpeed: cada escena
 # va por reference-to-video con el último cuadro de la anterior como primera
-# imagen más las de la escena (hasta 10 en total). Wan va primero: es la que se
-# ofrece arriba. Una cadena guarda su modelo; «Rehacer desde» sigue con el mismo.
+# imagen más el lugar de la escena (`imagenes_wan`, PND-330; hasta 10 en total).
+# Wan va primero: es la que se ofrece arriba. Una cadena guarda su modelo;
+# «Rehacer desde» sigue con el mismo.
 WAN = "wan3"
 MODELOS = (WAN, MODELO)
 ARRANQUE_WAN = ("@Imagen 1 = first frame — the last frame of the previous scene. The video starts exactly on "
@@ -82,6 +84,20 @@ def _es_elemento(x):
     return x["tipo"] in TIPOS_ELEMENTO
 
 
+def imagenes_wan(video, k):
+    """Las imágenes de la escena k que recibe Wan 3.0 (PND-330, decisión 2026-10-15, lote 2). En la prueba real del
+    2026-10-15 (Podcast de HappyCozy) Wan intercaló los retratos de referencia como planos: abría en el retrato de
+    Anna contra una pared lisa y cortaba a él a mitad de la escena 2. En la primera escena van todas, con el lugar
+    primero (el entorno es Image 1 y los retratos después). En las siguientes, solo los lugares de la escena: el último
+    cuadro de la anterior, que la tarea pone delante como Image 1, ya trae las caras y los objetos. No se agrega texto
+    al prompt: lo que no va se nombra en palabras (`escenas.prompt_para_crear`). `Conflicto` si falta una imagen."""
+    imgs = escenas.imagenes_para_crear(video, k)
+    lugares = [x for x in imgs if x["tipo"] == "entorno"]
+    if k == _primera(video):
+        return lugares + [x for x in imgs if x["tipo"] != "entorno"]
+    return lugares
+
+
 def id_imagen(img):
     """Clave estable de una imagen para cachear su elemento de Kling."""
     if img.get("activo_id"):
@@ -118,12 +134,12 @@ def revisar(video, prompts, desde=None, modelo=MODELO):
         if not prompts.get(f"principal:{k}"):
             problemas.append({"indice": k, "motivo": gettext("Esta escena todavía no tiene su prompt en el chat.")})
         try:
-            imgs = escenas.imagenes_para_crear(video, k)
+            imgs = imagenes_wan(video, k) if modelo == WAN else escenas.imagenes_para_crear(video, k)
         except Conflicto as e:
             problemas.append({"indice": k, "motivo": str(e)})
             continue
         if modelo == WAN:
-            # Las siguientes llevan además el último cuadro de la anterior.
+            # Las siguientes llevan además el último cuadro de la anterior (y solo su lugar: PND-330).
             maximo = info["max_referencias"] - (0 if k == primera else 1)
             if len(imgs) > maximo:
                 problemas.append({"indice": k, "motivo": gettext(
@@ -147,9 +163,11 @@ def revisar(video, prompts, desde=None, modelo=MODELO):
 def avisos(video, modelo=MODELO):
     """No bloquean: con Kling, una escena siguiente que cambia de lugar (el
     lugar nuevo solo llega por el texto: imagen a video no recibe entornos).
-    Wan recibe el entorno de la escena como imagen: no hay aviso."""
+    Wan recibe el entorno de la escena como imagen, pero desde la segunda escena
+    solo eso y el último cuadro (PND-330): quien aparece por primera vez en una
+    escena siguiente no lleva su imagen y sale del texto."""
     if modelo == WAN:
-        return []
+        return _avisos_wan(video)
     salida, previo = [], None
     for k in indices(video):
         claves, _ = escenas.claves_de(video, _clip(video, k))
@@ -160,6 +178,22 @@ def avisos(video, modelo=MODELO):
                 "Esta escena cambia de lugar: como arranca en el último cuadro de la anterior, el lugar nuevo "
                 "solo llega por el texto.")})
         previo = lugares
+    return salida
+
+
+def _avisos_wan(video):
+    pool_ = {x["clave"]: x for x in escenas.pool(video)}
+    salida, previas = [], None
+    for k in indices(video):
+        claves, _ = escenas.claves_de(video, _clip(video, k))
+        propias = {c for c in claves if c in pool_ and pool_[c]["tipo"] != "entorno"}
+        nuevas = sorted(propias - previas, key=lambda c: pool_[c]["numero"]) if previas is not None else []
+        if nuevas:
+            salida.append({"indice": k, "motivo": gettext(
+                "Aquí aparece %(lista)s, que no estaba en la escena anterior: con Wan 3.0 las escenas siguientes solo "
+                "reciben el último cuadro y el lugar, así que sale de lo que dice el texto.",
+                lista=", ".join(pool_[c]["nombre"] or f"Image {pool_[c]['numero']}" for c in nuevas))})
+        previas = propias
     return salida
 
 
