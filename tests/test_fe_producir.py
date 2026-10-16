@@ -325,7 +325,7 @@ def test_preparar_guion_no_guarda_un_angulo_vacio_si_claude_no_lo_decidio(entorn
             return _Resp(sin_angulo)
 
     class FakeAnthropic:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _Messages()
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "clave-test")

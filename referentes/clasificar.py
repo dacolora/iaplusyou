@@ -67,7 +67,7 @@ MAX_TOKENS = 4000
 
 
 def _llamar(content, max_tokens=MAX_TOKENS, system=None):
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     extra = {"system": system} if system else {}
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": content}], **extra)

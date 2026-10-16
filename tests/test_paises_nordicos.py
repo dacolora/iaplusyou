@@ -291,7 +291,7 @@ def test_caption_organico_en_noruego_pide_lenke_i_bio_y_nombra_el_idioma(monkeyp
         stop_reason = "end_turn"
 
     class _Cliente:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             pass
 
         class messages:

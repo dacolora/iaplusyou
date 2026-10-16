@@ -537,7 +537,7 @@ def test_regla_fidelidad_delimita_la_descripcion(monkeypatch):
         content = [type("B", (), {"type": "text", "text": '"Regla."'})()]
 
     class _Cliente:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = self
 
         def create(self, **kw):

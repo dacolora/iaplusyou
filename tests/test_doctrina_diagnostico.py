@@ -147,7 +147,7 @@ def test_una_forma_rara_se_corrige_y_suma_los_tokens_de_las_dos_llamadas(monkeyp
     monkeypatch.setattr(analisis, "_llamar_contando", falso)
     d, ent, sal = dg.diagnosticar({"pais": "CO", "nombre": "x"}, VEREDICTO, [], {}, {})
     assert d["causas"] and (ent, sal) == (200, 40) and len(vistos) == 2
-    assert "no sirvió" in vistos[1][0][-1]["text"] and vistos[0][1] == {"timeout": dg.TIMEOUT_S, "max_retries": 1}
+    assert "no sirvió" in vistos[1][0][-1]["text"] and vistos[0][1] == {"timeout": dg.TIMEOUT_S, "max_retries": 0}
     respuestas[:] = ['{"causas": [{"codigo": {"a": 1}}]}', '{"siguiente": 3}']
     with pytest.raises(dg.ErrorDiagnostico) as e:
         dg.diagnosticar({"pais": "CO", "nombre": "x"}, VEREDICTO, [], {}, {})

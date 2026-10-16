@@ -138,7 +138,7 @@ def test_llamar_pasa_el_system_solo_si_viene(monkeypatch):
             return type("R", (), {"content": [type("B", (), {"type": "text", "text": "ok"})()]})()
 
     class _A:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _M()
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
@@ -226,7 +226,7 @@ def test_llamar_contando_cobra_tambien_la_cache(monkeypatch):
     from sprints import analisis
 
     class Falso:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = self
 
         def create(self, **k):

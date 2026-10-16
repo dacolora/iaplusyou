@@ -261,7 +261,7 @@ def sugerir_ia(candidatos_, persona_texto, producto_texto, temporada_texto, obje
         enfoque=_sin_cierre(enfoque_texto or "(sin enfoque definido)", "enfoque"),
         objetivo=max(1, int(objetivo)), idioma=idiomas.nombre_para_claude(idioma),
     )
-    cliente_ia = anthropic.Anthropic(api_key=_api_key())
+    cliente_ia = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     # Claude Sonnet 5 piensa antes de responder y eso sale del mismo
     # max_tokens. Medido en producción (2026-09-25): 60 candidatos y objetivo 5
     # usaron ~1 700 tokens (casi todo pensamiento) con un tope viejo de 800 —

@@ -281,7 +281,7 @@ def test_llamar_manda_la_doctrina_de_angulo_y_gancho(monkeypatch):
                                   "usage": type("U", (), {"input_tokens": 1, "output_tokens": 1})()})()
 
     class _A:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _M()
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     monkeypatch.setattr(anthropic, "Anthropic", _A)

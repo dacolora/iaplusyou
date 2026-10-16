@@ -438,7 +438,7 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
     guion (error bloqueante) pero la primera no tenía ninguno — solo extra —
     se devuelve la primera: lo ya pagado nunca se pierde por una corrección
     que empeoró las cosas."""
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     mensajes = [{"role": "user", "content": mensaje_usuario}]
     costo = 0.0
     errores = []

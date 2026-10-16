@@ -180,7 +180,7 @@ def test_sugerir_ia_valida_contra_candidatos(monkeypatch):
             def create(**kw):
                 return respuesta
 
-    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key, max_retries=None: _ClienteFalso())
     monkeypatch.setattr("referentes.sugerir._api_key", lambda: "sk-test")
     elegidos, ent, sal = sugerir.sugerir_ia(cands, "persona", "producto", "temporada", objetivo=2)
     assert elegidos == [{"referente_id": 1, "razon": "encaja con la persona"}]
@@ -196,7 +196,7 @@ def test_sugerir_ia_respuesta_no_json_lanza(monkeypatch):
             def create(**kw):
                 return respuesta
 
-    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key, max_retries=None: _ClienteFalso())
     monkeypatch.setattr("referentes.sugerir._api_key", lambda: "sk-test")
     import pytest
     with pytest.raises(sugerir.SugerenciaInvalida) as exc:
@@ -215,7 +215,7 @@ def _cliente_que_responde(monkeypatch, respuesta, pedidos):
             def create(**kw):
                 pedidos.append(kw)
                 return respuesta
-    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key, max_retries=None: _ClienteFalso())
     monkeypatch.setattr("referentes.sugerir._api_key", lambda: "sk-test")
 
 
@@ -248,7 +248,7 @@ def test_sugerir_ia_muestra_consciencia_y_arranque_y_manda_la_doctrina(monkeypat
                 vistos.append(kw)
                 return respuesta
 
-    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key, max_retries=None: _ClienteFalso())
     monkeypatch.setattr("referentes.sugerir._api_key", lambda: "sk-test")
     cand = dict(_cand(1, "ugc"), consciencia="problem-aware", extra={"lead": "secreto"})
     sugerir.sugerir_ia([cand], "persona", "producto", "temporada", objetivo=1)

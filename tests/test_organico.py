@@ -337,7 +337,7 @@ def test_caption_organico_arma_el_mensaje_y_parsea_json(monkeypatch):
                                                         '"youtube": "mal"}\n```')]})()
 
     class _Cliente:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _Msgs()
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     monkeypatch.setattr(gp.anthropic, "Anthropic", _Cliente)
@@ -951,7 +951,7 @@ def test_caption_manda_la_doctrina_y_el_angulo(monkeypatch):
             return type("R", (), {"content": [type("B", (), {"type": "text", "text": texto})()]})()
 
     class _A:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _M()
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     monkeypatch.setattr(gp.anthropic, "Anthropic", _A)
@@ -981,7 +981,7 @@ def test_caption_organico_lleva_las_pruebas_del_producto(monkeypatch):
             return type("R", (), {"content": [_Bloque()]})()
 
     class _Cliente:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _Msgs()
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     monkeypatch.setattr(gp.anthropic, "Anthropic", _Cliente)
