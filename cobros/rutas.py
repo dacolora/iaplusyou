@@ -36,7 +36,7 @@ import gastos
 import idiomas
 import proyectos
 import usuarios
-from cobros import bold, libro, pasarela, planes, recargas, trm, vista, wompi
+from cobros import bold, csp, libro, pasarela, planes, recargas, trm, vista, wompi
 
 bp = Blueprint("cobros", __name__)
 log = logging.getLogger(__name__)
@@ -165,6 +165,8 @@ def texto_estado(recarga, tx_id=None, visto=None):
         return gettext("El link de pago venció sin pagarse.")
     if estado == "anulada":
         if es_wompi:
+            if not recargas.fue_acreditada(recarga["id"]):   # PND-328: Wompi la anuló antes de que se sumara
+                return gettext("Wompi anuló este pago antes de que lo sumáramos: tu saldo no cambió.")
             return gettext("Wompi anuló este pago y lo descontamos de tu saldo.")
         return gettext("Bold anuló este pago y lo descontamos de tu saldo.")
     return gettext("Verificando tu pago…")
@@ -338,6 +340,24 @@ def wompi_eventos():
     return "", status
 
 
+@bp.post("/pagos/csp/tarjeta")
+def csp_tarjeta():
+    """Las violaciones de la política de scripts de la página de la tarjeta (PND-304 a): las manda el navegador, sin
+    cookie y a veces marcadas de otro sitio, así que va exenta de la barrera CSRF y de la sesión por nombre exacto
+    (`dashboard.ENDPOINTS_OTRO_ORIGEN`). No se puede firmar: la protegen los topes de `cobros.csp` (16 KB, por IP,
+    por hora y violaciones distintas) y que solo anota lo justo. Responde sin cuerpo."""
+    sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
+    if sitio not in ("", "same-origin", "none") and (request.headers.get("Sec-Fetch-Dest") or "").lower() != "report":
+        # Marcado de otro sitio y no es un reporte del navegador (auditoría 2026-10-15): un `fetch` de otra página haría
+        # que sus visitantes mandaran reportes falsos desde IP reales. `Sec-Fetch-Dest: report` no lo puede poner una
+        # página; los reportes de nuestra página llegan como same-origin (visto en Chromium, 2026-10-15).
+        return "", 403
+    if (request.content_length or 0) > csp.MAX_CUERPO:
+        return "", 413
+    cuerpo = request.stream.read(csp.MAX_CUERPO + 1)
+    return "", csp.procesar(cuerpo, request.remote_addr)
+
+
 # --------------------------------------------- Configuración › Plan (planes 6/8) ---
 #
 # Spec planes §5.2, §7 y §8. Las mismas puertas que el saldo: la sesión, el
@@ -414,14 +434,22 @@ def _correo_sugerido(sus=None):
 # formularios solo hacia aquí. Un XSS que llegara a esta página ya no podría pintar un formulario falso de tarjeta.
 CSP_TARJETA = ("script-src 'self' 'nonce-{nonce}' https://checkout.wompi.co; frame-src https://checkout.wompi.co; "
                "form-action 'self'")
-# Primero «solo reporte» (la consola dice qué habría bloqueado, nada se rompe); a False cuando se vea limpia con el
-# widget de verdad (sandbox o producción). Ver la skill `cobros`.
+# Primero «solo reporte»: nada se bloquea y el navegador manda cada violación a `POST /pagos/csp/tarjeta`
+# (`report-uri`; PND-304 a, 2026-10-15), que la anota (`cobros.csp`) y la muestra en /admin/cobros.
+# Se pasa a False (bloquear) cuando, después de al menos un alta y un cambio de tarjeta reales con el widget, esa lista
+# está vacía o solo tiene cosas que no son ni de Creatv ni de Wompi (extensiones del navegador). Si aparece algo de
+# Wompi o nuestro, primero se agrega a CSP_TARJETA. Ver la skill `cobros` y docs/pagos/seguridad-pagos.md.
 CSP_TARJETA_SOLO_REPORTE = True
 
 
 def _con_politica_tarjeta(html):
     resp = make_response(html)
-    politica = CSP_TARJETA.format(nonce=getattr(g, "csp_nonce", "") or "sin-nonce")
+    # Solo `report-uri`, sin `report-to`: en Chromium `report-to` REEMPLAZA a `report-uri` y manda por la Reporting
+    # API, en tandas y hasta un minuto después; con el navegador integrado no llegó ninguno en 90 s, mientras que
+    # `report-uri` llegó al instante con las tres violaciones de prueba (2026-10-15). Firefox y Safari usan
+    # `report-uri`. `cobros.csp` lee igual los dos formatos.
+    politica = (CSP_TARJETA.format(nonce=getattr(g, "csp_nonce", "") or "sin-nonce")
+                + f"; report-uri {url_for('cobros.csp_tarjeta')}")
     resp.headers["Content-Security-Policy-Report-Only" if CSP_TARJETA_SOLO_REPORTE else "Content-Security-Policy"] = politica
     return resp
 
@@ -867,12 +895,21 @@ def admin_cobros():
     recargas_wompi = vista.recargas_wompi_sin_acreditar()
     for rw in recargas_wompi:
         rw["nombre"] = proyectos.nombre_visible(rw["cliente"])
+    try:
+        csp_tarjeta, csp_incompleta = csp.resumen(), csp.incompleta()
+    except Exception:  # noqa: BLE001 — la sección dice que no se pudo leer; el resto de la página sigue
+        log.exception("no se pudieron leer los reportes de la política de la tarjeta")
+        csp_tarjeta, csp_incompleta = None, None
     return render_template("admin_cobros.html", filas=filas, margen_global=margen, planes=datos_planes["planes"],
                            recargas_wompi=recargas_wompi, avisos_plata=vista.avisos_plata(),
+                           csp_tarjeta=csp_tarjeta, csp_solo_reporte=CSP_TARJETA_SOLO_REPORTE,
+                           csp_incompleta=(csp_incompleta or "")[:16].replace("T", " ") or None,
                            sin_correo=not cuentas.smtp_configurado(),
                            eventos=eventos, webhook_callado=vista.webhook_callado(), avisos_bold=_avisos_bold(),
                            avisos_wompi=_avisos_wompi(), trm_rechazada=_trm_rechazada(),
                            margen_global_texto=idiomas.numero(margen, 2), margen_global_campo=_campo(margen),
+                           bienvenida_campo=_campo(libro.bienvenida_usd()),
+                           bienvenida_max_texto=gastos.formatear(libro.BIENVENIDA_MAX),
                            margen_min_texto=idiomas.numero(libro.MARGEN_MIN, 2),
                            margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2))
 
@@ -911,6 +948,26 @@ def admin_margen():
         flash(str(e), "error")
         return _volver_admin()
     flash(gettext("Margen global guardado: %(margen)s.", margen=idiomas.numero(valor, 2)), "ok")
+    return _volver_admin()
+
+
+@bp.post("/admin/cobros/bienvenida")
+@_solo_admin
+def admin_bienvenida():
+    """El saldo de bienvenida de los proyectos nuevos (PND-299), junto al margen global: dólares con hasta 2
+    decimales, de 0 (apagado) al tope del libro."""
+    valor = _decimal(request.form.get("bienvenida"))
+    try:
+        if valor is None or abs(valor) > Decimal(str(libro.BIENVENIDA_MAX * 2)) \
+                or valor != valor.quantize(Decimal("0.01")):
+            raise ValueError(gettext("El saldo de bienvenida va de %(min)s a %(max)s, con hasta 2 decimales.",
+                                     min=gastos.formatear(0), max=gastos.formatear(libro.BIENVENIDA_MAX)))
+        guardado = libro.guardar_bienvenida(float(valor), session.get("usuario"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin()
+    flash(gettext("Saldo de bienvenida guardado: %(monto)s para cada proyecto nuevo, al confirmar su correo.",
+                  monto=gastos.formatear(guardado)), "ok")
     return _volver_admin()
 
 

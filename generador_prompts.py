@@ -1,8 +1,10 @@
 """
 Ayudas de copy, marca y prompts con Anthropic (Claude). Requiere ANTHROPIC_API_KEY en el .env.
 """
+import contextvars
 import json
 import os
+from contextlib import contextmanager
 
 import anthropic
 
@@ -14,6 +16,36 @@ from doctrina import producto as doctrina_producto
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 LINK_EN_BIO = {"es": "Link en bio", "en": "Link in bio", "pt": "Link na bio", "sv": "Länk i bion", "no": "Lenke i bio"}
+
+
+_USOS = contextvars.ContextVar("generador_prompts_usos", default=None)
+
+
+@contextmanager
+def contar_uso():
+    """PND-315 (decisión 2026-10-13, lote 1): junta el `usage` de cada llamada a Claude de este módulo hecha
+    dentro del bloque (en este hilo), para que quien llama anote lo que de verdad cobró Anthropic en vez de una
+    tarifa fija (o de nada). Las funciones no cambian de firma: fuera del bloque no se junta nada."""
+    usos = []
+    token = _USOS.set(usos)
+    try:
+        yield usos
+    finally:
+        _USOS.reset(token)
+
+
+def _anotar_uso(resp):
+    usos = _USOS.get()
+    if usos is not None:
+        usos.append(getattr(resp, "usage", None))
+
+
+def usd_de(usos):
+    """Lo que cobró Anthropic por esas llamadas (la caché de la doctrina contada como en `guiones.claude`)."""
+    from guiones.claude import tokens_entrada_equivalentes  # noqa: PLC0415 — perezoso: guiones importa a este módulo
+    from nicho.avatares import costo_real  # noqa: PLC0415
+    return round(sum(costo_real(tokens_entrada_equivalentes(u), int(getattr(u, "output_tokens", 0) or 0), modelo=MODEL)
+                     for u in usos or () if u is not None), 4)
 
 
 def _con_orden(texto, idioma):
@@ -65,6 +97,7 @@ def evaluar_contra_matriz(image_url, invariantes):
             ],
         }],
     )
+    _anotar_uso(resp)
     texto = "".join(block.text for block in resp.content if block.type == "text").strip()
 
     if texto.startswith("```"):
@@ -95,10 +128,12 @@ prompts de video — no menciones nombres propios, marcas, ni texto en pantalla.
 Responde solo con la guía, sin encabezados ni explicaciones adicionales."""
 
 
-def analizar_marca(image_urls, idioma="es"):
+def analizar_marca(image_urls, idioma="es", on_usage=None):
     """Le pide a Claude que mire hasta 5 imágenes de referencia de marca (URLs
     públicas) y devuelva una guía de estilo en texto para usar en cada prompt
-    futuro. `idioma`: idioma del proyecto (spec 2026-09-26 §B4)."""
+    futuro. `idioma`: idioma del proyecto (spec 2026-09-26 §B4). `on_usage`
+    recibe el `usage` apenas Claude responde, antes de leer el texto: lo que
+    cobró se anota aunque la respuesta no sirva (PND-299: antes no se anotaba)."""
     urls = [u for u in image_urls if u][:5]
     if not urls:
         raise RuntimeError("No hay imágenes de referencia para analizar.")
@@ -113,7 +148,14 @@ def analizar_marca(image_urls, idioma="es"):
         max_tokens=400,
         messages=[{"role": "user", "content": content}],
     )
-    return "".join(block.text for block in resp.content if block.type == "text").strip()
+    if on_usage:
+        on_usage(getattr(resp, "usage", None))
+    guia = "".join(block.text for block in resp.content if block.type == "text").strip()
+    if not guia or getattr(resp, "stop_reason", None) == "max_tokens":
+        # Cobrada pero vacía o cortada: quien llama no la guarda (pisaría la guía buena) ni la cobra al proyecto.
+        raise RespuestaInvalida(idiomas.N_("Claude no devolvió una guía completa; no se cobró ni se cambió la guía. "
+                                           "Intenta de nuevo."))
+    return guia
 
 
 REGLA_FIDELIDAD_PROMPT = """Eres director de arte de una marca. Te doy el nombre, la descripción y \
@@ -150,6 +192,7 @@ def regla_fidelidad(nombre, descripcion="", categoria="", idioma="es"):
             system=_con_orden(REGLA_FIDELIDAD_PROMPT.replace("__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma),
             messages=[{"role": "user", "content": "\n".join(partes)}],
         )
+        _anotar_uso(resp)
         texto = "".join(block.text for block in resp.content if block.type == "text").strip()
         return texto.strip('"').strip()
     except Exception:  # noqa: BLE001 — ver docstring
@@ -249,6 +292,7 @@ def generar_prompt_creative_flow(personajes, productos, escenas, accion_central,
         system=_con_orden(PLANTILLA_MAESTRA_CREATIVE_FLOW.replace("__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma),
         messages=[{"role": "user", "content": mensaje}],
     )
+    _anotar_uso(resp)
     return "".join(block.text for block in resp.content if block.type == "text").strip()
 
 
@@ -343,6 +387,7 @@ def caption_organico(contexto, plataformas):
         system=doctrina.bloque_system("caption", extra=extra, idioma=idioma_orden),
         messages=[{"role": "user", "content": "\n".join(partes)}],
     )
+    _anotar_uso(resp)
     texto = "".join(block.text for block in resp.content if block.type == "text").strip()
     if texto.startswith("```"):
         texto = texto.split("\n", 1)[1] if "\n" in texto else texto[3:]

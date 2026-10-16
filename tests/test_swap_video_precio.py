@@ -499,3 +499,54 @@ def test_la_pantalla_dice_por_que_no_hay_precio(estado, clave):
     assert r.returncode == 0, r.stderr
     salida = json.loads(r.stdout.strip().splitlines()[-1])
     assert salida["texto"] == {"sesion": "S", "grande": "G", "ocupado": "O"}[clave] and salida["bloqueado"] is True
+
+
+# --- revisión de guardian-gasto (2026-10-15): la revisión de marca se cobra, así que va en el precio visto ---
+
+def test_la_revision_de_marca_va_en_el_precio_del_swap(base_temporal):
+    import gastos
+    sin = gastos.estimar("swap", proveedor="nano_banana", formato="foto")["usd"]
+    con = gastos.estimar("swap", proveedor="nano_banana", formato="foto", con_revision=True)["usd"]
+    assert con == pytest.approx(sin + gastos.TARIFAS["revision_marca"])
+    video = gastos.estimar("swap", proveedor="seedance25_edit", formato="video", duracion=5, con_revision=True)["usd"]
+    assert video == pytest.approx(gastos.estimar("swap", proveedor="seedance25_edit", formato="video", duracion=5)["usd"]
+                                  + gastos.TARIFAS["revision_marca"])
+
+
+def test_un_proyecto_con_reglas_de_marca_ve_la_revision_en_el_precio(base_temporal, monkeypatch):
+    import dashboard
+    monkeypatch.setattr(dashboard.marca_mod, "cargar_root", lambda c: {"invariants": [{"id": 1, "name": "logo"}]})
+    assert dashboard._revision_marca_swap("acme") is True
+    with dashboard.app.test_request_context():
+        assert dashboard._precios_swap({}, True)["revision"] > 0
+        assert dashboard._precios_swap({}, False)["revision"] == 0
+    monkeypatch.setattr(dashboard.marca_mod, "cargar_root", lambda c: {"invariants": []})
+    assert dashboard._revision_marca_swap("acme") is False
+
+
+def test_la_pantalla_suma_la_revision_de_marca_por_archivo():
+    if not shutil.which("node"):
+        pytest.skip("sin node")
+    programa = r"""
+    const fs=require('fs'),assert=require('assert');const g=globalThis;g.window=g;
+    function nodo(extra){return Object.assign({dataset:{},textContent:'',value:'',disabled:true,
+      addEventListener(t,f){this['on'+t]=f}},extra||{});}
+    const input=nodo({files:[]}), visto=nodo(), boton=nodo(), salida=nodo();
+    const radioFoto={value:'nano_banana',dataset:{}};
+    const form=nodo({querySelector(s){
+      if(s.indexOf('type="file"')>=0)return input;
+      if(s.indexOf('proveedor_foto')>=0)return radioFoto;
+      return null;}});
+    const datos={textContent:JSON.stringify({usdEjemplo:'US$ 0,50',urlMedir:'/m',
+      precios:{video:{},foto:{nano_banana:{usd:0.117}},fps:30,necesita_fps:[],revision:0.03},
+      textos:{aprox:'≈',elegir:'Elige',sinPrecio:'—',midiendo:'…',sinDuracion:'?',detalleVideos:'{segundos}',
+              elegirProducto:'P',recorte:'{max}',salidaFija:'{segundos}'}})};
+    g.document={getElementById:id=>({'swap-form':form,'swap-precio':salida,'swap-precio-datos':datos,
+      'swap-precio-visto':visto,'swap-generar':boton}[id]||null)};
+    eval(fs.readFileSync('static/swap-precio.js','utf8'));
+    input.files=[{name:'foto.jpg'},{name:'otra.png'}];
+    input.onchange();
+    setTimeout(()=>{ assert.equal(visto.value,'0.2940'); },0);
+    """
+    r = subprocess.run(["node", "-e", programa], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr

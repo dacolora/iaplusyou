@@ -85,8 +85,11 @@
     if (!estado.cargado) return;
     var n = texto().length;
     $('hb-contador').textContent = n;
-    var usd = n * (parseFloat($('hb-form').dataset.usdCaracter) || 0);
-    $('hb-escuchar-precio').textContent = n ? ('· ' + T.aprox + ' ' + (usd < 0.01 ? 'US$ <0' + sep() + '01' : fmtUsd(usd))) : '';
+    // Sin número (el margen no se pudo leer, PND-231): «precio no disponible», nunca US$ <0,01.
+    var tarifa = parseFloat($('hb-form').dataset.usdCaracter);
+    var usd = n * tarifa;
+    $('hb-escuchar-precio').textContent = n ? ('· ' + (isNaN(tarifa) ? T.sinPrecio
+      : T.aprox + ' ' + (usd < 0.01 ? 'US$ <0' + sep() + '01' : fmtUsd(usd)))) : '';
     $('hb-escuchar').disabled = !n || estado.ocupado;
     var vigente = !!(estado.voz && estado.voz.clave === clave());
     var precio = vigente ? estado.voz.datos.precio_video : null;

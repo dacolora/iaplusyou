@@ -102,7 +102,12 @@ COP mandó los diarios en pesos colombianos 100 veces más altos (4 000 → 400 
 `centavos()` consigo mismo: `tests/test_monedas_meta.py` compara con la tabla de Meta. Cuatro frenos, ninguno se quita:
 (1) `lanzador.comprobar_moneda` antes de mandar CUALQUIER monto (lanzar, cambiar el diario, activar): la cuenta
 factura en la moneda del experimento y `PRESUPUESTO_MINIMO_DIARIO` convertido cuadra ×10 con el `min_daily_budget` que
-Meta da para la cuenta (con la lista vieja daba ×120); (2) cada diario y cada `spend_cap` se lee de vuelta
+Meta da para la cuenta (con la lista vieja daba ×120). Desde PND-325 (2026-10-15) esa comprobación ya no se salta
+en silencio: sin `min_daily_budget` de Meta se niega con un texto claro, y una moneda que no está en
+`PRESUPUESTO_MINIMO_DIARIO` (GBP, DKK, JPY…) se compara, con la misma holgura ×10, contra US$ 1 convertido con la tasa
+del BCE de hoy (`lanzador._minimo_diario_esperado` → `meta_rendimiento.tasas.usd`, que la pide con `asegurar` si no
+está guardada); sin tasa (el BCE no publica TWD, CRC…, o la última tiene más de 4 días), también se niega. COP y SEK
+tienen su mínimo propio y no consultan tasas (`tests/test_monedas_meta.py`); (2) cada diario y cada `spend_cap` se lee de vuelta
 (`_confirmar_presupuesto`/`_confirmar_tope`): si Meta guardó otro, se pausa y lanza `PresupuestoNoCoincide`; activar
 (`cambiar_estado`, `activar_pieza`) también lo lee, así un conjunto viejo con ×100 nunca se enciende; (3) el tope va a
 la campaña desde el `min_campaign_group_spend_cap` de la cuenta (Forja: 200 000 COP; `minimo_tope_campana` queda como
@@ -120,7 +125,12 @@ siga ACTIVA en Meta se vuelve a pausar, salvo que alguien lo esté activando (`e
 lectura deja un solo aviso, no uno cada 10 min. Si una lectura de
 vuelta no coincide y la pausa falla, el país NO se marca «pausado» (el aviso dice «páusalo en Meta ya») para que la
 vigilancia lo siga contando. «Activar» de un anuncio suelto (`dashboard.cambiar_estado_ad`) pasa por los mismos
-frenos y se niega si la ficha no tiene su `presupuesto_diario`.
+frenos y se niega si la ficha no tiene su `presupuesto_diario`. La tarea vieja que los publicaba (`meta_publicar`,
+`tareas/meta.publicar`; ninguna ruta la encola, pero sigue registrada para los anuncios sueltos viejos) también
+(PND-324, 2026-10-15): `comprobar_moneda` antes de crear la campaña, con la moneda de la ficha (si no tiene, la de
+`meta.json`), y `_confirmar_presupuesto` después de crear el conjunto; si Meta guardó otro diario, el conjunto queda en
+pausa, no se crean creative ni anuncio y la ficha queda en error con el conjunto anotado. Al crear el conjunto la ficha
+guarda `presupuesto_diario` y `moneda`, que es lo que «Activar» vuelve a leer contra Meta (`tests/test_tareas_meta.py`).
 
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.

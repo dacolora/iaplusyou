@@ -172,8 +172,10 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
     import tareas.flowplus as fp
     monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
     cid = cf.crear("acme", [], [], [], "camina", 5, "", "A", referencias_urls=["https://x/1.png", "https://x/frame.jpg"])
+    # Con su duración medida: sin ella Wan no se lanza (PND-319, revisión del guardián de gasto).
     cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="wan3",
-                  referencias=[{"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/frame.jpg"}])
+                  referencias=[{"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/frame.jpg",
+                                "duracion_s": 5.0}])
 
     visto = {}
 
@@ -181,7 +183,7 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
         visto.update(refs=referencias, videos=videos, ar=aspect_ratio)
         return "https://prov/v.mp4"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
-    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final": {})
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final", **k: {})
     monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
@@ -905,7 +907,8 @@ def test_preparar_mide_el_video_si_la_sesion_no_trae_su_duracion(base_temporal, 
     video = {"tipo": "video", "url": "https://x/v2.mp4", "frame_url": "https://x/v2.jpg", "etiqueta": "@Video 1"}
     cid = _sesion_wan_con_video(cf, monkeypatch, tmp_path, 25, video)
     medidos = []
-    monkeypatch.setattr(fp.cortes, "duracion", lambda ruta: medidos.append(ruta) or 12.0)
+    # PND-319: se mide por los paquetes del video bajado (`medir_video_url`), no por la cabecera de la URL.
+    monkeypatch.setattr(fp, "medir_video_url", lambda url: medidos.append(url) or 12.0)
     assert fp._preparar("acme", cid)[3] == 18
     assert medidos == ["https://x/v2.mp4"]
 
@@ -1112,3 +1115,25 @@ def test_pnd125_recuperar_cache_no_reduce_el_cobro_original(base_temporal, monke
     assert fila['usd'] == pytest.approx(.82)
     assert fila['extra']['usd_musica'] == .02
     assert cf.cargar('acme')[cid]['capas']['musica']['url'] == 'https://r2/m.mp3'
+
+
+def test_imagen_cuya_espera_se_agota_anota_lo_que_cobra_wavespeed(base_temporal, monkeypatch, tmp_path):
+    """Auditoría de PND-013: WaveSpeed sigue con la imagen después de que el worker dejó de esperar y la cobra
+    igual; se anotaba nada. Ahora se anota el estimado, sin cobrárselo al cliente."""
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "posa", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P")
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": None, "usd": 0.09})
+
+    def _agotada(*a, **k):
+        raise wc.EsperaAgotada("Seedream V5.0 Pro Edit", "pred-i", 900)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", _agotada)
+    with pytest.raises(TimeoutError):
+        fp.ejecutar_imagen({"id": 23, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    (g,) = gastos.historial("acme")
+    assert g["referencia"] == f"imagen:{cid}:t23" and g["usd"] == 0.09 and "se agotó la espera" in g["detalle"]

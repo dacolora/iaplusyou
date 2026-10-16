@@ -9,8 +9,9 @@ description: "Crear (FlowPlus): generar video o imagen con WaveSpeed (Wan 3.0, K
 
 `comparar_seedance_turbo.py` (2026-10-01) is a research CLI for the VPS, like `comparar_modelos.py`: it
 regenerates existing Seedance 2.5 pieces through WaveSpeed's Turbo routes with the worker's same inputs
-(`tareas.flowplus._preparar`) for a side-by-side page, asks «si» before spending and registers the gasto
-(`docs/investigacion/2026-10-01-seedance-turbo.md`). Crear keeps the standard route until that comparison
+(`tareas.flowplus._preparar`) for a side-by-side page, asks «si» before spending and registers the gasto under
+`_creatv` with the project in `extra.cliente` (PND-316, 2026-10-13: it went to the `--cliente`, and happyflops in
+pospago ×3 would have paid our research) (`docs/investigacion/2026-10-01-seedance-turbo.md`). Crear keeps the standard route until that comparison
 says otherwise.
 
 **Crear (FlowPlus)**. Two paths from the same form (`cf_crear_video`, field
@@ -22,7 +23,7 @@ sound) — no brand guide, no EVITAR/«Recordatorio», no FIDELIDAD/catalog rule
 logos. Never add anything in the background unless the person asks for it; `armar` is
 still what the director fallback, Sprints and derivations use. `_lanzar_video_cf` launches
 right away with the cost shown on the «Generar video» button. **Optional** «Armar prompt
-con IA (gratis)» (`modo_prompt=director`, for people who don't know what to write):
+con IA» (`modo_prompt=director`, for people who don't know what to write; not free since PND-299, see below):
 sesión en `prompt_pendiente` -> worker
 `tareas/director.py` (`director.compilar`: Claude escribe los planos por familia de
 modelo, valida y compone A/B con `flowplus_prompt.armar(..., planos=)`; fallback al
@@ -95,9 +96,24 @@ los videos juntos hasta 15 s y entrada + salida hasta 30 s (`max_videos_s`, `max
 La bandeja guarda `duracion_s` de cada video (ffprobe al subirlo o bajar el link, `dashboard._duracion_video`;
 `fp_reusar` la conserva), `cf_crear_video` avisa y no genera con `flowplus_modelos.problema_duracion`, el compositor
 lo avisa en vivo (`data-duracion` en la bandeja, `data-max-total`/`data-max-videos-s` en los radios), el worker recorta
-la salida como última barrera (`duracion_con_videos`, midiendo por URL lo que la sesión no traía) y el precio incluye
+la salida como última barrera (`duracion_con_videos`, midiendo lo que la sesión no traía) y el precio incluye
 los segundos de entrada que WaveSpeed factura en Wan (`segundos_facturables_referencia`: cada video 1–15 s, el total
 hasta 15 s, hacia arriba; `estimate_video(..., videos_ref_s=)` en el botón, al reintentar y en el gasto real).
+**La duración del video de referencia no sale de la cabecera (PND-319, decisión 2026-10-13, lote 1):** un mp4 con
+mvhd/mdhd falsos (12 s que dicen 2 s) bajaba el precio visto y el anotado de Wan 3.0, y WaveSpeed cobraba el video
+entero. `_duracion_video` mide con `providers.swap_video_precio.medir` (la mayor entre cabecera y paquetes, solo
+archivos del disco; los mismos dos turnos de ffprobe que «Cambiar producto»), `cf_crear_video` vuelve a medir el
+archivo de la bandeja si sigue en disco (una referencia subida antes guardó la medida de la cabecera) y, si un video que
+Wan recibe como video queda sin medida (`flowplus_modelos.videos_sin_duracion`), avisa y no genera; el worker
+(`tareas/flowplus.medir_video_url`) baja a un temporal lo que una sesión vieja no traía y lo mide igual (tope
+`MAX_BYTES_VIDEO_REFERENCIA`, solo de nuestro R2: `R2_PUBLIC_BASE_URL`) y, si tampoco puede, no lanza (revisión del
+guardián de gasto). Una referencia reusada con «Editar y crear otra» no tiene archivo en disco: `fp_reusar` la mide
+bajándola de R2 y `cf_crear_video` la vuelve a medir así (`_duracion_video_url`) cuando el modelo la factura; si no se
+puede, no genera y lo dice (R7). Si la medida nueva no es
+la que guardaba la bandeja (la que usó el precio de la pantalla), `cf_crear_video` no genera: la guarda
+(`referencias_flowplus.fijar_duracion`) y avisa, así el precio a la vista es el que se cobra. Kling y Seedance usan el
+fotograma y no miran la duración. Pruebas:
+`tests/test_crear_duracion_referencia.py`.
 Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
 devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
@@ -147,8 +163,10 @@ degradable (the paid video is never lost) — it only reports, never regenerates
 3 imágenes y en el nuestro solo una»):** WaveSpeed solo tiene la imagen-a-video de Seedance 2.5 (`image` de arranque +
 `last_image`; su reference-to-video no existe, 404 verificado ese día), así que `seedance25_ref` es la ÚNICA entrada de
 `VIDEO` que no va por WaveSpeed: `proveedor: "fal"` (`flowplus_modelos.proveedor_de`), ruta
-`bytedance/seedance-2.5/reference-to-video` (`image_urls`, `duration` como TEXTO "4".."30", `aspect_ratio` 9:16/16:9/1:1
-—4:3 y 3:4 fuera hasta medir su cobro, fal cobra por píxeles—, 720p, `generate_audio`) y sin imágenes `bytedance/seedance-2.5/text-to-video`. Hasta 10 imágenes (fal admite 30, pero
+`bytedance/seedance-2.5/reference-to-video` (`image_urls`, `duration` como TEXTO "4".."30", `aspect_ratio`
+9:16/16:9/1:1/4:3/3:4, 720p, `generate_audio`) y sin imágenes `bytedance/seedance-2.5/text-to-video` (mismos formatos y
+precio). 4:3 y 3:4 se abrieron el 2026-10-13 (PND-211, decisión del lote 1) al mismo precio por segundo: fal cobra por
+píxeles de salida y a 720p esos formatos no pasan de los de 16:9; la factura la revisa la auditoría de PND-013. Hasta 10 imágenes (fal admite 30, pero
 `cf_crear_video` corta `referencias_urls[:10]`; subir el tope exige subir esos cortes). Las menciones se vuelven
 `@Image1`, `@Image2`… (`token_imagen` del registro, `flowplus_prompt.asignar_tokens`) y el director tiene su familia
 `seedance_ref` (`director._TOKEN` acepta las dos formas). Precio 0,473 USD/s a 720p (API de precios de fal: 0,0214 USD por
@@ -162,18 +180,54 @@ rotación automática de regeneraciones (`rotar: False`, `flowplus_modelos.video
 un modelo que dejaría referencias sin usar (`derivaciones.modelo_regeneracion` filtra con `referencias_de_mas`). Un video
 que fal ya terminó y cobró pero cuyo resultado no se pudo traer (429, 5xx, red) sale como error de red y conserva el id;
 `ErrorProveedor` es solo para un 4xx con motivo (revisión del guardián de gasto, 2026-10-09). Sin saldo en fal (PND-213, 2026-10-09): `_aviso_sin_saldo.html` pinta un aviso aparte con `con_fal` (solo lo pone Crear)
-y `aviso_saldo_fal`/`modelos_fal`; Alertas suma `saldo:fal`/`saldo:fal_recarga`. Pendientes: prueba real
-(PND-211), videos de referencia como video (PND-212), el audio de fal no marca el saldo (PND-215).
+y `aviso_saldo_fal`/`modelos_fal`; Alertas suma `saldo:fal`/`saldo:fal_recarga`. Pendientes: la factura de
+fal de la prueba real y de un 4:3 o un solo texto (PND-211, dentro de la auditoría de PND-013), videos de referencia como
+video (PND-212), el audio de fal no marca el saldo (PND-215).
 
 **Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «<proveedor> no aceptó el pedido y no se cobró nada: <motivo>…» (WaveSpeed o fal.ai, `saldo.nombre_proveedor`) (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
 
-**Gasto y duplicación (2026-10-02, PND-004/014/109):** `duplicar(..., variante="B")` toma `BEGIN IMMEDIATE` antes de buscar y crear; dos clics obtienen la misma hija. El director cuenta `usage` con caché y conserva el costo en `DirectorError`; la ayuda gratis se anota bajo `_creatv` con el proyecto en `extra`, antes de guardar la sesión. Sus tareas van con `max_intentos=1`. La predicción conserva `referencia_gasto`: recuperar una descarga pagada mantiene la referencia del intento original, y una música nueva se registra aparte con la tarea de recuperación.
+**Gasto y duplicación (2026-10-02, PND-004/014/109):** `duplicar(..., variante="B")` toma `BEGIN IMMEDIATE` antes de buscar y crear; dos clics obtienen la misma hija. El director cuenta `usage` con caché y conserva el costo en `DirectorError`; su gasto se anota antes de guardar la sesión (desde PND-299, al proyecto: ver abajo). Sus tareas van con `max_intentos=1`. La predicción conserva `referencia_gasto`: recuperar una descarga pagada mantiene la referencia del intento original, y una música nueva se registra aparte con la tarea de recuperación.
+
+**Lanzamiento incierto (PND-214, decisión 2026-10-13, lote 1; dos revisiones del guardián de gasto).** Regla: ante
+cualquier duda NADIE recibe un video por suposición; el posible cobro queda anotado (`entregado=False`) y se avisa al
+admin. Una lectura agotada, una conexión cortada, un 2xx sin id o CUALQUIER 5xx al LANZAR (de WaveSpeed o de su
+pasarela: el pedido pudo crearse antes de fallar) es `wavespeed_common.LanzamientoIncierto` (lo arma
+`lanzar_prediccion`, que usan `flowplus_modelos._lanzar` y `wan3_client.generar_video`); no poder ni conectar
+(`ConnectTimeout`, `NewConnectionError`) es `SinConexion` («no salió, no se cobró»); un 4xx sigue siendo
+`PedidoRechazado`. Video: `tareas/flowplus._lanzamiento_incierto` guarda `lanzamiento_incierto` {path, modelo, desde,
+hasta, causa, estado, en, referencia_gasto, prompt_sha (huella del prompt enviado, `huella_prompt`)} y sigue
+`flowplus_recuperar` cuando cerró la ventana tardía (`TARDANZA_MAX_S` 300 s tras el corte) más `ESPERA_LISTADO_S`.
+`_buscar_lanzamiento` primero mira si OTRO lanzamiento incierto (cualquier proyecto, cualquier modelo, también uno
+descartado: `kv` `crear:lanzamiento:<cliente>:<cf_id>`) cruza su ventana ENTERA de búsqueda (`_ventana_busqueda`): si sí,
+dudosa sin preguntar. Si no, lee el historial (`buscar_lanzada` → `POST /predictions`, paginando hasta una página vacía;
+una página que repite es `HistorialNoDisponible`). **Lo que trae el historial (leído en vivo el 2026-10-15):** `data.items`
+del más nuevo al más viejo, filtrado por `created_after/before`; cada ítem con id (32 hex), model (la ruta completa, p. ej.
+`alibaba/wan-3.0/reference-to-video`), status, created_at con nanosegundos y «Z», outputs, urls, timings, error y code;
+**sin la entrada (prompt)**. Por eso hoy una predicción de la ruta en la ventana NUNCA se entrega: «encontrada» exige
+que el ítem traiga `input.prompt` con la misma huella (si WaveSpeed algún día lo agrega). Resultados: «ninguna» (ni una
+de la ruta ni un `model` fuera de `flowplus_modelos.rutas_wavespeed()`, con un historial que filtró y se entiende) → «no
+se creó ni se cobró», `estado: no_creado`, vuelve «Reintentar» y una línea de posible cobro anterior vuelve a 0;
+«dudosa» (cualquier candidata sin entrada que la confirme, dos o más, un `model` desconocido, un id raro, un historial
+que no filtró, un cruce) o historial caído → en palabras, posible cobro en Gasto con la `referencia_gasto` del intento y
+`avisar_admin("lanzamiento_dudoso")` UNA vez (`avisado`). Si alguna vez entrega, la toma con
+`creative_flow.reclamar_prediccion` (`BEGIN IMMEDIATE`; ninguna otra sesión la nombra: `prediccion`,
+`prediccion_entregada` o `kv` `crear:prediccion:<id>` de una descartada). Mientras `estado` es `buscando` o `dudoso`
+(`lanzamiento_pendiente`): «Recuperar el video» sí, «Reintentar» y «Rearmar» no (`cf_generar_video`, `cf_rearmar`,
+`flowplus_lanzar.lanzar` devuelven sin cobrar), y mientras está `buscando` tampoco «Descartar»; descartar en otro estado
+anota el posible cobro (`anotar_posible_cobro_al_descartar`) y `creative_flow.eliminar` guarda en `kv` la predicción y
+el lanzamiento. `duplicar` no copia `prediccion`, `prediccion_entregada` ni `lanzamiento_incierto`. Imagen (no se
+recupera): posible cobro anotado, `lanzamiento_incierto.estado = "imagen"` y «Reintentar» pide confirmar con el precio
+(`confirmo_posible_cobro`); tras confirmar queda `imagen_reintentada`. fal sigue contándolo como su 5xx. Riesgo que
+queda: una predicción hecha con la misma llave fuera de esta base (web de WaveSpeed, pruebas locales) con una ruta de la
+app no se distingue; como nunca se entrega sin la entrada, solo puede volver dudosa una búsqueda. Pruebas:
+`tests/test_lanzamiento_incierto.py`.
+
 
 Director (revisión 2026-10-02, PND-014): Anthropic usa max_retries=0; un 529 cae al prompt básico sin reintentar y sin cobrar dos veces. PND-109: una generación normal persiste la referencia de su propia tarea; solo una recuperación reutiliza referencia_gasto. Guardar esa referencia está dentro del try de descarga y el gasto se registra antes de persistir un error.
 
 PND-028/034 (2026-10-03): el rótulo A usa tiene_hija_b. El gancho interrumpida del director continúa la generación solo con auto_lanzar ya aprobado, también si alcanzó prompt_listo antes de cortarse; respeta prioridad y max_intentos=1. No vuelve a lanzar sesiones que ya salieron de esos estados.
 
-PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage bajo _creatv antes de leer el texto, sin retries del SDK; no cambia el botón de sugerencia. extra.cliente identifica al proyecto que pidió la ayuda. El gasto del video se registra apenas se descarga y el de la pista antes de mezclar, conservando un cobro mayor cuando recuperar usa caché.
+PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage antes de leer el texto, sin retries del SDK (bajo _creatv hasta PND-299; ahora al proyecto). El gasto del video se registra apenas se descarga y el de la pista antes de mezclar, conservando un cobro mayor cuando recuperar usa caché.
 
 PND-144/145 (Codex, 2026-10-07): falla de descarga/R2 de pista conserva costo y URL en la capa fallida y gasto idempotente; imagen anota cobro antes de persistir el error o su bitácora. Pruebas locales en test_lote5_gasto; las revisiones del lote corresponden a Claude.
 
@@ -216,3 +270,54 @@ al parsear esa sección, antes de los módulos posteriores y del selector de mod
 Crear en modo imagen con la imagen del anuncio como la ÚNICA referencia de la bandeja (se reemplaza, como «Editar y
 crear otra» y la escena de Flow Plus) y un prompt para editarla; nada se genera hasta «Generar» con su precio. El
 detalle vive en la skill `triple-whale` («Cómo mejorarlo» de un anuncio de imagen fija).
+
+**Las ayudas con IA las paga el proyecto (PND-299, decisión 2026-10-13, lote 1; Daniel: «de resto todo de cuenta del
+cliente»).** El director («Crear super prompt» y «Rearmar»), «Describir con IA», «Sugerir» sonido y «Analizar
+referencias» de la marca ya no van a `_creatv` ni son gratis: cada botón dice su precio (`precio_de('director')`,
+`precio_describir(refs)` según las imágenes que se mandan, `gastos.TARIFAS` `director` 0,05, `describir_referencias`
+0,004 + 0,0015 por imagen, `sugerir_sonido` 0,002, `analizar_marca` 0,025, de lo medido) y el gasto va al proyecto con su
+tipo (`director`, `describir_referencias`, `sugerir_sonido`, `analizar_marca`). `flowplus_director` está en
+`TIPOS_QUE_COBRAN`: `cf_crear_video` (modo director) y `cf_rearmar` exigen antes de tocar la sesión y
+`tareas.director.encolar` reserva `costo_estimado()`; si la reserva falla tras crear la sesión, queda en `error` con la
+frase (la bandeja no se consume). El director que cae al prompt básico se anota con `entregado=False` (no se cobra).
+Describir y sugerir corren con `libro.pedido` en la petición; «Analizar marca» con `trabajos.iniciar_con_pedido`
+(`generador_prompts.analizar_marca(on_usage=)` avisa el uso apenas Claude responde: antes no se anotaba). Los lotes de
+Sprints suman el director de cada video al precio del lote si el proyecto cobra (`director_usd`, como el QA), y
+«Regenerar» de un video lo suma siempre (`costo_regenerar`; «Reintentar» no pasa por el director: `costo_reintentar`).
+El video que lanza el director con `auto_lanzar` no cuenta la reserva del director (`flowplus_lanzar.lanzar(...,
+excluir_job=)`): ya está cobrada. «Analizar marca» vacía o cortada (`max_tokens` 400) lanza `RespuestaInvalida`: se
+anota con `entregado=False` y no pisa la guía. Un plan no las incluye (no están en `planes.TIPOS_INCLUIDOS`). Pruebas:
+`tests/test_cobros_ayudas_ia.py`.
+
+**Cambiar producto: la espera agotada y «Recuperar el resultado» (PND-318, decisión 2026-10-13, lote 1).** Un swap cuya
+espera de WaveSpeed se agotaba (`poll_hasta_listo`, 900 s) no anotaba nada aunque WaveSpeed lo terminara y cobrara (un
+Seedance de 30 s son US$ 13,20) y no había cómo traer el resultado. Ahora los editores de WaveSpeed avisan el id apenas
+lo reciben (`wavespeed_common.avisar_lanzada` en `wavespeed_client`, `wavespeed_video_edit` y `wavespeed_imagen`) y el
+swap lo guarda en `swaps.json` (`prediccion = {id, proveedor, referencia_gasto, en}`; solo el modelo principal, no la
+mejora de calidad). Al agotarse la espera, `tareas/swap._al_agotarse` pregunta UNA vez (`wavespeed_common.consultar`):
+terminado → se entrega como siempre; fallido → `ErrorProveedor` sin gasto; en curso o sin poder preguntar →
+`SwapEnEspera`: el costo previsto (calculado ANTES de llamar, y guardado en `prediccion.usd`) se anota con
+`entregado=False` (no se le cobra al cliente) y la clave `pred:<id>` en `extra.cache`. Si el worker se reinicia con
+el pedido lanzado, el gancho `interrumpida` anota lo mismo. La tarjeta ofrece «Recuperar el resultado (se cobra ≈ X)»
+(decisión de quien orquesta, 2026-10-15: todo se cobra, con el precio a la vista) → `recuperar_swap`, que pasa por
+el freno de saldo (`exigir` y `encolar(..., costo_estimado=)`; `swap_recuperar` está en TIPOS_QUE_COBRAN,
+`max_intentos=1`, mismo job_id que el swap para que la tarjeta muestre su barra): pregunta por ese id
+(`TIEMPO_RECUPERAR` 120 s) sin lanzar otro pedido (WaveSpeed no cobra de nuevo), y si llegó, lo baja, lo sube, evalúa
+la marca y anota con `gastos.registrar_trasladando` (por la clave `pred:<id>`): el costo pasa de la fila del intento
+agotado a `swap:<id>:t<tarea>` y AHÍ se cobra (sin contarlo dos veces). Solo un pedido «failed» pone lo anotado en 0
+(no cobró); uno cancelado, borrado o vencido de su lado pudo cobrarse y no se toca, ni al agotarse la espera (se
+anota sin «Recuperar») ni al recuperar (como `tareas/flowplus`). Un swap de fal (Kling O1, comparador) que se agota
+se anota si fal lo va a cobrar (`EsperaAgotadaFal.cobrado`, PND-313) pero no se recupera. La mejora de calidad
+pagada que no llega (falla al bajar o se agota su espera) se anota aparte en `swap:<id>:t<tarea>:mejora`, sin
+cobrarla (PND-315). Pruebas: `tests/test_swap_recuperar.py`, `tests/test_tareas_swap.py`.
+
+**Lo que de verdad cobró cada llamada de Cambiar producto (PND-315).** La revisión de marca de cada swap
+(`generador_prompts.evaluar_contra_matriz`) anota lo que cobró Claude en `revision_marca:<swap>:t<tarea>` (tipo
+`revision`; sin cobrarla si la respuesta no se pudo leer) con `generador_prompts.contar_uso()`, que junta el `usage`
+de las llamadas del módulo sin cambiar sus firmas (`usd_de(usos)`), y va en el precio que se ve antes: con reglas
+de marca en el proyecto (`dashboard._revision_marca_swap`), `gastos.estimar("swap", ..., con_revision=True)` suma
+`TARIFAS["revision_marca"]` (0,02, el peor caso con su tope) y `_precios_swap` manda `revision` para que
+`static/swap-precio.js` la sume por archivo. Gemini (`nano_banana_client._llamar`, `on_cobro(usd, entregado)`) avisa
+lo que cobra cada intento: la imagen (entregado), un `ReadTimeout` (Google pudo generarla y cobrarla) y una
+respuesta sin imagen (su `usageMetadata`). Al cliente solo se le cobra el intento que entregó; los otros van en
+`swap:<id>:t<tarea>:intentos` con `entregado=False`, también cuando el swap falla.

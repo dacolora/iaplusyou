@@ -234,7 +234,7 @@ def voz_final_falsa(base_temporal, tmp_path, monkeypatch):
     llamadas = []
     monkeypatch.setattr(fal_audio, "tts", lambda texto, voz="Rachel", idioma="es", **kw:
                         llamadas.append((idioma, kw)) or {"url": "https://fal/x.mp3", "costo_usd": 0.01})
-    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None:
+    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None, duracion_ms=None:
                         {"texto": "", "costo_usd": 0.0, "palabras": []})
     monkeypatch.setattr(insumos, "_descargar", lambda url, destino: (open(destino, "wb").write(b"mp3"), destino)[1])
     monkeypatch.setattr(cortes, "duracion", lambda path: 1.0)

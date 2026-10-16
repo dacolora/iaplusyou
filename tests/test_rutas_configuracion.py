@@ -753,7 +753,8 @@ def test_precios_en_botones_crear_y_catalogo(app, monkeypatch):
     assert "costó US$ 0,85" in html
     # Generar video/imagen: el estimado se calcula en JS con el formato «≈ US$ 1,00»
     # y va al lado del botón (#fp-precio, compositor de Crear 2026-09-27).
-    assert "function formatearUSD" in html and "precio.textContent = usd ? '≈ ' + formatearUSD(usd)" in html
+    # Sin margen legible (PND-231) dice «precio no disponible» (T.m40) en vez de un número.
+    assert "function formatearUSD" in html and "(usd ? '≈ ' + formatearUSD(usd) : '')" in html
     assert "(~$" not in html and "(~$" not in detalle
     # Catálogo: la regla con IA se cobra al importar; crear a mano no gasta.
     cat = html[html.index('<section id="tab-catalogo"'):html.index('<section id="tab-settings"')]

@@ -38,7 +38,9 @@ from idiomas import N_
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "voz_propia", "transcripcion", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "voz_propia", "transcripcion",
+         # PND-299: las ayudas con IA que pagaba Creatv (`_creatv`, tipo «otro») y ahora paga el proyecto.
+         "director", "describir_referencias", "sugerir_sonido", "analizar_marca", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -83,7 +85,11 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 TARIFAS = {
     "guion": 0.13,
     "regla_producto": 0.01,
-    "caption_organico": 0.01,
+    # Texto orgánico («Escribir con IA», la publicación de una ganadora): la doctrina en el system y hasta 4 000
+    # tokens de salida con el pensamiento. Peor caso con ese tope: 4 000 × US$ 10/M + ≈ 6 000 de entrada (la
+    # doctrina escrita en caché, 1,25×) × US$ 2/M ≈ 0,055. Era 0,01 fijo y se anotaba eso (PND-315: ahora se anota
+    # lo real; revisión de guardian-gasto, 2026-10-15: el botón tiene que mostrar un precio que no se quede corto).
+    "caption_organico": 0.06,
     "adaptar_referente": 0.01,
     # «Recrear» fiel (spec 2026-09-30): una llamada de visión que describe la
     # composición y lee los textos de la referencia, una vez por referente.
@@ -139,16 +145,44 @@ TARIFAS = {
     # llamada. Informe: docs/superpowers/evals/2026-10-10-meta-evaluacion.md («Segunda medición»).
     "evaluacion_meta": 0.25,
     "evaluacion_meta_por_anuncio": 0.005,
+    # Las ayudas con IA de Crear y de la marca, que pagaba Creatv (`_creatv`) y desde PND-299 (decisión 2026-10-13,
+    # lote 1) cobran del saldo del proyecto como todo lo demás. Costo de proveedor; el real se anota con los tokens.
+    # Director («Crear super prompt», `director.compilar`): una llamada con la doctrina de video; con corrección, dos.
+    # Medido el 2026-10-09 (docs/superpowers/evals/2026-10-09-director-seedance-ref.md): 0,015–0,026 una llamada y
+    # 0,035–0,050 con la corrección. Se muestra lo más caro medido.
+    "director": 0.05,
+    # Describir referencias (`referencias_link.describir`, visión): medido el 2026-10-10 (PND-141) 0,004 con una imagen
+    # y 0,010 con seis; base + lo de cada imagen, redondeado hacia arriba (hasta 16 imágenes ≈ 0,028).
+    "describir_referencias": 0.004,
+    "describir_referencias_por_imagen": 0.0015,
+    # Sugerir sonido (`final_edition.sonido.sugerir_descripcion`): medido 0,0013 (PND-141).
+    "sugerir_sonido": 0.002,
+    # Analizar marca (`generador_prompts.analizar_marca`): hasta 5 imágenes (~1 600 tokens c/u) y 400 de salida.
+    "analizar_marca": 0.025,
+    # La revisión de marca de cada swap (`generador_prompts.evaluar_contra_matriz`): una llamada con visión y hasta
+    # 1 500 tokens de salida. Peor caso con ese tope: 1 500 × US$ 10/M + ≈ 3 000 de entrada (imagen y reglas) ×
+    # US$ 2/M ≈ 0,021; se anota lo real (PND-315) y este es el precio que se ve antes (revisión de guardian-gasto,
+    # 2026-10-15: se cobraba sin estar en el precio del swap).
+    "revision_marca": 0.02,
 }
 
-# Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
-# llamada con visión (una miniatura por anuncio), la doctrina de clasificar,
-# ángulo, gancho y video en el system (caché) y hasta ~10k tokens de salida con
-# pensamiento. Cálculo a la tarifa de claude-sonnet-5: entrada ~6k de doctrina +
-# ~900 por anuncio (datos + miniatura) ≈ US$ 0,03 con 10 anuncios; salida ≈
-# US$ 0,10. Redondeado hacia arriba; el real se registra con los tokens medidos.
-EVALUACION_TW_BASE_USD = 0.08
-EVALUACION_TW_POR_ANUNCIO_USD = 0.012
+# Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una llamada con visión (una miniatura por
+# anuncio), la doctrina de clasificar, ángulo, gancho y video en el system (caché), hasta 32 000 tokens de salida con
+# pensamiento y UNA corrección si la respuesta no sirve (`triple_whale.analisis`). El precio a la vista es el del PEOR
+# caso (PND-217, decisión del lote 1, 2026-10-13): las dos llamadas agotando el tope de salida (2 × 32 000 × US$ 10 por
+# millón = 0,64) más la entrada de las dos con la caché fría (doctrina ≈ 7 000 tokens escritos a 1,25×, el prompt y, por
+# anuncio, su bloque y su miniatura ≈ 1 000 tokens por llamada a US$ 2 por millón): 0,67 de base + 0,005 por anuncio,
+# 0,72 con 10. Lo que no crece con N va en la base. Lo medido de verdad (una sola llamada que termina sola) sale entre
+# US$ 0,12 y 0,23 (evals 2026-10-09, 2026-10-12 y docs/superpowers/evals/2026-10-15-tw-evaluar-32000-nvp.md): Cobros
+# cobra el costo real × margen; esto es solo el precio visto antes, que nunca queda por debajo de lo que puede costar.
+# Hasta el 2026-10-15 eran 0,08 + 0,012 por anuncio (0,20 con 10), por debajo de lo medido con corrección (0,30).
+EVALUACION_TW_BASE_USD = 0.67
+EVALUACION_TW_POR_ANUNCIO_USD = 0.005
+# Un anuncio hecho en Creatv con video no manda una miniatura sino hasta 8 fotogramas de 640 px (`doctrina.revisor`,
+# ≈ 970 tokens cada uno, ≈ 8 000 por anuncio) en CADA una de las dos llamadas: ≈ US$ 0,032 más por anuncio así
+# (revisión del gasto, 2026-10-15: con 10 piezas de Creatv el peor caso llegaba a ≈ 1,00 y se habría cobrado más de lo
+# visto). `triple_whale.analisis.estimado` los cuenta (`n_video`) con la misma regla en el botón, la ruta y la tarea.
+EVALUACION_TW_POR_VIDEO_USD = 0.032
 
 # «Proponer ideas» de Sprints (entrega 2 del tablero): una llamada a Claude con
 # la doctrina en el system (caché) y hasta ~1 200 tokens de salida por idea
@@ -173,10 +207,24 @@ NOMBRES_TIPO = {
     "clasificacion": N_("Clasificación de referentes (IA)"), "adaptar_referente": N_("Recrear referentes (IA)"),
     "sugerir_ia": N_("Sugerencias de referentes (IA)"), "recoleccion": N_("Recolección de comentarios"),
     "investigacion": N_("Investigación de nicho (IA)"), "avatares": N_("Avatares (IA)"),
+    # Las ayudas con IA que pagaba Creatv y desde PND-299 paga el proyecto.
+    "director": N_("Prompts armados con IA"), "describir_referencias": N_("Referencias descritas con IA"),
+    "sugerir_sonido": N_("Sonidos sugeridos con IA"), "analizar_marca": N_("Guía de marca con IA"),
     "otro": N_("Otros"),
 }
 
 SIN_PRECIO = N_("precio no disponible")
+
+
+class SinPrecio(str):
+    """«precio no disponible» en el idioma de quien mira: lo que devuelve el filtro de plantilla `|precio` cuando el
+    margen de la petición no se pudo leer (PND-231, como `texto_precio`). Es texto: los filtros `|usd`, `|usd_fino` y
+    `|precio_fmt` lo dejan pasar tal cual, y como `total_visto` no vuelve a ser un precio (`costo_de_precio` → None:
+    el servidor no cobra con eso)."""
+
+    @classmethod
+    def ahora(cls):
+        return cls(gettext(SIN_PRECIO))
 
 
 # ------------------------------------------------------------ formato ---
@@ -184,7 +232,10 @@ SIN_PRECIO = N_("precio no disponible")
 def formatear(usd):
     """`None` -> "—"; menos de un centavo -> "US$ <0,01"; si no, dos
     decimales con coma decimal y punto de miles ("US$ 1.234,56") — o el
-    separador del idioma activo (`idiomas.numero`)."""
+    separador del idioma activo (`idiomas.numero`). Un `SinPrecio` (el
+    `|precio` sin margen) pasa tal cual: «precio no disponible»."""
+    if isinstance(usd, SinPrecio):
+        return usd
     if usd is None:
         return "—"
     try:
@@ -327,11 +378,20 @@ def _estimar_imagen(modelo=None, n_referencias=1, **_):
     return r.get("usd"), f"{modelo} · {max(1, int(n_referencias or 1))} referencia(s)"
 
 
-def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, fps=None, **_):
+def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, fps=None,
+                  con_revision=False, **_):
     """Misma tabla que usa `tareas/swap.py` al cobrar: cada proveedor tiene
     su `estimate_*`; el que no esté aquí no tiene tarifa (None). `formato`
     es "foto" | "video" (el `tipo` del swap). En video, `duracion` y `fps` son
-    los del video que se sube (`providers.swap_video_precio`, PND-312)."""
+    los del video que se sube (`providers.swap_video_precio`, PND-312). `con_revision`: el proyecto tiene reglas
+    de marca y cada swap pasa por la revisión de marca con Claude, que se cobra (`TARIFAS["revision_marca"]`)."""
+    usd, detalle = _estimar_swap_proveedor(proveedor, formato, mejorar_calidad, duracion, n_referencias, fps)
+    if usd is not None and con_revision:
+        usd, detalle = float(usd) + TARIFAS["revision_marca"], f"{detalle} · revisión de marca"
+    return usd, detalle
+
+
+def _estimar_swap_proveedor(proveedor, formato, mejorar_calidad, duracion, n_referencias, fps):
     from providers import (comparador_modelos, kling_o1_client, nano_banana_client, wavespeed_client,
                            wavespeed_imagen, wavespeed_video_edit)
     if not proveedor:
@@ -507,8 +567,10 @@ _ESTIMADORES = {
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
     "revision_pieza": lambda **_: (TARIFAS["revision_pieza"], "una llamada a Claude con visión"),
-    "evaluacion_tw": lambda n=1, **_: (EVALUACION_TW_BASE_USD + EVALUACION_TW_POR_ANUNCIO_USD * max(1, int(n or 0)),
-                                       f"{max(1, int(n or 0))} anuncio(s) con Claude"),
+    "evaluacion_tw": lambda n=1, n_video=0, **_: (
+        EVALUACION_TW_BASE_USD + EVALUACION_TW_POR_ANUNCIO_USD * max(1, int(n or 0))
+        + EVALUACION_TW_POR_VIDEO_USD * max(0, int(n_video or 0)),
+        f"{max(1, int(n or 0))} anuncio(s) con Claude"),
     "evaluacion_meta": lambda n=1, **_: (
         TARIFAS["evaluacion_meta"] + TARIFAS["evaluacion_meta_por_anuncio"] * max(1, int(n or 0)),
         f"{max(1, int(n or 0))} anuncio(s) de Meta con Claude"),
@@ -516,6 +578,12 @@ _ESTIMADORES = {
     "analisis_anuncio_tw": _estimar_analisis_anuncio_tw,
     "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
                                         f"{max(1, int(n or 0))} idea(s) con Claude"),
+    "director": lambda **_: (TARIFAS["director"], "una o dos llamadas a Claude"),
+    "describir_referencias": lambda imagenes=1, **_: (
+        TARIFAS["describir_referencias"] + TARIFAS["describir_referencias_por_imagen"] * max(1, int(imagenes or 0)),
+        f"{max(1, int(imagenes or 0))} imagen(es) con Claude"),
+    "sugerir_sonido": lambda **_: (TARIFAS["sugerir_sonido"], "una llamada corta a Claude"),
+    "analizar_marca": lambda **_: (TARIFAS["analizar_marca"], "una llamada a Claude con visión"),
 }
 
 
@@ -583,6 +651,16 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
     ya existía recalcula su cobro si lo tenía y nunca lo crea (§3.2).
     `entregado=False`: el proveedor cobró pero la pieza no llegó; el costo se
     anota igual y al cliente no se le cobra (spec §3.4)."""
+    fila = _normalizar(cliente, tipo, usd, referencia, detalle, proveedor)
+    with db.conectar() as con:
+        gasto_id, resultado_cobro, usd_final = _escribir(con, cliente, *fila, extra=extra, creado_en=creado_en,
+                                                         conservar_mayor=conservar_mayor, entregado=entregado)
+    _despues_del_cobro(cliente, resultado_cobro, gasto_id, usd_final, fila[0], fila[2])
+    return gasto_id
+
+
+def _normalizar(cliente, tipo, usd, referencia, detalle, proveedor):
+    """(tipo, monto, referencia, detalle, proveedor) como se guardan."""
     if not cliente or not referencia:
         raise ValueError("registrar necesita cliente y referencia.")
     tipo = tipo if tipo in TIPOS else "otro"
@@ -595,6 +673,13 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
     detalle = (detalle or "")[:300]
     proveedor = (proveedor or None) and str(proveedor)[:30]
     referencia = str(referencia)[:160]
+    return tipo, monto, referencia, detalle, proveedor
+
+
+def _escribir(con, cliente, tipo, monto, referencia, detalle, proveedor, *, extra=None, creado_en=None,
+              conservar_mayor=False, entregado=True):
+    """El upsert del gasto y su cobro, dentro de la transacción `con`.
+    Devuelve (gasto_id, resultado_cobro, usd_final)."""
     valores = {"tipo": tipo, "usd": monto, "detalle": detalle}
     # Al actualizar, proveedor/extra solo se pisan si vienen (una segunda
     # llamada que solo corrige el monto no borra lo que ya se sabía).
@@ -605,11 +690,11 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
         cambios["extra"] = extra
     g = db.gasto
 
-    def _actualizar(con, gasto_id):
+    def _actualizar(gasto_id):
         con.execute(sa.update(g).where(g.c.id == gasto_id,
             g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
 
-    def _cobrar(con, gasto_id, nuevo):
+    def _cobrar(gasto_id, nuevo):
         """El cobro en su propio savepoint, con el candado de escritura YA tomado
         por el INSERT/UPDATE del gasto: en WAL, una transacción diferida que lee y
         después escribe recibe «database is locked» al instante si otro escritor
@@ -633,33 +718,150 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
             resultado = "error"
         return resultado, usd_final
 
+    fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
+    if fila:
+        gasto_id = int(fila.id)
+        _actualizar(gasto_id)   # el UPDATE abre la transacción y toma el candado
+        resultado_cobro, usd_final = _cobrar(gasto_id, nuevo=False)
+        return gasto_id, resultado_cobro, usd_final
+    try:
+        with con.begin_nested():
+            r = con.execute(sa.insert(g).values(cliente=cliente, referencia=referencia,
+                                                creado_en=(creado_en or db.ahora())[:19],
+                                                proveedor=proveedor, extra=extra or {}, **valores))
+            gasto_id = int(r.inserted_primary_key[0])
+            # DENTRO del savepoint del gasto: pysqlite no emite BEGIN antes de un
+            # SAVEPOINT, así que este es el más externo; el INSERT ya tomó el candado
+            # y su RELEASE confirma gasto y cobro juntos.
+            resultado_cobro, usd_final = _cobrar(gasto_id, nuevo=True)
+    except sa.exc.IntegrityError:
+        # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
+        fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente,
+                                                   g.c.referencia == referencia)).first()
+        gasto_id = int(fila.id)
+        _actualizar(gasto_id)
+        resultado_cobro, usd_final = _cobrar(gasto_id, nuevo=False)
+    return gasto_id, resultado_cobro, usd_final
+
+
+# ------------------------------------------- cobrar lo que se entrega después ---
+
+def _pendiente_de_cobro(con, gasto_id):
+    """¿Se pagó y al cliente no se le cobró? Un `no_cobrado` (el proveedor cobró y la pieza no llegó), o un
+    `cobro` con su `reverso` (la tarea falló después). Sin movimientos (un proyecto que no cobra) o con un
+    `cobro` vivo o `incluido`: no. Solo lee."""
+    m = db.movimiento_saldo
+    tipos = {r.tipo for r in con.execute(sa.select(m.c.tipo).where(m.c.gasto_id == gasto_id))}
+    return "no_cobrado" in tipos or {"cobro", "reverso"} <= tipos
+
+
+def pendientes_por_clave(cliente, prefijos, claves):
+    """Las partes que quedaron en caché tras un trabajo que falló después de pagar y que nadie le cobró al
+    cliente: filas del proyecto cuya referencia empieza con alguno de `prefijos`, con `extra.cache[clave]`
+    para una de `claves` y pendientes de cobro (`_pendiente_de_cobro`). Devuelve
+    [{"referencia", "clave", "usd"}], lo que `registrar_trasladando` recibe. Solo lee."""
+    claves = set(claves or ())
+    if not claves or not prefijos:
+        return []
+    g = db.gasto
+    filtro = sa.or_(*[g.c.referencia.startswith(p, autoescape=True) for p in prefijos])
+    salida = []
     with db.conectar() as con:
-        fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
-        resultado_cobro = None
-        if fila:
-            gasto_id = int(fila.id)
-            _actualizar(con, gasto_id)   # el UPDATE abre la transacción y toma el candado
-            resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=False)
-        else:
-            try:
-                with con.begin_nested():
-                    r = con.execute(sa.insert(g).values(cliente=cliente, referencia=referencia,
-                                                        creado_en=(creado_en or db.ahora())[:19],
-                                                        proveedor=proveedor, extra=extra or {}, **valores))
-                    gasto_id = int(r.inserted_primary_key[0])
-                    # DENTRO del savepoint del gasto: pysqlite no emite BEGIN antes de un
-                    # SAVEPOINT, así que este es el más externo; el INSERT ya tomó el candado
-                    # y su RELEASE confirma gasto y cobro juntos.
-                    resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=True)
-            except sa.exc.IntegrityError:
-                # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
-                fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente,
-                                                           g.c.referencia == referencia)).first()
-                gasto_id = int(fila.id)
-                _actualizar(con, gasto_id)
-                resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=False)
-    _despues_del_cobro(cliente, resultado_cobro, gasto_id, usd_final, tipo, referencia)
-    return gasto_id
+        filas = con.execute(sa.select(g.c.id, g.c.referencia, g.c.extra)
+                            .where(g.c.cliente == cliente, filtro).order_by(g.c.id)).all()
+        for f in filas:
+            cache = (f.extra or {}).get("cache") or {}
+            propias = [k for k in cache if k in claves]
+            if propias and _pendiente_de_cobro(con, f.id):
+                salida += [{"referencia": f.referencia, "clave": k, "usd": float(cache[k] or 0)} for k in propias]
+    return salida
+
+
+def registrar_trasladando(cliente, tipo, usd, referencia, traslados, detalle="", proveedor=None, extra=None,
+                          entregado=True):
+    """`registrar` de una entrega que además se lleva lo que el proveedor cobró antes y nunca se le cobró al
+    cliente (PND-314 y PND-318, decisión 2026-10-13, lote 1: «se cobra cuando se reusa»): la pieza recuperada
+    sin pagar de nuevo, o lo que quedó en caché tras una final que falló. Cada traslado es
+    {"referencia": <fila de origen>, "clave": <clave de su extra.cache> | None}; con clave se mueve ese monto (la
+    clave sale de `extra.cache`), sin clave toda la fila. El origen BAJA en lo movido y anota a dónde fue en
+    `extra.trasladado`: el proveedor cobró una sola vez y la tabla sigue sumando lo mismo que su factura. Un
+    origen ya cobrado, de otro proyecto o de un proyecto que no cobra no se toca. Todo en una transacción, con
+    el candado tomado antes de leer. Sin nada que mover y con `usd` 0 no escribe nada.
+    Devuelve (gasto_id | None, usd_movido)."""
+    tipo_n, monto, referencia_n, detalle_n, proveedor_n = _normalizar(cliente, tipo, usd, referencia, detalle,
+                                                                      proveedor)
+    g = db.gasto
+    ahora = db.ahora()
+    with db.conectar() as con:
+        con.execute(db.kv.update().where(db.kv.c.clave == "gastos:candado").values(valor=db.kv.c.valor))
+        movido, hechos = 0.0, []
+        # Una fila de origen puede traer varias claves (el borrador y el destino de la misma final fallida): se
+        # lee UNA vez y se le descuentan todas, para que cada clave salga y se cobre una sola vez.
+        origenes = {}
+        for t in traslados or ():
+            ref_origen = str(t.get("referencia") or "")
+            if ref_origen not in origenes:
+                fila = con.execute(sa.select(g).where(g.c.cliente == cliente, g.c.referencia == ref_origen)).first()
+                if fila is None or fila.referencia == referencia_n or not _pendiente_de_cobro(con, fila.id):
+                    origenes[ref_origen] = None
+                    continue
+                origenes[ref_origen] = {"fila": fila, "usd": float(fila.usd or 0.0), "extra": dict(fila.extra or {})}
+            o = origenes[ref_origen]
+            if o is None:
+                continue
+            clave = t.get("clave")
+            if clave:
+                cache = dict(o["extra"].get("cache") or {})
+                if clave not in cache:
+                    continue
+                parte = min(float(cache.pop(clave) or 0.0), o["usd"])
+                o["extra"]["cache"] = cache
+            else:
+                parte = o["usd"]
+            parte = round(max(0.0, parte), 4)
+            if parte <= 0:
+                continue
+            o["usd"] = round(o["usd"] - parte, 4)
+            o["extra"]["trasladado"] = list(o["extra"].get("trasladado") or []) + [
+                {"a": referencia_n, "clave": clave, "usd": parte, "en": ahora}]
+            o["movido"] = True
+            hechos.append({"de": ref_origen, "clave": clave or f"traslado:{ref_origen}", "usd": parte})
+            movido += parte
+        correcciones = [o for o in origenes.values() if o and o.get("movido")]
+        movido = round(movido, 4)
+        if not movido and not monto:
+            return None, 0.0
+        for o in correcciones:
+            # Una corrección (nuevo=False): un `no_cobrado` sigue igual; un cobro con su reverso baja en par.
+            f = o["fila"]
+            _escribir(con, cliente, f.tipo, o["usd"], f.referencia, f.detalle or "", f.proveedor, extra=o["extra"],
+                      entregado=False)
+        extra_destino = dict(extra or {})
+        if hechos:
+            extra_destino["traslados"] = list(extra_destino.get("traslados") or []) + hechos
+            extra_destino["usd_trasladado"] = movido
+            # Si la entrega falla después y se le devuelve el cobro, lo movido queda pendiente aquí con sus mismas
+            # claves: la próxima que lo reuse lo encuentra (revisión de guardian-gasto, 2026-10-15).
+            cache = dict(extra_destino.get("cache") or {})
+            for h in hechos:
+                cache[h["clave"]] = round(float(cache.get(h["clave"]) or 0.0) + h["usd"], 4)
+            extra_destino["cache"] = cache
+        gasto_id, resultado, usd_final = _escribir(con, cliente, tipo_n, round(monto + movido, 4), referencia_n,
+                                                   detalle_n, proveedor_n, extra=extra_destino, entregado=entregado)
+    _despues_del_cobro(cliente, resultado, gasto_id, usd_final, tipo_n, referencia_n)
+    return gasto_id, movido
+
+
+def registrar_trasladando_seguro(cliente, tipo, usd, referencia, traslados, **kw):
+    """`registrar_trasladando` que nunca lanza: si falla, anota la entrega sola con `registrar_seguro` (lo
+    pagado en esta corrida no se pierde; lo de antes sigue pendiente en su fila). Devuelve lo mismo."""
+    try:
+        return registrar_trasladando(cliente, tipo, usd, referencia, traslados, **kw)
+    except Exception:  # noqa: BLE001 — ver docstring
+        log.exception("No se pudo trasladar lo pendiente de cobro a %s de %s", referencia, cliente)
+        if not usd:
+            return None, 0.0
+        return registrar_seguro(cliente, tipo, usd, referencia, **kw), 0.0
 
 
 def _neto_del_gasto(con, gasto_id):

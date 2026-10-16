@@ -1552,3 +1552,121 @@ def test_meta_rendimiento_esta_registrada_y_la_pestana_meta_tiene_nombre():
     import alertas
     assert ("meta_rendimiento", alertas._fuente_meta_rendimiento) in alertas.FUENTES
     assert "meta" in alertas.NOMBRES_TAB
+
+
+# ---------- Meta: el acceso a los datos vence (PND-058, 2026-10-15) ----------
+
+VENCE_FORJA = "2026-12-18T12:00:00"     # data_access_expires_at real de colorado_forja
+
+
+def _acceso_meta(monkeypatch, tmp_path, vence=VENCE_FORJA, cliente="acme", **campos):
+    """meta.json de una conexión propia con su fecha de acceso a los datos, en una carpeta de proyectos temporal."""
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "BASE_DIR", str(tmp_path))
+    datos = {"token": "EAAsecreto123456", "ad_account_id": "act_1", "page_id": "9", **campos}
+    if vence:
+        datos["acceso_datos_vence_en"] = vence
+    meta_conexion._escribir_atomico(meta_conexion._path(cliente), datos)
+
+
+@__import__("pytest").mark.parametrize("ahora", ["2026-10-15T10:00:00", "2026-12-04T11:59:59"])
+def test_meta_acceso_no_avisa_antes_de_14_dias(monkeypatch, tmp_path, ahora):
+    import alertas
+    _acceso_meta(monkeypatch, tmp_path)
+    assert alertas._fuente_meta_acceso("acme", ahora) == []
+
+
+def test_meta_acceso_avisa_14_dias_antes_al_admin_y_al_cliente(monkeypatch, tmp_path):
+    import alertas
+    _acceso_meta(monkeypatch, tmp_path)
+    [a] = alertas._fuente_meta_acceso("acme", "2026-12-04T12:00:00")
+    assert a["clave"] == "meta_acceso:datos" and a["nivel"] == "atencion" and a["grupo"] == "puesta_a_punto"
+    assert a["solo_admin"] is False and not alertas.descarte_solo_admin(a["clave"], [a])
+    assert a["tab"] == "settings" and a["ancla"] == "config-meta"
+    assert a["titulo"] == "El acceso de Creatv a los datos de Meta vence el 18 de diciembre de 2026"
+    assert "Faltan 14 días" in a["detalle"] and "Configuración › Conexiones" in a["detalle"]
+    assert a["huella"] == alertas.huella("2026-12-18", "por_vencer")
+    [b] = alertas._fuente_meta_acceso("acme", "2026-12-17T20:00:00")
+    assert b["detalle"].startswith("Falta 1 día.") and b["huella"] == a["huella"]   # un descarte vale hasta que venza
+    [c] = alertas._fuente_meta_acceso("acme", "2026-12-18T06:00:00")
+    assert c["detalle"].startswith("Vence hoy.") and c["nivel"] == "atencion" and c["huella"] == a["huella"]
+
+
+def test_meta_acceso_vencido_bloquea_y_vuelve_a_salir(monkeypatch, tmp_path):
+    import alertas
+    _acceso_meta(monkeypatch, tmp_path)
+    [a] = alertas._fuente_meta_acceso("acme", "2026-12-18T12:00:00")
+    assert a["clave"] == "meta_acceso:datos" and a["nivel"] == "bloquea"
+    assert a["titulo"] == "Venció el acceso de Creatv a los datos de Meta"
+    assert "18 de diciembre de 2026" in a["detalle"] and "Configuración › Conexiones" in a["detalle"]
+    assert a["huella"] == alertas.huella("2026-12-18", "vencido")       # descartar «por vencer» no esconde esta
+
+
+def test_meta_acceso_reconectar_cambia_la_huella(monkeypatch, tmp_path):
+    import alertas
+    _acceso_meta(monkeypatch, tmp_path)
+    [antes] = alertas._fuente_meta_acceso("acme", "2026-12-10T10:00:00")
+    _acceso_meta(monkeypatch, tmp_path, vence="2026-12-22T12:00:00")     # reconectó y Meta dio otra fecha cercana
+    [despues] = alertas._fuente_meta_acceso("acme", "2026-12-10T10:00:00")
+    assert antes["huella"] != despues["huella"]
+    _acceso_meta(monkeypatch, tmp_path, vence="2027-03-18T12:00:00")
+    assert alertas._fuente_meta_acceso("acme", "2026-12-10T10:00:00") == []   # resuelta: desaparece sola
+
+
+@__import__("pytest").mark.parametrize("caso", ["sin_conexion", "sin_fecha", "agencia", "sin_token", "fecha_rota"])
+def test_meta_acceso_sin_fecha_propia_no_avisa(monkeypatch, tmp_path, caso):
+    import alertas
+    import meta_conexion
+    if caso == "sin_conexion":
+        monkeypatch.setattr(meta_conexion, "BASE_DIR", str(tmp_path))
+    elif caso == "sin_fecha":
+        _acceso_meta(monkeypatch, tmp_path, vence=None)
+    elif caso == "agencia":
+        _acceso_meta(monkeypatch, tmp_path, modo="agencia")
+    elif caso == "sin_token":
+        _acceso_meta(monkeypatch, tmp_path, token=None)
+    else:
+        _acceso_meta(monkeypatch, tmp_path, vence="pronto")
+    assert alertas._fuente_meta_acceso("acme", "2026-12-17T10:00:00") == []
+
+
+def test_meta_acceso_no_mezcla_proyectos(monkeypatch, tmp_path):
+    import alertas
+    _acceso_meta(monkeypatch, tmp_path, cliente="otro")
+    _acceso_meta(monkeypatch, tmp_path, cliente="acme", vence="2027-06-01T12:00:00")
+    assert alertas._fuente_meta_acceso("acme", "2026-12-17T10:00:00") == []
+    assert _claves(alertas._fuente_meta_acceso("otro", "2026-12-17T10:00:00")) == ["meta_acceso:datos"]
+
+
+def test_meta_acceso_no_consulta_la_base_ni_llama_a_meta(monkeypatch, tmp_path, base_temporal):
+    import alertas
+    import meta_conexion
+
+    def _no(*a, **k):
+        raise AssertionError("no debía llamar a Meta")
+    monkeypatch.setattr(meta_conexion.requests, "get", _no)
+    _acceso_meta(monkeypatch, tmp_path)
+    resultado, n = _consultas(base_temporal, alertas._fuente_meta_acceso, "acme", "2026-12-10T10:00:00")
+    assert len(resultado) == 1 and n == 0
+    assert "EAAsecreto" not in json.dumps(resultado)
+
+
+def test_meta_acceso_la_huella_no_depende_del_idioma_y_el_texto_si(monkeypatch, tmp_path):
+    import alertas
+    import idiomas
+    _acceso_meta(monkeypatch, tmp_path)
+    [es] = alertas._fuente_meta_acceso("acme", "2026-12-10T10:00:00")
+    with idiomas.en_idioma("en"):
+        [en] = alertas._fuente_meta_acceso("acme", "2026-12-10T10:00:00")
+        [vencida] = alertas._fuente_meta_acceso("acme", "2026-12-19T10:00:00")
+    assert en["huella"] == es["huella"] and en["titulo"] != es["titulo"] and en["detalle"] != es["detalle"]
+    assert en["titulo"] == "Creatv's access to your Meta data expires on December 18, 2026"
+    assert "8 days left" in en["detalle"] and "Settings › Connections" in en["detalle"]
+    assert vencida["titulo"] == "Creatv's access to your Meta data has expired"
+
+
+def test_meta_acceso_esta_registrada_despues_de_meta():
+    import alertas
+    nombres = [n for n, _ in alertas.FUENTES]
+    assert ("meta_acceso", alertas._fuente_meta_acceso) in alertas.FUENTES
+    assert nombres.index("meta_acceso") == nombres.index("meta") + 1

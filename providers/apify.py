@@ -382,6 +382,13 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
                 continue
             v["fallos"] = 0
             reg["estado"] = status or reg["estado"]
+            if reg["estado"] in TERMINALES:
+                try:
+                    usd_real = _usd_reportado(_cuerpo(r))
+                except ValueError:
+                    usd_real = None
+                if usd_real is not None:
+                    reg["usd_real"] = usd_real
             hechas = total - len(vivas) - len(pendientes)
             avanzar(etapa, gettext("Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)",
                                    estado=reg["estado"], corrida=reg["run_id"], hechas=hechas, total=total))
@@ -411,6 +418,17 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
                                   corrida=reg["run_id"], etiqueta=reg["etiqueta"], estado=frase_estado(reg["estado"]),
                                   n=reg["resultados"], motivo=("; " + reg["motivo"]) if reg["motivo"] else ""))
     return {"items": items, "resultados": sum(r["resultados"] for r in registros), "corridas": registros, "aviso": " · ".join(avisos)}
+
+
+def _usd_reportado(cuerpo):
+    """`usageTotalUsd` de la respuesta de una corrida, o None si no viene o no sirve."""
+    import math
+    try:
+        usd = ((cuerpo or {}).get("data") or {}).get("usageTotalUsd")
+        usd = float(usd) if usd is not None else None
+    except (TypeError, ValueError, AttributeError):
+        return None
+    return round(usd, 4) if usd is not None and math.isfinite(usd) and usd >= 0 else None
 
 
 def costo_corrida(sesion, token, run_id):

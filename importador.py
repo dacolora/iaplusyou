@@ -493,6 +493,22 @@ def _regla_si_hay_saldo(cliente, nombre, descripcion, categoria):
     return generador_prompts.regla_fidelidad(nombre, descripcion, categoria, idiomas.de_proyecto(cliente))
 
 
+def _regla_y_gasto(cliente, producto_id, nombre, descripcion, categoria):
+    """La regla de fidelidad y su gasto real (PND-315): lo que cobró Claude por su `usage`, también si vuelve
+    vacía (cortada, rechazada), en ese caso sin cobrársela al cliente. Sin `usage` medido (no hubo llamada, o
+    un doble de las pruebas), la tarifa fija solo si hubo regla, como antes. Devuelve la regla ("" si no hay)."""
+    with generador_prompts.contar_uso() as usos:
+        regla = _regla_si_hay_saldo(cliente, nombre, descripcion, categoria)
+    usd = generador_prompts.usd_de(usos) if usos else (gastos.TARIFAS["regla_producto"] if regla else 0.0)
+    if usos or regla:
+        # Se guarda: en el idioma del proyecto aunque algún día la llame una ruta.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            detalle = gettext("regla de fidelidad de «%(nombre)s»", nombre=nombre)[:300]
+        gastos.registrar_seguro(cliente, "regla_producto", usd, f"regla_producto:{producto_id}",
+                                proveedor="anthropic", detalle=detalle, entregado=bool(regla))
+    return regla
+
+
 def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
     """Liga el producto (fila `producto`) a un activo del catálogo de Crear.
     Devuelve el `activo_id` (None si no se pudo). Con `extra.variantes`
@@ -566,16 +582,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
             return None
         if fallidas:
             errores.append(_aviso(prod, gettext("%(n)s foto(s) no se pudieron descargar.", n=fallidas)))
-        regla = _regla_si_hay_saldo(cliente, nombre, descripcion, prod.get("categoria") or "")
-        if regla:
-            # Claude respondió (una regla vacía es el fallback sin llamada o
-            # con error, que no cobra). Tarifa fija: el SDK no devuelve el
-            # precio y una llamada de ~600 tokens cuesta menos que ese tope.
-            # Se guarda: en el idioma del proyecto aunque algún día la llame una ruta.
-            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-                detalle = gettext("regla de fidelidad de «%(nombre)s»", nombre=nombre)[:300]
-            gastos.registrar_seguro(cliente, "regla_producto", gastos.TARIFAS["regla_producto"],
-                                    f"regla_producto:{producto_id}", proveedor="anthropic", detalle=detalle)
+        regla = _regla_y_gasto(cliente, producto_id, nombre, descripcion, prod.get("categoria") or "")
         tipo = inferir_tipo(nombre, descripcion, prod.get("categoria") or "")
         try:
             activo_id = catalogo_productos.crear(cliente, nombre, descripcion, tipo=tipo,

@@ -50,7 +50,7 @@
               <button type="submit" class="btn-guardar btn-sm" style="margin-top:.4rem;">{{ _('Guardar cambios') }}</button>
             </form>
             <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe las versiones A y B (se pierden tus ediciones). ¿Seguir?')|tojson }});'>
-              <button type="submit" class="btn-sm">{{ _('Rearmar con IA') }}</button>
+              <button type="submit" class="btn-sm">{{ _('Rearmar con IA') }} · {{ precio_de('director').texto }}</button>
             </form>
           </section>
           {% elif item.prompt_relleno and item.prompt_relleno != item.accion_central %}
@@ -87,14 +87,18 @@
               <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
             </form>
             {% endif %}
-            {% if item.estado == "error" and item.prediccion and item.prediccion.id and item.tipo != "imagen" %}
-            {# Incidente 2026-09-28: el worker dejó de esperar pero WaveSpeed sigue con la predicción; se recupera sin pagar. #}
+            {% if item.estado == "error" and item.tipo != "imagen" and ((item.prediccion and item.prediccion.id) or item.lanzamiento_pendiente) %}
+            {# Incidente 2026-09-28: el worker dejó de esperar pero WaveSpeed sigue con la predicción; se recupera sin pagar.
+               PND-214: también si el pedido salió sin respuesta (se busca en el historial). #}
             <form method="post" action="{{ url_for('cf_recuperar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
               <button type="submit" class="btn-generar btn-sm">{{ _('Recuperar el video (sin pagar de nuevo)') }}</button>
             </form>
             {% endif %}
-            {% if item.estado in ("prompt_listo", "error") %}
-            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd|precio if item.costo_estimado else '' }}">
+            {% if item.estado in ("prompt_listo", "error") and not item.lanzamiento_pendiente %}
+            {% set imagen_incierta = item.tipo == "imagen" and item.lanzamiento_incierto and item.lanzamiento_incierto.estado == "imagen" %}
+            {# R5 (PND-214): la imagen anterior pudo cobrarse; reintentar paga otra vez y se dice con el precio. #}
+            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd|precio if item.costo_estimado else '' }}"{% if imagen_incierta %} onsubmit='return confirm({{ _("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta %(precio)s más. ¿Seguir?", precio=(item.costo_estimado.usd|precio|usd) if item.costo_estimado else _("precio no disponible"))|tojson }});'{% endif %}>
+              {% if imagen_incierta %}<input type="hidden" name="confirmo_posible_cobro" value="1">{% endif %}
               {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}
               <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> {{ _('Generar también la versión B (dos videos)') }}</label>
               {% endif %}
@@ -104,9 +108,9 @@
               <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}{{ _('Reintentar') }}{% elif item.estado == "prompt_listo" %}{{ _('Generar video') }}{% else %}{{ _('Generar') }}{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | precio | usd }}{% endif %}</button>
             </form>
             {% endif %}
-            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" and item.modo_crear != "hablado" %}
+            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" and item.modo_crear != "hablado" and not item.lanzamiento_pendiente %}
             <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }}</button>
+              <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }} · {{ precio_de('director').texto }}</button>
             </form>
             {% endif %}
             <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('¿Descartar esta pieza?')|tojson }});' style="display:inline;">

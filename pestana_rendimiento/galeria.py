@@ -195,20 +195,52 @@ def claves_confirmadas(valores, tope=None):
     return claves
 
 
-def pedir_lote(cliente, alcances, claves, usuario, veredicto=""):
+class PrecioCambiado(Exception):
+    """El total que vio la persona en «Analizar los N que más gastaron» ya no es el de ahora (PND-236): no se pidió
+    nada. La ruta lo avisa y la pestaña recargada muestra el precio nuevo."""
+
+
+def costos_confirmados(cliente, alcances, claves):
+    """{(fuente, canal, ad_id): costo o None} de cada clave confirmada que sigue en el alcance de su fuente (las demás no
+    salen), con la misma cuenta que la tarjeta (`pedidos.costos_de`). Una lectura de creativos y una de análisis por
+    fuente."""
+    costos = {}
+    for fuente in dict.fromkeys(f for f, _, _ in claves):
+        alc = alcances.get(fuente)
+        if alc:
+            suyas = [(c, ad) for f, c, ad in claves if f == fuente]
+            costos.update({(fuente, *k): usd for k, usd in pedidos.costos_de(cliente, alc, suyas).items()})
+    return costos
+
+
+def pedir_lote(cliente, alcances, claves, usuario, veredicto="", *, costo_visto):
     """«Analizar los N que más gastaron» con las dos fuentes: (encolados, fallos). `alcances` = {"tw": …, "meta": …}
     (None si el alcance no tiene esa fuente); `claves`, las confirmadas (`claves_confirmadas`: ya recortadas a N_LOTE
     entre las dos). Cada fuente cobra con SU alcance y su `pedidos.pedir_lote` (confirmadas ∩ aún elegibles con el
     filtro `veredicto`), en el orden de su primera clave: la del anuncio de más gasto en USD va primero. Sin saldo,
-    para ahí (la otra fuente no se pide) y re-lanza `SaldoInsuficiente` con `.lote` = lo de las dos."""
+    para ahí (la otra fuente no se pide) y re-lanza `SaldoInsuficiente` con `.lote` = lo de las dos.
+
+    `costo_visto`: el total que mostró el botón, ya pasado a costo en la ruta (PND-236, decisión del lote 1,
+    2026-10-13). Antes de pedir nada se suma el costo de AHORA de cada clave confirmada que sigue en el alcance de su
+    fuente (`costos_confirmados`; una que no está no se cobra ni cuenta); si alguna no tiene precio o el total no es el
+    visto (±0,005), `PrecioCambiado` y nada se crea ni se reserva. Lo que se cobra son esas mismas claves, las que
+    sigan elegibles, cada una a su costo de esa suma: nunca más que lo visto (una que otra pestaña ya analizó se salta y
+    se cobra menos). Sin ninguna clave en su alcance no hay nada que cobrar ni que comparar."""
+    costos = costos_confirmados(cliente, alcances, claves)
+    if not costos:
+        return 0, 0
+    total = None if any(v is None for v in costos.values()) else sum(costos.values())
+    if not pedidos.coincide(costo_visto, total):
+        raise PrecioCambiado()
     n = fallos = 0
     for fuente in dict.fromkeys(f for f, _, _ in claves):
         alc = alcances.get(fuente)
         if not alc:
             continue
-        suyas = [(c, ad) for f, c, ad in claves if f == fuente]
+        suyas = [(c, ad) for f, c, ad in claves if f == fuente and (f, c, ad) in costos]
         try:
-            hechos, fallidos = pedidos.pedir_lote(cliente, alc, suyas, usuario, veredicto=veredicto)
+            hechos, fallidos = pedidos.pedir_lote(cliente, alc, suyas, usuario, veredicto=veredicto,
+                                                  costos_vistos={(c, ad): costos[(fuente, c, ad)] for c, ad in suyas})
         except SaldoInsuficiente as e:
             hechos, fallidos = getattr(e, "lote", (0, 0))
             e.lote = (n + hechos, fallos + fallidos)

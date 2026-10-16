@@ -71,6 +71,83 @@ ETAPAS_SWAP_FOTO_MEJORADA = [
     (ETAPA_GUARDAR, 15),
 ]
 
+# «Recuperar el resultado» (PND-318): vuelve a preguntar por la predicción que ya se pagó, sin lanzar otra.
+ETAPA_BUSCAR = N_("Buscando el resultado en WaveSpeed")
+ETAPAS_SWAP_RECUPERAR = [
+    (ETAPA_BUSCAR, 70),
+    (ETAPA_DESCARGAR, 15),
+    (ETAPA_GUARDAR, 15),
+]
+TIEMPO_RECUPERAR = 120
+# Los swaps que van por WaveSpeed (los únicos que se pueden recuperar por su id) y el nombre de cada modelo.
+MODELOS_WAVESPEED = {
+    "wan27_edit": "Wan 2.7 Video Edit",
+    **{k: v["nombre"] for k, v in wavespeed_video_edit.MODELOS.items()},
+    "nano_banana_pro_ultra": "Nano Banana Pro Ultra",
+    "seedream_v5_pro": "Seedream V5.0 Pro Edit",
+}
+ESTADOS_FALLIDOS = ("failed", "cancelled", "timeout", "deleted")
+# Solo «failed» dice que WaveSpeed no lo terminó (y no lo cobró). Un pedido cancelado, borrado o vencido de su lado
+# pudo terminarse y cobrarse antes: lo anotado no se toca (revisión de guardian-gasto, 2026-10-15).
+FALLO_SIN_COBRO = "failed"
+
+
+def clave_pedido(prediction_id):
+    """La clave de caché de lo que cobró el pedido de un swap (`extra.cache`): «Recuperar» la busca para cobrarla."""
+    return f"pred:{prediction_id}"
+
+
+class SwapEnEspera(RuntimeError):
+    """PND-318: el worker dejó de esperar y el proveedor sigue con el pedido (y lo cobra igual). Lleva el costo
+    previsto para anotarlo (sin cobrárselo al cliente) y, si es de WaveSpeed, el id para «Recuperar el
+    resultado» sin pagar de nuevo. Su texto se guarda en la tarjeta (idioma del proyecto)."""
+
+    def __init__(self, nombre_modelo, prediction_id, costo, recuperable=True):
+        self.nombre_modelo, self.prediction_id, self.costo, self.recuperable = (nombre_modelo, prediction_id,
+                                                                                costo, recuperable)
+        if recuperable:
+            texto = gettext("%(modelo)s sigue trabajando en este swap y lo cobra igual. Toca «Recuperar el "
+                            "resultado» en unos minutos: %(modelo)s no lo cobra otra vez y a ti se te cobra solo "
+                            "cuando llegue.", modelo=nombre_modelo)
+        else:
+            texto = gettext("%(modelo)s siguió trabajando en este swap después de que dejamos de esperar. No se "
+                            "puede recuperar desde aquí y no se te cobró.", modelo=nombre_modelo)
+        super().__init__(texto)
+
+
+def _al_agotarse(e, proveedor, costo_previsto):
+    """La espera del modelo principal se agotó (PND-318): se pregunta UNA vez a WaveSpeed cómo va el pedido.
+    Terminado → su URL (se entrega como siempre); fallido → ErrorProveedor (no cobró); en curso o sin poder
+    preguntar → SwapEnEspera (lo cobra igual). Un pedido de fal que fal va a cobrar → SwapEnEspera sin
+    recuperar; uno que fal canceló a tiempo sube tal cual."""
+    if isinstance(e, wavespeed_common.EsperaAgotada):
+        try:
+            data = wavespeed_common.consultar(e.prediction_id)
+        except Exception:  # noqa: BLE001 — sin poder preguntar, WaveSpeed casi siempre termina y cobra
+            data = {}
+        estado = data.get("status")
+        if estado == "completed" and data.get("outputs"):
+            return data["outputs"][0]
+        if estado in ESTADOS_FALLIDOS:
+            error = wavespeed_common.ErrorProveedor(e.nombre_modelo, estado, detalle=data.get("error") or None,
+                                                    codigo=data.get("code"), prediction_id=e.prediction_id,
+                                                    datos=data)
+            # Cancelado, borrado o vencido de su lado pudo cobrarse: se anota (sin cobrarlo); no hay qué recuperar.
+            error.costo_cobrado = None if estado == FALLO_SIN_COBRO else costo_previsto
+            raise error from e
+        raise SwapEnEspera(e.nombre_modelo, e.prediction_id, costo_previsto,
+                           recuperable=proveedor in MODELOS_WAVESPEED) from e
+    if getattr(e, "cobrado", False):
+        raise SwapEnEspera("fal.ai", getattr(e, "request_id", None), costo_previsto, recuperable=False) from e
+    raise e
+
+
+def _esperas():
+    """Las esperas agotadas que `_al_agotarse` sabe atender (la de fal llega con PND-313)."""
+    from providers import fal_client  # noqa: PLC0415
+    return (wavespeed_common.EsperaAgotada, getattr(fal_client, "EsperaAgotadaFal", wavespeed_common.EsperaAgotada))
+
+
 # Los proveedores hablan en sus propios códigos de estado; esto es lo único
 # honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
 _FASES_PROVEEDOR = {
@@ -110,12 +187,23 @@ def _texto_fase(info):
     return texto
 
 
-def _avisar_fase_de(job_id):
+def _avisar_fase_de(job_id, guardar_prediccion=None):
     """Devuelve el callback on_progreso que esperan los clientes de proveedores
     (Higgsfield, fal.ai, WaveSpeed): traduce la fase cruda del poll y la publica
     como detalle del trabajo. Envuelto en try/except porque un fallo REPORTANDO
-    jamás puede tumbar una generación que ya gastó créditos."""
+    jamás puede tumbar una generación que ya gastó créditos.
+    `guardar_prediccion(id)` (PND-318): se llama una vez por id nuevo, apenas el
+    proveedor lo devuelve, para que el swap lo tenga aunque la espera se agote."""
+    vista = {"id": None}
+
     def avisar_fase(info):
+        try:
+            pid = (info or {}).get("prediction_id")
+            if guardar_prediccion and pid and pid != vista["id"]:
+                vista["id"] = pid
+                guardar_prediccion(pid)
+        except Exception:
+            pass
         try:
             texto = _texto_fase(info)
             if texto:
@@ -132,7 +220,7 @@ def _extraer_frame(video_path, frame_path, segundo=1.0):
     )
 
 
-def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
+def _evaluar_swap_contra_matriz(cliente, swap_id, image_url, ref_sufijo=""):
     """Corre la evaluación de marca sobre una imagen (foto final, o un fotograma
     extraído de un video final) y guarda el resultado. No falla el swap si esto
     falla — es un plus, no el resultado principal."""
@@ -148,7 +236,18 @@ def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
         if not invariantes:
             swaps_mod.actualizar(cliente, swap_id, evaluacion_estado="sin_matriz")
             return
-        evaluacion = generador_prompts.evaluar_contra_matriz(image_url, invariantes)
+        entregada = False
+        # PND-315: lo que cobró Claude por revisar la marca se anota (antes no se anotaba nada: 27 en happyflops).
+        with generador_prompts.contar_uso() as usos:
+            try:
+                evaluacion = generador_prompts.evaluar_contra_matriz(image_url, invariantes)
+                entregada = True
+            finally:
+                if usos:
+                    gastos.registrar_seguro(cliente, "revision", generador_prompts.usd_de(usos),
+                                            f"revision_marca:{swap_id}{ref_sufijo}", proveedor="anthropic",
+                                            detalle=gettext("revisión de marca del swap %(swap)s", swap=swap_id),
+                                            entregado=entregada)
         swaps_mod.actualizar(cliente, swap_id, evaluacion=evaluacion, evaluacion_estado="ok")
         bitacora.registrar(cliente, swap_id, "evaluacion", "ok", "")
     except Exception as e:
@@ -159,8 +258,20 @@ def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
 @al_interrumpir("swap_generar")
 def interrumpida(tarea, mensaje):
     """El worker murió a mitad del swap: sin esto la tarjeta queda en
-    `generando` para siempre. En error, con motivo, se puede volver a lanzar."""
+    `generando` para siempre. En error, con motivo, se puede volver a lanzar.
+    Si WaveSpeed ya tenía el pedido (`prediccion`), lo termina y lo cobra igual: se anota su costo previsto sin
+    cobrárselo al cliente, con la clave del pedido, para que «Recuperar el resultado» tenga qué cobrar al
+    entregarlo (revisión de guardian-gasto, 2026-10-15)."""
     cliente, swap_id = tarea["payload"]["cliente"], tarea["payload"]["swap_id"]
+    pred = (swaps_mod.cargar(cliente).get(swap_id) or {}).get("prediccion") or {}
+    if pred.get("id") and pred.get("usd") and pred.get("referencia_gasto"):
+        nombre = MODELOS_WAVESPEED.get(pred.get("proveedor"), pred.get("proveedor") or "WaveSpeed")
+        gastos.registrar_seguro(cliente, "swap", float(pred["usd"]), pred["referencia_gasto"], entregado=False,
+                                proveedor=pred.get("proveedor"),
+                                detalle=" · ".join([str(pred.get("proveedor") or ""),
+                                                    gettext("se cortó al reiniciar; el proveedor lo cobra igual")]),
+                                extra={"cache": {clave_pedido(pred["id"]): float(pred["usd"])}})
+        mensaje = str(SwapEnEspera(nombre, pred["id"], {"usd": pred["usd"]}))
     swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
 
 
@@ -201,6 +312,14 @@ def ejecutar(tarea):
     # Cada etapa se anuncia con trabajos.reportar(job_id, ...) para que la barra
     # deje de ser un número inventado: el usuario ve en qué paso real va.
     avisar_fase = _avisar_fase_de(job_id)
+
+    previsto_actual = {"usd": None}
+
+    def _guardar_prediccion(pid):
+        swaps_mod.actualizar(cliente, swap_id, prediccion={"id": pid, "proveedor": proveedor, "referencia_gasto": ref,
+                                                           "usd": previsto_actual["usd"], "en": _ahora()})
+    # Solo el modelo principal guarda su id (la mejora de calidad es otra predicción).
+    avisar_modelo = _avisar_fase_de(job_id, guardar_prediccion=_guardar_prediccion)
     # None hasta que el proveedor cobró: si algo falla después, el gasto se
     # registra igual (el cobro ya ocurrió).
     costo = None
@@ -253,33 +372,40 @@ def ejecutar(tarea):
                 referencias_urls.append(r2_uploader.upload_image(ref_local, key))
 
             trabajos.reportar(job_id, etapa=ETAPA_MODELO)
+            # El costo se calcula ANTES de llamar: si la espera se agota, es lo que se anota (PND-318).
             if proveedor == "kling_o1":
                 citas = " ".join(f"@Image{i + 1}" for i in range(len(referencias_urls)))
                 prompt = prompt_swap.prompt_video(tipo_producto, citas=citas, mapa=mapa_producto)
-                resultado_url = kling_o1_client.editar_video(
-                    video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
+                previsto = kling_o1_client.estimate_video(duracion_in, fps_in)
+                llamar = lambda: kling_o1_client.editar_video(  # noqa: E731
+                    video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_modelo,
                 )
-                costo = kling_o1_client.estimate_video(duracion_in, fps_in)
             elif proveedor == "wan27_edit":
                 prompt = prompt_swap.prompt_video(tipo_producto, mapa=mapa_producto)
-                resultado_url = wavespeed_client.editar_video(
-                    video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
+                previsto = wavespeed_client.estimate_video(duracion_in, fps_in)
+                llamar = lambda: wavespeed_client.editar_video(  # noqa: E731
+                    video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_modelo,
                 )
-                costo = wavespeed_client.estimate_video(duracion_in, fps_in)
             elif proveedor in wavespeed_video_edit.MODELOS:
                 prompt = prompt_swap.prompt_video(tipo_producto, mapa=mapa_producto)
-                resultado_url = wavespeed_video_edit.editar_video(
+                previsto = wavespeed_video_edit.estimate_video(proveedor, duracion_in, fps_in)
+                llamar = lambda: wavespeed_video_edit.editar_video(  # noqa: E731
                     proveedor, video_url, prompt, referencias_urls=referencias_urls,
-                    on_progreso=avisar_fase,
+                    on_progreso=avisar_modelo,
                 )
-                costo = wavespeed_video_edit.estimate_video(proveedor, duracion_in, fps_in)
             else:
                 referencia = referencias_urls[0] if referencias_urls else None
-                resultado_url = comparador_modelos.editar_video(
+                previsto = comparador_modelos.estimate_video(proveedor, duracion_in, fps_in)
+                llamar = lambda: comparador_modelos.editar_video(  # noqa: E731
                     proveedor, video_url, producto["descripcion"], referencia_imagen_url=referencia,
-                    on_progreso=avisar_fase, tipo=tipo_producto, mapa=mapa_producto,
+                    on_progreso=avisar_modelo, tipo=tipo_producto, mapa=mapa_producto,
                 )
-                costo = comparador_modelos.estimate_video(proveedor, duracion_in, fps_in)
+            previsto_actual["usd"] = (previsto or {}).get("usd")
+            try:
+                resultado_url = llamar()
+            except _esperas() as e:
+                resultado_url = _al_agotarse(e, proveedor, previsto)
+            costo = previsto
 
             trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
             resp = requests.get(resultado_url, timeout=180)
@@ -300,13 +426,26 @@ def ejecutar(tarea):
             trabajos.reportar(job_id, etapa=ETAPA_PREPARAR_FOTO)
             if proveedor == "nano_banana":
                 trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-                img_bytes = nano_banana_client.swap_producto(
-                    foto_local, producto["referencias"], negative_prompt=negative_prompt,
-                    tipo=tipo_producto, mapa=mapa_producto,
-                )
+                # PND-315: Gemini reintenta; se anota lo que cobró cada intento. Al cliente solo se le cobra el
+                # que entregó la imagen; los que pudieron cobrar sin entregar van en su propia fila, sin cobrarlos.
+                entregados, sin_entregar = [], []
+                try:
+                    img_bytes = nano_banana_client.swap_producto(
+                        foto_local, producto["referencias"], negative_prompt=negative_prompt,
+                        tipo=tipo_producto, mapa=mapa_producto,
+                        on_cobro=lambda usd, entregado: (entregados if entregado else sin_entregar).append(usd),
+                    )
+                finally:
+                    if sin_entregar:
+                        gastos.registrar_seguro(
+                            cliente, "swap", round(sum(sin_entregar), 4), f"{ref}:intentos", proveedor="nano_banana",
+                            entregado=False,
+                            detalle=gettext("nano_banana · %(n)s intento(s) que Google pudo cobrar sin entregar",
+                                            n=len(sin_entregar)))
+                costo = ({"credits": None, "usd": round(sum(entregados), 4)} if entregados
+                         else nano_banana_client.estimate_image())
                 with open(local_path, "wb") as f:
                     f.write(img_bytes)
-                costo = nano_banana_client.estimate_image()
             else:  # nano_banana_fal, qwen_edit, nano_banana_pro_ultra
                 foto_url = r2_uploader.upload_image(foto_local, f"clientes/{cliente}/swaps_subidas/{nombre_subida}")
                 # Nano Banana Pro Ultra acepta hasta 14 imágenes (13 de
@@ -328,30 +467,37 @@ def ejecutar(tarea):
                         f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)."
                         for i in range(len(referencias_urls))
                     )
-                    resultado_url = wavespeed_imagen.editar_imagen(
+                    previsto = wavespeed_imagen.estimate_image()
+                    llamar = lambda: wavespeed_imagen.editar_imagen(  # noqa: E731
                         foto_url, prompt_swap.prompt_imagen(tipo_producto, referencias_lista, mapa=mapa_producto),
                         referencias_urls=referencias_urls,
                         aspect_ratio=aspect_ratio_mod.detectar_wavespeed_nano_banana_pro(foto_local),
-                        on_progreso=avisar_fase,
+                        on_progreso=avisar_modelo,
                     )
-                    costo = wavespeed_imagen.estimate_image()
                 elif proveedor == "seedream_v5_pro":
                     referencias_lista = "\n".join(
                         f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)."
                         for i in range(len(referencias_urls))
                     )
-                    resultado_url = wavespeed_imagen.editar_imagen_seedream(
+                    previsto = wavespeed_imagen.estimate_seedream(n_imagenes=len(referencias_urls) + 1)
+                    llamar = lambda: wavespeed_imagen.editar_imagen_seedream(  # noqa: E731
                         foto_url,
                         prompt_swap.prompt_imagen(tipo_producto, referencias_lista, mapa=mapa_producto),
-                        referencias_urls=referencias_urls, on_progreso=avisar_fase,
+                        referencias_urls=referencias_urls, on_progreso=avisar_modelo,
                     )
-                    costo = wavespeed_imagen.estimate_seedream(n_imagenes=len(referencias_urls) + 1)
                 else:
-                    resultado_url = comparador_modelos.editar_imagen(
+                    previsto = comparador_modelos.estimate_image(proveedor)
+                    llamar = lambda: comparador_modelos.editar_imagen(  # noqa: E731
                         proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
-                        foto_local_path=foto_local, on_progreso=avisar_fase, tipo=tipo_producto, mapa=mapa_producto,
+                        foto_local_path=foto_local, on_progreso=avisar_modelo, tipo=tipo_producto,
+                        mapa=mapa_producto,
                     )
-                    costo = comparador_modelos.estimate_image(proveedor)
+                previsto_actual["usd"] = (previsto or {}).get("usd")
+                try:
+                    resultado_url = llamar()
+                except _esperas() as e:
+                    resultado_url = _al_agotarse(e, proveedor, previsto)
+                costo = previsto
                 trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
                 resp = requests.get(resultado_url, timeout=120)
                 resp.raise_for_status()
@@ -363,15 +509,21 @@ def ejecutar(tarea):
                 # URL pública, así que primero sube el resultado del swap a
                 # R2 y después reemplaza el archivo local por el mejorado.
                 trabajos.reportar(job_id, etapa=ETAPA_MEJORAR)
+                mejora_pagada = False
                 try:
                     url_para_mejorar = r2_uploader.upload_image(
                         local_path, f"clientes/{cliente}/swaps/{swap_id}.previo.png")
                     ancho_prev, alto_prev = aspect_ratio_mod.dimensiones(local_path)
-                    mejorada_url = wavespeed_imagen.mejorar_calidad(
-                        url_para_mejorar,
-                        factor=wavespeed_imagen.factor_seguro(ancho_prev, alto_prev),
-                        on_progreso=avisar_fase,
-                    )
+                    try:
+                        mejorada_url = wavespeed_imagen.mejorar_calidad(
+                            url_para_mejorar,
+                            factor=wavespeed_imagen.factor_seguro(ancho_prev, alto_prev),
+                            on_progreso=avisar_fase,
+                        )
+                    except wavespeed_common.EsperaAgotada:
+                        mejora_pagada = True   # WaveSpeed la termina y la cobra igual
+                        raise
+                    mejora_pagada = True
                     resp_mejorada = requests.get(mejorada_url, timeout=180)
                     resp_mejorada.raise_for_status()
                     with open(local_path, "wb") as f:
@@ -386,6 +538,12 @@ def ejecutar(tarea):
                     # se entrega igual. Perder el resultado por el paso opcional
                     # sería tirar a la basura lo que el usuario ya pagó.
                     bitacora.registrar(cliente, swap_id, "mejora_calidad", "error", str(e))
+                    if mejora_pagada:
+                        # PND-315: WaveSpeed ya cobró la mejora y no llegó: se anota aparte, sin cobrarla.
+                        gastos.registrar_seguro(
+                            cliente, "swap", wavespeed_imagen.COSTO_USD_UPSCALE, f"{ref}:mejora",
+                            proveedor="wavespeed", entregado=False,
+                            detalle=gettext("mejora de calidad pagada que no llegó (%(error)s)", error=str(e)[:120]))
 
             trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
             try:
@@ -400,7 +558,7 @@ def ejecutar(tarea):
 
         swaps_mod.actualizar(
             cliente, swap_id, estado="listo", resultado_url=url, resultado_local=local_path,
-            credits=costo.get("credits"), usd=costo.get("usd"), error_storage=error_storage,
+            credits=costo.get("credits"), usd=costo.get("usd"), error_storage=error_storage, prediccion=None,
         )
         bitacora.registrar(cliente, swap_id, "swap", "ok", local_path)
         _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok)
@@ -411,30 +569,52 @@ def ejecutar(tarea):
                 try:
                     _extraer_frame(local_path, frame_path)
                     frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/swaps/{swap_id}.frame.jpg")
-                    _evaluar_swap_contra_matriz(cliente, swap_id, frame_url)
+                    _evaluar_swap_contra_matriz(cliente, swap_id, frame_url, ref_sufijo(tarea))
                 except Exception as e:
                     bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
             else:
-                _evaluar_swap_contra_matriz(cliente, swap_id, url)
+                _evaluar_swap_contra_matriz(cliente, swap_id, url, ref_sufijo(tarea))
 
         return gettext("Swap listo.")
     except Exception as e:
         mensaje_error = str(e)
+        sufijo = " · " + gettext("falló después de generar; el proveedor ya cobró")
+        campos, cache = {}, None
         if isinstance(e, wavespeed_common.SinSaldo):
             # Incidente 2026-09-30: en palabras, y el administrador se entera.
             saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
                 mensaje_error = saldo.mensaje_tarjeta(e.proveedor)
-        swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje_error)
+        elif isinstance(e, SwapEnEspera):
+            # PND-318: el proveedor sigue y cobra igual: se anota (sin cobrárselo al cliente) y, en WaveSpeed,
+            # el id queda para «Recuperar el resultado», que lo trae sin pagar de nuevo y ahí lo cobra.
+            costo = e.costo
+            sufijo = " · " + gettext("se agotó la espera; el proveedor lo cobra igual")
+            if e.recuperable and e.prediction_id:
+                campos["prediccion"] = {"id": e.prediction_id, "proveedor": proveedor, "referencia_gasto": ref,
+                                        "usd": (costo or {}).get("usd"), "en": _ahora()}
+                cache = {clave_pedido(e.prediction_id): (costo or {}).get("usd")}
+            else:
+                campos["prediccion"] = None
+        elif getattr(e, "costo_cobrado", None):
+            # WaveSpeed lo dio por cancelado, borrado o vencido: pudo cobrarlo; se anota y no hay qué recuperar.
+            costo = e.costo_cobrado
+            sufijo = " · " + gettext("el proveedor lo cerró sin entregarlo; pudo cobrarlo")
+            campos["prediccion"] = None
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje_error, **campos)
         bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
         if costo is not None:
-            _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok,
-                             sufijo=" · " + gettext("falló después de generar; el proveedor ya cobró"),
-                             entregado=False)
+            _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok, sufijo=sufijo, entregado=False,
+                             cache=cache)
         raise
 
 
-def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, sufijo="", entregado=True):
+def _ahora():
+    from datetime import datetime  # noqa: PLC0415
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, sufijo="", entregado=True, cache=None):
     """`swap:<swap_id><ref_sufijo>` con el `usd` del estimate del proveedor
     (ya incluye la mejora de calidad si de verdad corrió). Un proveedor sin
     tarifa (usd None) se registra en 0 con "sin tarifa" para que quede
@@ -448,4 +628,106 @@ def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, suf
     detalle = " · ".join(partes)
     gastos.registrar_seguro(cliente, "swap", usd, referencia, detalle=detalle + sufijo, proveedor=proveedor,
                             entregado=entregado,
-                            extra={"credits": (costo or {}).get("credits"), "sin_tarifa": usd is None})
+                            extra={"credits": (costo or {}).get("credits"), "sin_tarifa": usd is None,
+                                   **({"cache": cache} if cache and usd else {})})
+
+
+# ------------------------------------------------------------- recuperar ---
+
+@al_interrumpir("swap_recuperar")
+def recuperar_interrumpida(tarea, mensaje):
+    """Se cortó mientras preguntaba: el swap vuelve a error con su predicción (se puede volver a recuperar)."""
+    cliente, swap_id = tarea["payload"]["cliente"], tarea["payload"]["swap_id"]
+    swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
+
+
+@registrar("swap_recuperar")
+def recuperar(tarea):
+    """«Recuperar el resultado» (PND-318, como «Recuperar el video» de Crear): vuelve a preguntar a WaveSpeed
+    por la predicción que el swap ya pagó y, si terminó, lo entrega. Nunca lanza otra (WaveSpeed no cobra de
+    nuevo). Lo que se anotó al agotarse la espera (clave `pred:<id>`) pasa a la fila de esta entrega y ahí se le
+    cobra al cliente, con el precio que vio en el botón (`gastos.registrar_trasladando`). Solo si WaveSpeed lo da
+    por fallido («failed») no cobró y lo anotado vuelve a 0; cancelado, borrado o vencido no lo toca."""
+    p = tarea["payload"]
+    cliente, swap_id = p["cliente"], p["swap_id"]
+    job_id = tarea.get("job_id")
+    entry = swaps_mod.cargar(cliente).get(swap_id) or {}
+    pred = entry.get("prediccion") or {}
+    proveedor = pred.get("proveedor") or entry.get("proveedor")
+    ref_original = pred.get("referencia_gasto")
+    if not pred.get("id") or proveedor not in MODELOS_WAVESPEED:
+        mensaje = gettext("Este swap no tiene nada que recuperar.")
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
+        raise RuntimeError(mensaje)
+    nombre = MODELOS_WAVESPEED[proveedor]
+    trabajos.reportar(job_id, etapa=ETAPA_BUSCAR)
+    try:
+        data = wavespeed_common.poll_hasta_listo(pred["id"], nombre, timeout_seconds=TIEMPO_RECUPERAR,
+                                                 on_progreso=_avisar_fase_de(job_id))
+    except wavespeed_common.ErrorProveedor as e:
+        # Solo «failed» dice que no lo terminó: WaveSpeed no cobra un pedido fallido y lo anotado vuelve a 0. Uno
+        # cancelado, borrado o vencido pudo cobrarse antes: lo anotado se queda (como `tareas/flowplus`).
+        if ref_original and e.estado == FALLO_SIN_COBRO:
+            gastos.registrar_seguro(cliente, "swap", 0, ref_original, proveedor=proveedor, entregado=False,
+                                    detalle=gettext("%(modelo)s no terminó el swap; no cobró", modelo=nombre))
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=str(e), prediccion=None)
+        raise
+    except wavespeed_common.EsperaAgotada as e:
+        mensaje = gettext("%(modelo)s todavía no termina este swap. Vuelve a tocar «Recuperar el resultado» en "
+                          "unos minutos; no se paga de nuevo.", modelo=nombre)
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
+        raise RuntimeError(mensaje) from e
+    salidas = data.get("outputs") or []
+    if not salidas:
+        mensaje = gettext("%(modelo)s terminó sin devolver ningún resultado.", modelo=nombre)
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
+        raise RuntimeError(mensaje)
+    resultado_url = salidas[0]
+    es_video = entry.get("tipo") == "video"
+    resultados_dir = os.path.join(BASE_DIR, "salidas", cliente, "swaps")
+    os.makedirs(resultados_dir, exist_ok=True)
+    local_path = os.path.join(resultados_dir, f"{swap_id}.mp4" if es_video else f"{swap_id}.png")
+    trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
+    try:
+        resp = requests.get(resultado_url, timeout=180)
+        resp.raise_for_status()
+        with open(local_path, "wb") as f:
+            f.write(resp.content)
+    except Exception as e:
+        # Ya está en WaveSpeed: la predicción se conserva y se puede volver a intentar.
+        mensaje = gettext("El resultado ya está listo en %(modelo)s pero no se pudo bajar: %(error)s. Vuelve a "
+                          "tocar «Recuperar el resultado».", modelo=nombre, error=e)
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
+        raise RuntimeError(mensaje) from e
+    trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
+    error_storage = None
+    clave = f"clientes/{cliente}/swaps/{swap_id}.mp4" if es_video else f"clientes/{cliente}/swaps/{swap_id}.png"
+    try:
+        url = r2_uploader.upload_video(local_path, clave) if es_video else r2_uploader.upload_image(local_path, clave)
+    except Exception as e:
+        url, error_storage = resultado_url, str(e)
+        bitacora.registrar(cliente, swap_id, "storage", "error", str(e))
+    gastos.registrar_trasladando_seguro(
+        cliente, "swap", 0, f"swap:{swap_id}{ref_sufijo(tarea)}",
+        gastos.pendientes_por_clave(cliente, (f"swap:{swap_id}",), {clave_pedido(pred["id"])}), proveedor=proveedor,
+        detalle=" · ".join([proveedor, gettext("video") if es_video else gettext("foto"),
+                            gettext("recuperado sin pagar de nuevo")]))
+    # Lo que costó: la fila de esta entrega si el costo se movió (proyecto que cobra), o la del intento agotado.
+    pagado = ((gastos.por_referencia(cliente, f"swap:{swap_id}{ref_sufijo(tarea)}")
+               or (gastos.por_referencia(cliente, ref_original) if ref_original else None) or {}).get("usd"))
+    swaps_mod.actualizar(cliente, swap_id, estado="listo", resultado_url=url, resultado_local=local_path,
+                         error=None, error_storage=error_storage, prediccion=None,
+                         **({"usd": pagado} if pagado else {}))
+    bitacora.registrar(cliente, swap_id, "swap", "ok", local_path)
+    if url:
+        if es_video:
+            frame_path = os.path.join(resultados_dir, f"{swap_id}.frame.jpg")
+            try:
+                _extraer_frame(local_path, frame_path)
+                frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/swaps/{swap_id}.frame.jpg")
+                _evaluar_swap_contra_matriz(cliente, swap_id, frame_url, ref_sufijo(tarea))
+            except Exception as e:
+                bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
+        else:
+            _evaluar_swap_contra_matriz(cliente, swap_id, url, ref_sufijo(tarea))
+    return gettext("Swap recuperado: WaveSpeed no lo cobró otra vez.")

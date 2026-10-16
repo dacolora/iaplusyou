@@ -161,7 +161,8 @@ def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
     corridas para rastrear el cobro. Devuelve el costo."""
     n = int(getattr(fuente, "resultados", 0) or 0)
     corridas = [c.get("run_id") for c in (getattr(fuente, "corridas", None) or []) if c.get("run_id")]
-    usd = plataformas.costo(n, len(corridas), tarifa)
+    # PND-315: conciliado con lo que Apify dice que cobró cada corrida (`usageTotalUsd`), no solo el estimado.
+    usd, conciliacion = plataformas.costo_conciliado(n, getattr(fuente, "corridas", None) or [], tarifa)
     referencia = f"recoleccion:{eid}:{paso}{ref_sufijo(tarea)}"
     if usd <= 0 and not corrida_anotada(cliente, referencia):
         return 0.0
@@ -169,7 +170,7 @@ def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
     gastos.registrar_seguro(cliente, "recoleccion", usd, referencia,
                             detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify", extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
-                                                      "usd_por_corrida": tarifa.get("usd_por_corrida", 0),
+                                                      "usd_por_corrida": tarifa.get("usd_por_corrida", 0), **conciliacion,
                                    **({"estimado": True, "conciliacion_pendiente": True} if any(c.get("estimado") for c in (getattr(fuente, "corridas", None) or [])) else {}), "corridas": corridas})
     return usd
 

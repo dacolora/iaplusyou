@@ -42,10 +42,11 @@
           {% if p.revision != "rechazada" %}<button type="button" class="btn-xs btn-rechazar" data-pieza-accion="rechazar">{{ _('Rechazar') }}</button>{% endif %}
           <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='creativeflowplus') }}">{{ _('Abrir en Crear') }}</a>
         {% endif %}
-        {% set precio = ('US$ %.2f' % (p.costo_regenerar | precio)) if p.costo_regenerar is not none else _('precio no disponible') %}
+        {% set precio_reintentar = (p.costo_reintentar | precio_fmt('US$ %.2f')) if p.costo_reintentar is not none else _('precio no disponible') %}
+        {% set precio = (p.costo_regenerar | precio_fmt('US$ %.2f')) if p.costo_regenerar is not none else _('precio no disponible') %}
         {% if p.estado == "error" %}
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}"
-                data-confirmar="{{ _('Reintentar gasta de nuevo (%(precio)s). ¿Seguir?', precio=precio) }}">{{ _('Reintentar (%(precio)s)', precio=precio) }}</button>
+                data-confirmar="{{ _('Reintentar gasta de nuevo (%(precio)s). ¿Seguir?', precio=precio_reintentar) }}">{{ _('Reintentar (%(precio)s)', precio=precio_reintentar) }}</button>
         {% endif %}
         {% if p.estado in ("listo", "degradada", "error") %}
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_regenerar', cliente=cliente, cp_id=p.id) }}"

@@ -56,6 +56,37 @@ def _sembrar(tienda_id=None, dias=10):
     datos.reemplazar_tienda("acme", tienda_id, _hace(dias - 1), _hace(0), tienda)
 
 
+def precio_visto(c, ad_id, fuente="tw", canal="facebook-ads", entrada="", dias="30", filtro=""):
+    """Lo que manda el formulario de «Cómo mejorarlo» de esa tarjeta: el precio que muestra su botón (PND-236). La
+    tarjeta se pide como la repinta la pestaña; sin botón (sin datos, en curso, fuera del alcance), ""."""
+    r = c.get(f"/cliente/acme/rendimiento/tarjeta/{fuente}/{canal}/{ad_id}",
+              query_string={"entrada": entrada, "dias": dias, "canal": filtro})
+    m = re.search(r'name="precio_visto" value="([^"]*)"', r.data.decode()) if r.status_code == 200 else None
+    return m.group(1) if m else ""
+
+
+def precio_del_lote(html):
+    """El `precio_visto` del formulario «Analizar los N que más gastaron» de un HTML de la pestaña ("" sin lote)."""
+    i = html.find("tw-analizar-lote")
+    m = re.search(r'name="precio_visto" value="([^"]*)"', html[i:]) if i >= 0 else None
+    return m.group(1) if m else ""
+
+
+def con_total(app, data, cliente="acme"):  # noqa: F811
+    """`data` del lote con su `precio_visto` si no lo trae: el total de AHORA de las claves que siguen en su alcance
+    (lo que mostraría un botón con esas claves; la ruta compara contra eso, PND-236). Para las pruebas que arman a mano
+    las claves del lote y vigilan otra cosa (lo elegible, el tope, el saldo)."""
+    if "precio_visto" in data:
+        return data
+    from pestana_rendimiento import galeria
+    from pestana_rendimiento import rutas as rend_rutas
+    with app["dashboard"].app.test_request_context():
+        al = rend_rutas._alcances(cliente, data)
+        costos = galeria.costos_confirmados(cliente, al, galeria.claves_confirmadas(data.get("clave") or []))
+    total = sum(costos.values()) if costos and None not in costos.values() else None
+    return dict(data, precio_visto="" if total is None else repr(total))
+
+
 def _tareas(tipo):
     with db.conectar() as con:
         return [dict(r._mapping) for r in con.execute(

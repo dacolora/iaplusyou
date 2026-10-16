@@ -92,7 +92,16 @@ def transcribir(cliente, mat, idioma, carpeta, referencia):
             url, clave_temporal = _audio_de_video(cliente, mat, carpeta)
         duracion_ms = int(mat.get("duracion_ms") or 0)
         # la espera crece con el audio (10 min no caben en 180 s con la cola de fal)
-        r = fal_audio.transcribir_palabras(url, idioma, duracion_ms=duracion_ms or None)
+        try:
+            r = fal_audio.transcribir_palabras(url, idioma, duracion_ms=duracion_ms or None)
+        except Exception as e:
+            # La espera se agotó (o volvió sin nada) y fal la cobró igual (PND-186 (1)): se anota, sin cobrarla.
+            if getattr(e, "costo_usd", 0):
+                gastos.registrar_seguro(cliente, "transcripcion", float(e.costo_usd), referencia, entregado=False,
+                                        detalle=gettext("Whisper · %(s)s s de audio · no llegó",
+                                                        s=round(duracion_ms / 1000.0, 1)),
+                                        proveedor="fal/whisper")
+            raise
         palabras = a_ms(r.get("palabras"))
         usd = fal_audio.costo_whisper(duracion_ms)
         gastos.registrar_seguro(cliente, "transcripcion", usd, referencia,

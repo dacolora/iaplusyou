@@ -50,6 +50,8 @@ def editar_video(video_url, prompt, referencias_urls=None, resolution="720p", on
     prediction_id = (resp.json().get("data") or {}).get("id")
     if not prediction_id:
         raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
+    # El id sale antes de esperar: si la espera se agota, el swap lo tiene para anotar y recuperar (PND-318).
+    wavespeed_common.avisar_lanzada(on_progreso, prediction_id)
 
     resultado = wavespeed_common.poll_hasta_listo(
         prediction_id, "Wan 2.7 Video Edit", on_progreso=on_progreso,

@@ -525,8 +525,9 @@ def _llamar(texto, max_tokens):
     client = anthropic.Anthropic(api_key=_api_key())
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens, system=doctrina.bloque_system("investigar"),
                                   messages=[{"role": "user", "content": texto}])
+    from guiones.claude import tokens_entrada_equivalentes  # noqa: PLC0415 — la caché de la doctrina también se cobra
     uso = getattr(resp, "usage", None)
-    entrada = int(getattr(uso, "input_tokens", 0) or 0)
+    entrada = tokens_entrada_equivalentes(uso)
     tok_salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason == "refusal":
         e = AnalisisInvalido(gettext("Claude rechazó la solicitud."))

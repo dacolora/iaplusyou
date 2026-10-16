@@ -135,10 +135,15 @@ def syncs_en_curso(cliente):
     return sorted(cola.job_ids_vivos(cliente, TIPO_SYNC))
 
 
+# Lo que la barra cree que tarda «Evaluar con IA»: con el tope de 32 000 y el NVP (PND-217) la respuesta entera
+# (pensamiento + JSON) tardó 152–170 s con 10 anuncios (docs/superpowers/evals/2026-10-15-tw-evaluar-32000-nvp.md).
+DURACION_EVALUAR = 180
+
+
 def encolar_evaluacion(cliente, evaluacion_id, costo_estimado=None):
     """max_intentos=1: paga a Claude. False si ya había una viva."""
     return trabajos.encolar(job_id_evaluar(cliente), TIPO_EVALUAR, {"cliente": cliente, "evaluacion_id": evaluacion_id},
-                            cliente=cliente, duracion_estimada=120, etapas=ETAPAS_EVALUAR, max_intentos=1,
+                            cliente=cliente, duracion_estimada=DURACION_EVALUAR, etapas=ETAPAS_EVALUAR, max_intentos=1,
                             costo_estimado=costo_estimado)
 
 
@@ -270,11 +275,15 @@ def tw_analizar_anuncio(tarea):
                 voz = mejorar.transcribir(foto)
             except Exception as e:  # noqa: BLE001 — sin voz, Claude juzga por lo demás
                 log.info("sin voz para el análisis %s: %s", aid, type(e).__name__)
+                if getattr(e, "costo_usd", 0):
+                    # fal la cobró y no llegó (PND-186 (1)): se anota, sin cobrársela al cliente.
+                    gastos.registrar_seguro(cliente, "transcripcion", float(e.costo_usd), f"{referencia}:voz",
+                                            proveedor="fal", detalle=_detalle_voz(de_meta), entregado=False)
             if voz:
                 usd_voz = float(voz.get("costo_usd") or 0)
-                if usd_voz:
-                    gastos.registrar_seguro(cliente, "transcripcion", usd_voz, f"{referencia}:voz", proveedor="fal",
-                                            detalle=_detalle_voz(de_meta))
+                # También en 0: queda constancia de la llamada (PND-186 (1)).
+                gastos.registrar_seguro(cliente, "transcripcion", usd_voz, f"{referencia}:voz", proveedor="fal",
+                                        detalle=_detalle_voz(de_meta))
                 medios["transcripcion"] = (voz.get("texto") or "")[:mejorar.MAX_TRANSCRIPCION] or None
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
         # G4 (revisión final de Rendimiento E2, 2026-10-10): la evaluación de cuenta es del Pixel de Triple Whale; en el
@@ -485,7 +494,9 @@ def tw_evaluar(tarea):
     fila = datos.evaluacion(cliente, eid)
     if fila is None:
         return gettext("Esa evaluación ya no existe.")
-    datos.actualizar_evaluacion(eid, estado="analizando", tarea_id=tarea.get("id"), error=None)
+    # La fila sigue «en_cola» mientras baja miniaturas y saca fotogramas: «analizando» es «la llamada a Claude empezó»
+    # (revisión del gasto, 2026-10-15), lo que mira el gancho de interrupción para anotar el estimado (PND-268).
+    datos.actualizar_evaluacion(eid, tarea_id=tarea.get("id"), error=None)
     anuncios = list(fila["anuncios"] or [])
     extra = dict(fila["extra"] or {})
     trabajos.reportar(job_id, etapa=idiomas.N_("Buscando miniaturas"), detalle=gettext("%(n)s anuncio(s)", n=len(anuncios)))
@@ -504,6 +515,7 @@ def tw_evaluar(tarea):
                 "modelo": extra.get("modelo"), "ventana": extra.get("ventana"),
                 "benchmarks": extra.get("benchmarks") or {}, "meta_roas": extra.get("meta_roas")}
     referencia = f"tw_eval:{eid}{ref_sufijo(tarea)}"
+    datos.actualizar_evaluacion(eid, estado="analizando")
     try:
         resultado, entrada, salida = analisis.analizar(proyectos.nombre_visible(cliente), contexto, anuncios,
                                                        medios, idiomas.de_proyecto(cliente), bloques=bloques,
@@ -512,9 +524,17 @@ def tw_evaluar(tarea):
         entrada = int(getattr(e, "tokens_entrada", 0) or 0)
         salida = int(getattr(e, "tokens_salida", 0) or 0)
         usd = costo_real(entrada, salida) if (entrada or salida) else 0.0
-        if usd:
+        # E2-R7, como la evaluación de Meta (PND-217 subió el tope de tiempo a 900 s): una llamada que se quedó sin
+        # respuesta (tope de tiempo, conexión cortada) no trae `usage`, pero Anthropic pudo cobrarla. Se anota el
+        # estimado de la tarifa sobre lo exacto que ya se sepa (la primera llamada, si la que no respondió fue la
+        # corrección). Un rechazo de la API (`APIStatusError`) no cobra: `sin_respuesta` es False.
+        estimado = analisis.sin_respuesta(e)
+        if estimado:
+            usd += float(analisis.estimado(cliente, anuncios, creatv)["usd"] or 0.0)
+        if usd:     # pagado y sin entregar: en un proyecto que cobra no se le cobra (skill `cobros`)
             gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                                    detalle=gettext("sin resultado usable"), entregado=False)
+                                    detalle=gettext("estimado: sin respuesta de Claude") if estimado
+                                    else gettext("sin resultado usable"), entregado=False)
         mensaje = analisis.texto_error(e)
         datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
         raise RuntimeError(mensaje) from None
@@ -535,14 +555,38 @@ def tw_evaluar(tarea):
     return gettext("Evaluación lista: %(n)s idea(s) de anuncios nuevos.", n=len(resultado["ideas"]))
 
 
+def anotar_estimado_cortado(cliente, referencia, usd, detalle):
+    """PND-268 (decisión del lote 1, 2026-10-13; regla 1): una evaluación que un reinicio del worker (o el respaldo sin
+    saldo) mató con la fila «analizando» pudo cortar una llamada a Claude que Anthropic cobró, y nadie la anotaría. Se
+    anota el estimado de la tarifa (`usd`, costo) con la referencia que habría usado la tarea, sin entregar: en un
+    proyecto que cobra no se le cobra al cliente. Si la tarea alcanzó a anotar lo que Claude cobró con sus tokens (esa
+    referencia ya existe), no se pisa ni se suma: el worker ya revirtió el cobro de su cadena (`worker._revertir`).
+    La comparte la evaluación de Meta (`tareas.meta_rendimiento`). Nunca lanza."""
+    try:
+        if not usd or gastos.por_referencia(cliente, referencia):
+            return False
+        return gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic", detalle=detalle,
+                                       entregado=False) is not None
+    except Exception as e:  # noqa: BLE001 — el gancho nunca tumba al worker; la fila igual queda en error
+        log.warning("no se pudo anotar el estimado de %s de %s (%s)", referencia, cliente, type(e).__name__)
+        return False
+
+
 @al_interrumpir(TIPO_EVALUAR)
 def _evaluar_interrumpida(tarea, mensaje):
+    """La fila no se queda «analizando». Si lo estaba, la llamada a Claude había empezado (`tw_evaluar` la pone así
+    justo antes): se anota el estimado (PND-268); «en_cola» = no llegó a llamar (respaldo sin saldo, o un reinicio
+    mientras bajaba miniaturas), no se anota nada."""
     p = tarea.get("payload") or {}
     if p.get("cliente") and p.get("evaluacion_id"):
-        fila = datos.evaluacion(p["cliente"], int(p["evaluacion_id"]))
+        cliente, eid = p["cliente"], int(p["evaluacion_id"])
+        fila = datos.evaluacion(cliente, eid)
         if fila and fila["estado"] in ("en_cola", "analizando"):
-            datos.actualizar_evaluacion(int(p["evaluacion_id"]), estado="error",
-                                        error=cola.recortar(cola.sin_token(str(mensaje)), 500))
+            if fila["estado"] == "analizando":
+                anotar_estimado_cortado(cliente, f"tw_eval:{eid}{ref_sufijo(tarea)}",
+                                        analisis.estimado(cliente, fila["anuncios"] or [])["usd"],
+                                        gettext("estimado: se interrumpió durante el análisis"))
+            datos.actualizar_evaluacion(eid, estado="error", error=cola.recortar(cola.sin_token(str(mensaje)), 500))
 
 
 # ------------------------------------------------ ganchos nuevos (spec 2026-10-09 §4.4–§4.6) ---

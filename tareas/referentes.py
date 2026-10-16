@@ -304,7 +304,7 @@ def _job_continuacion_barrer(job_id):
     return job_id[:-len(SUFIJO_CONT)] if job_id.endswith(SUFIJO_CONT) else job_id + SUFIJO_CONT
 
 
-def _costo_fase(payload, bid, tipo):
+def _costo_fase(payload, bid, tipo, cliente=None):
     """Costo del proveedor (USD, sin margen) de la fase que se va a encolar:
     el resto de lo que falta traer, o la clasificación del siguiente tramo
     (cobros, revisión final 2026-10-08). 0 para las imágenes (no pagan a
@@ -318,7 +318,8 @@ def _costo_fase(payload, bid, tipo):
             faltan = max(1, int(payload.get("tope") or 0) - int((datos.barrido(bid) or {}).get("traidos") or 0))
             return float(fuentes.por_tipo(consulta.get("fuente")).estimar(consulta, faltan)["usd_fuente"])
         n = len(datos.pendientes_clasificacion(barrido_id=bid, limite=TRAMO, incluir_error=tipo == TIPO_CLASIFICAR))
-        return gastos.estimar("clasificacion", n=max(1, n))["usd"]
+        return gastos.estimar("clasificacion", n=max(1, n),
+                              bilingue=clasificar.tarifa_bilingue(cliente or payload.get("cliente")))["usd"]
     except Exception:  # noqa: BLE001 — sin estimado no se inventa un precio
         return None
 
@@ -332,7 +333,7 @@ def _continuar_barrer(tarea, payload, bid, tipo=TIPO_BARRER):
     conserva; la tarea termina bien (no revierte lo que sí se entregó)."""
     job_id = _job_continuacion_barrer(tarea.get("job_id") or job_id_barrer(bid))
     cliente = payload.get("cliente") or tarea.get("cliente")
-    costo = _costo_fase(payload, bid, tipo)
+    costo = _costo_fase(payload, bid, tipo, cliente)
     if cliente and costo != 0:
         try:
             # La reserva de ESTA tarea (la fase que termina) no cuenta: lo suyo ya se gastó.
@@ -378,7 +379,8 @@ def encolar_clasificar_pendientes(cliente, barrido_id):
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "clasificando",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
                      duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2, cliente=cliente,
-                     costo_estimado=gastos.estimar("clasificacion", n=b.get("pendientes") or 1)["usd"])
+                     costo_estimado=gastos.estimar("clasificacion", n=b.get("pendientes") or 1,
+                                                   bilingue=clasificar.tarifa_bilingue(cliente))["usd"])
     return True
 
 

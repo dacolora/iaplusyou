@@ -18,8 +18,11 @@ AL_INTERRUMPIR = {}
 # de una cadena). Todo tipo de tareas/ está aquí o en los exentos, con su motivo:
 # tests/test_cobros_worker.py falla si uno nuevo no está en ninguno.
 TIPOS_QUE_COBRAN = frozenset({
-    # Crear y Flow Plus (WaveSpeed)
-    "flowplus_video", "flowplus_imagen", "cadena_elementos", "swap_generar",
+    # Crear y Flow Plus (WaveSpeed; el director con Claude desde PND-299: antes lo pagaba Creatv)
+    "flowplus_video", "flowplus_imagen", "cadena_elementos", "swap_generar", "flowplus_director",
+    # «Recuperar el resultado» de un swap: WaveSpeed no cobra de nuevo, pero lo que cobró se le cobra al cliente al
+    # entregarlo, con el precio en el botón y el freno de saldo (decisión de quien orquesta, 2026-10-15)
+    "swap_recuperar",
     # Voz y música (fal: MiniMax, ElevenLabs, Whisper)
     "audio_generar", "hablado_voz", "voz_propia_crear", "musica_generar", "editor_voz", "material_transcribir",
     # Final edition (Claude escribe el guion; voz y música por fal)
@@ -40,7 +43,6 @@ TIPOS_QUE_COBRAN = frozenset({
 
 TIPOS_EXENTOS_DE_COBRO = {
     "flowplus_recuperar": "recupera un video ya pagado; no paga de nuevo",
-    "flowplus_director": "el director lo paga Creatv (_creatv); el video que lanza pasa por su propio freno",
     "cadena_vigilar": "periódica: avanza las cadenas; cada escena la cobra flowplus_video",
     "cadena_unir": "une con ffmpeg escenas ya pagadas",
     "edicion_producir": "renderiza con ffmpeg materiales que ya existen",
@@ -60,6 +62,7 @@ TIPOS_EXENTOS_DE_COBRO = {
     "exp_avanzar_todos": "periódica: avanza derivaciones; lo que produce pasa por su propio freno",
     "meta_publicar": "publica en Meta; no llama a un proveedor que cobra",
     "meta_refrescar": "lee métricas de Meta",
+    "meta_revisar_acceso": "periódica: lee en Meta cuándo vence el acceso a los datos; no cobra",
     "meta_rend_sincronizar": "lee métricas de las cuentas de Meta y las tasas del BCE; no cobra",
     "meta_rend_sincronizar_todas": "periódica: solo encola meta_rend_sincronizar",
     "meta_rend_limpiar": "periódica de mantenimiento",

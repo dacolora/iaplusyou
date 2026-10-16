@@ -86,6 +86,7 @@ def editar_imagen(foto_url, prompt, referencias_urls=None, resolution="4k",
         payload["aspect_ratio"] = aspect_ratio
 
     prediction_id = _lanzar(MODELO_EDICION, payload)
+    wavespeed_common.avisar_lanzada(on_progreso, prediction_id)   # antes de esperar (PND-318)
     data = wavespeed_common.poll_hasta_listo(
         prediction_id, "Nano Banana Pro Ultra", on_progreso=on_progreso,
     )
@@ -101,6 +102,7 @@ def mejorar_calidad(imagen_url, factor=FACTOR_UPSCALE_POR_DEFECTO, on_progreso=N
         raise ValueError(f"desired_increase solo acepta 2 o 4, no {factor!r}")
 
     prediction_id = _lanzar(MODELO_UPSCALE, {"image": imagen_url, "desired_increase": factor})
+    wavespeed_common.avisar_lanzada(on_progreso, prediction_id)   # antes de esperar (PND-318)
     data = wavespeed_common.poll_hasta_listo(
         prediction_id, "Bria Increase Resolution", on_progreso=on_progreso,
     )
@@ -154,6 +156,7 @@ def editar_imagen_seedream(foto_url, prompt, referencias_urls=None, resolution="
     if aspect_ratio:
         payload["aspect_ratio"] = aspect_ratio
     prediction_id = _lanzar(MODELO_SEEDREAM, payload)
+    wavespeed_common.avisar_lanzada(on_progreso, prediction_id)   # antes de esperar (PND-318)
     data = wavespeed_common.poll_hasta_listo(
         prediction_id, "Seedream V5.0 Pro Edit", on_progreso=on_progreso,
     )

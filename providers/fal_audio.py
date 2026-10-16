@@ -112,14 +112,13 @@ def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None, time
         payload["speed"] = round(float(velocidad), 2)
     if language_code:
         payload["language_code"] = language_code
-    data = fal_client.llamar(modelo, payload, timeout=timeout, on_progreso=on_progreso)
+    costo = round(len(texto) * COSTOS_TTS.get(modelo, COSTO_USD_POR_CARACTER), 4)
+    data = _llamar_cobrando(modelo, payload, costo, timeout=timeout, on_progreso=on_progreso)
 
     url = (data.get("audio") or {}).get("url")
     if not url:
-        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
-                                   modelo=modelo, datos=data))
-
-    costo = round(len(texto) * COSTOS_TTS.get(modelo, COSTO_USD_POR_CARACTER), 4)
+        raise _cobrado_sin_resultado(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
+                                             modelo=modelo, datos=data), costo)
     return {"url": url, "costo_usd": costo}
 
 
@@ -151,13 +150,31 @@ def tts_minimax(texto, voice_id, idioma, velocidad=None, timeout=180):
         "output_format": "url",
         "audio_setting": {"format": "mp3", "sample_rate": 44100, "bitrate": 128000, "channel": 1},
     }
-    data = fal_client.llamar(MODELO_MINIMAX_TTS, payload, timeout=timeout)
+    costo = round(len(texto) * COSTO_MINIMAX_POR_CARACTER, 4)
+    data = _llamar_cobrando(MODELO_MINIMAX_TTS, payload, costo, timeout=timeout)
     url = (data.get("audio") or {}).get("url")
     if not url:
-        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
-                                   modelo=MODELO_MINIMAX_TTS, datos=data))
-    return {"url": url, "costo_usd": round(len(texto) * COSTO_MINIMAX_POR_CARACTER, 4),
-            "duracion_ms": int(data.get("duration_ms") or 0)}
+        raise _cobrado_sin_resultado(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
+                                             modelo=MODELO_MINIMAX_TTS, datos=data), costo)
+    return {"url": url, "costo_usd": costo, "duracion_ms": int(data.get("duration_ms") or 0)}
+
+
+def _llamar_cobrando(modelo, payload, costo, **kw):
+    """`fal_client.llamar` que, si la espera se agota y fal lo cobra igual, le pega `costo_usd` a la excepción
+    para que quien llama lo anote (PND-313). Si fal lo canceló en cola, sube sin costo."""
+    try:
+        return fal_client.llamar(modelo, payload, **kw)
+    except fal_client.EsperaAgotadaFal as e:
+        if e.cobrado:
+            e.costo_usd = costo
+        raise
+
+
+def _cobrado_sin_resultado(mensaje, costo):
+    """fal respondió (y cobró) pero sin lo que se pidió: un RuntimeError que lleva lo cobrado (PND-313)."""
+    e = RuntimeError(mensaje)
+    e.costo_usd = costo
+    return e
 
 
 def costo_clonar_voz(preview_text):
@@ -170,12 +187,12 @@ def clonar_voz_minimax(audio_url, preview_text, timeout=300):
     estrena aparte). Devuelve {"voice_id", "url_vista_previa", "costo_usd"}."""
     payload = {"audio_url": audio_url, "noise_reduction": True, "need_volume_normalization": True,
                "text": preview_text}
-    data = fal_client.llamar(MODELO_MINIMAX_CLONAR, payload, timeout=timeout)
+    costo = costo_clonar_voz(preview_text)
+    data = _llamar_cobrando(MODELO_MINIMAX_CLONAR, payload, costo, timeout=timeout)
     voice_id = data.get("custom_voice_id")
     if not voice_id:
-        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
-                                   modelo=MODELO_MINIMAX_CLONAR, datos=data))
-    costo = costo_clonar_voz(preview_text)
+        raise _cobrado_sin_resultado(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
+                                             modelo=MODELO_MINIMAX_CLONAR, datos=data), costo)
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 
@@ -188,12 +205,12 @@ def disenar_voz_minimax(prompt, preview_text, timeout=300):
     """Diseña una voz nueva desde la descripción `prompt`; la vista previa lee
     `preview_text`. Devuelve {"voice_id", "url_vista_previa", "costo_usd"}."""
     payload = {"prompt": prompt, "preview_text": preview_text}
-    data = fal_client.llamar(MODELO_MINIMAX_DISENAR, payload, timeout=timeout)
+    costo = costo_disenar_voz(preview_text)
+    data = _llamar_cobrando(MODELO_MINIMAX_DISENAR, payload, costo, timeout=timeout)
     voice_id = data.get("custom_voice_id")
     if not voice_id:
-        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
-                                   modelo=MODELO_MINIMAX_DISENAR, datos=data))
-    costo = costo_disenar_voz(preview_text)
+        raise _cobrado_sin_resultado(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
+                                             modelo=MODELO_MINIMAX_DISENAR, datos=data), costo)
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 
@@ -227,7 +244,10 @@ def transcribir_palabras(audio_url, idioma, on_progreso=None, duracion_ms=None):
         "language": idioma,
         "chunk_level": "word",
     }
-    data = fal_client.llamar(MODELO_STT, payload, timeout=timeout_whisper(duracion_ms), on_progreso=on_progreso)
+    # Lo que cobra es por la duración del AUDIO (el silencio también se procesa): con la duración conocida, esa;
+    # sin ella, la última palabra. PND-186 (1): un audio sin voz costaba 0 aunque fal sí cobró.
+    data = _llamar_cobrando(MODELO_STT, payload, costo_whisper(duracion_ms or 0),
+                            timeout=timeout_whisper(duracion_ms), on_progreso=on_progreso)
 
     chunks = data.get("chunks") or []
     palabras = []
@@ -238,7 +258,7 @@ def transcribir_palabras(audio_url, idioma, on_progreso=None, duracion_ms=None):
         if fin is not None and fin > duracion_s:
             duracion_s = fin
 
-    costo = costo_whisper(duracion_s * 1000.0)
+    costo = costo_whisper(max(duracion_s * 1000.0, float(duracion_ms or 0)))
     return {"texto": data.get("text", ""), "palabras": palabras, "costo_usd": costo}
 
 
@@ -247,12 +267,12 @@ def musica(prompt, segundos, on_progreso=None):
     de `prompt` (inglés, ver tipos.ESTILOS_MUSICA). Devuelve
     {"url": wav público, "costo_usd": 0.02}."""
     payload = {"prompt": prompt, "seconds_total": int(segundos)}
-    data = fal_client.llamar(MODELO_MUSICA, payload, timeout=300, on_progreso=on_progreso)
+    data = _llamar_cobrando(MODELO_MUSICA, payload, COSTO_USD_POR_PISTA_MUSICA, timeout=300, on_progreso=on_progreso)
 
     url = (data.get("audio_file") or {}).get("url")
     if not url:
-        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
-                                   modelo=MODELO_MUSICA, datos=data))
+        raise _cobrado_sin_resultado(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
+                                             modelo=MODELO_MUSICA, datos=data), COSTO_USD_POR_PISTA_MUSICA)
 
     return {"url": url, "costo_usd": COSTO_USD_POR_PISTA_MUSICA}
 
@@ -266,9 +286,10 @@ def musica_elevenlabs(prompt, segundos=60, instrumental=True, on_progreso=None):
     """Canción a medida con Eleven Music. Devuelve {"url": mp3 público, "costo_usd"}."""
     segundos = max(3, min(600, int(segundos)))
     payload = {"prompt": prompt, "music_length_ms": segundos * 1000, "force_instrumental": bool(instrumental)}
-    data = fal_client.llamar(MODELO_MUSICA_ELEVENLABS, payload, timeout=600, on_progreso=on_progreso)
+    costo = costo_elevenlabs(segundos)
+    data = _llamar_cobrando(MODELO_MUSICA_ELEVENLABS, payload, costo, timeout=600, on_progreso=on_progreso)
     url = (data.get("audio") or {}).get("url")
     if not url:
-        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
-                                   modelo=MODELO_MUSICA_ELEVENLABS, datos=data))
-    return {"url": url, "costo_usd": costo_elevenlabs(segundos)}
+        raise _cobrado_sin_resultado(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
+                                             modelo=MODELO_MUSICA_ELEVENLABS, datos=data), costo)
+    return {"url": url, "costo_usd": costo}

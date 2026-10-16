@@ -415,7 +415,7 @@
       <label class="campo-label">{{ _('Modelo para VIDEO') }}</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_video.items() %}
-        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo|precio) }}{{ _('/s con sonido') }}</span></label>
+        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">{% set _p = m.usd_por_segundo_efectivo|precio_fmt('$%.3f') %}· {{ _p }}{% if _p is not sin_precio %}{{ _('/s con sonido') }}{% endif %}</span></label>
         {% endfor %}
       </div>
     </div>
@@ -423,7 +423,7 @@
       <label class="campo-label">{{ _('Modelo para IMAGEN') }}</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_imagen.items() %}
-        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd|precio) }}</span></label>
+        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· {{ m.usd|precio_fmt('$%.3f') }}</span></label>
         {% endfor %}
       </div>
     </div>

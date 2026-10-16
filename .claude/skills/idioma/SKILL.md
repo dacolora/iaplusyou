@@ -105,3 +105,9 @@ con `_()` y `tojson` en sus plantillas, dentro de JSON `crear-<módulo>-datos`. 
 objeto `T`, sin español visible suelto. `test_i18n_estaticos_crear.py` vigila los cuatro archivos y
 `test_pagina_por_partes.py` renderiza y ejecuta es/en sin fijar las traducciones. No se añadieron msgids;
 actualizar → comprobar con glosario (0 pendientes) → compilar, sin fuzzy y sin diferencias en el catálogo.
+
+PND-243 (2026-10-15): el nombre de un modelo de `flowplus_modelos` es un msgid (`N_`). En Python se pinta con
+`flowplus_modelos.nombre_visible(modelo)` (avisos de Crear, el texto del estimado del lote de Sprints) y en plantillas
+con `m.nombre|traducir` (selectores del lote de Sprints); `nombre_modelo` devuelve el msgid. «Seedance 2.5 · varias
+referencias» salía sin traducir en inglés. Pruebas `*pnd243*` en `test_rutas_crear_director.py` y
+`test_sprints_tablero_entrega2.py`.

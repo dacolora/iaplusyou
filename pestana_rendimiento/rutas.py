@@ -24,10 +24,12 @@ Todas resuelven el alcance con `entrada`, `dias` y `canal` (este solo si el alca
 - `anuncio/<fuente>/<canal>/<ad_id>/analizar` (POST): «Cómo mejorarlo» con `triple_whale.pedidos.pedir_analisis` y el
   alcance de SU fuente (precio a la vista, Cobros, `max_intentos=1`, nunca dos veces lo mismo). Con
   `Accept: application/json` responde JSON con la tarjeta ya en curso (también sin alcance: el JS de la tarjeta espera
-  JSON); sin saldo, el 402 de `dashboard._saldo_insuficiente`.
+  JSON); sin saldo, el 402 de `dashboard._saldo_insuficiente`. El formulario manda `precio_visto` (el precio del botón,
+  con el margen): si no es el de ahora, nada se cobra y vuelve la tarjeta con el precio nuevo (PND-236).
 - `analizar-lote` (POST): «Analizar los N que más gastaron». Cobra solo las claves `<fuente>:<canal>:<ad_id>` que
   mostró el formulario, recortadas a N entre las dos fuentes y aún elegibles, cada una con su fuente
-  (`galeria.pedir_lote`); un segundo envío no cobra nada y la primera fuente sin saldo para todo.
+  (`galeria.pedir_lote`); un segundo envío no cobra nada y la primera fuente sin saldo para todo. Con `precio_visto`
+  (el total del botón): si no es el de ahora, nada se cobra y el aviso pide revisar el nuevo (PND-236).
 
 - `evaluar` (POST, E2 tarea 5): «Evaluar con IA» de la parte Triple Whale del alcance (`fuente` "tw"; otra, 404), con
   `triple_whale.pedidos.pedir_evaluacion` (la muestra, el precio de su botón, Cobros, `max_intentos=1`, una por
@@ -43,6 +45,7 @@ from datetime import date
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
+import gastos
 import usuarios
 from cobros import SaldoInsuficiente
 from meta_rendimiento import rutas as meta_rutas
@@ -247,7 +250,9 @@ def analizar_anuncio(cliente, fuente, canal, ad_id):
     a = pedidos.anuncio_del_alcance(alc, canal, ad_id)
     if a is None:
         abort(404)
-    ok, mensaje = pedidos.pedir_analisis(cliente, alc, a, session.get("usuario"))
+    # El precio que mostró el botón vuelve a costo UNA vez, aquí (PND-236); `pedir_analisis` lo compara con el de ahora.
+    ok, mensaje = pedidos.pedir_analisis(cliente, alc, a, session.get("usuario"),
+                                         costo_visto=gastos.costo_de_precio(request.form.get("precio_visto")))
     if _quiere_json():
         galeria.tarjeta(cliente, fuente, alc, a)
         return {"ok": ok, "mensaje": mensaje, "html": _render_galeria(cliente, al, modo="tarjeta", a=a)}
@@ -275,7 +280,12 @@ def analizar_lote(cliente):
     claves = galeria.claves_confirmadas(request.form.getlist("clave"))
     try:
         n, fallos = galeria.pedir_lote(cliente, al, claves, session.get("usuario"),
-                                       veredicto=request.form.get("veredicto") or "")
+                                       veredicto=request.form.get("veredicto") or "",
+                                       costo_visto=gastos.costo_de_precio(request.form.get("precio_visto")))
+    except galeria.PrecioCambiado:
+        # PND-236: el total que vio la persona ya no es el de ahora; nada se pidió. La pestaña recargada trae el nuevo.
+        flash(gettext("El precio cambió desde que lo viste: revisa el nuevo y vuelve a confirmar."), "warn")
+        return _volver(cliente)
     except SaldoInsuficiente as e:
         _avisos_lote(*getattr(e, "lote", (0, 0)))   # los que sí salieron; el manejador común dice el resto
         raise

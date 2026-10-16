@@ -143,7 +143,9 @@
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
       pintarReceta(m, esImagen);
-      var usdMusica = D.tarifaMusica;
+      // Una tarifa que no es número es «precio no disponible» (el margen no se pudo leer, PND-231): NaN, y el
+      // botón lo dice en vez de mostrar un costo o nada.
+      var usdMusica = Number(D.tarifaMusica);
       var usd = 0;
       var conSonido = document.getElementById('fp-check-sonido');
       if (m) {
@@ -163,7 +165,7 @@
       // «Crear super prompt» solo existe para video (la imagen nunca pasa por
       // el director): lo oculta [data-solo-video].
       botonGenerar.textContent = esImagen ? T.m02 : T.m03;
-      precio.textContent = usd ? '≈ ' + formatearUSD(usd) : '';
+      precio.textContent = isNaN(usd) ? T.m40 : (usd ? '≈ ' + formatearUSD(usd) : '');
       if (pieLogos) pieLogos.hidden = sinAdjuntos();
       pintarFichas(); pintarMusica(); pintarPastillas();
       avisarRefs(m, esImagen);
@@ -497,7 +499,9 @@
       var btnDescribir = document.getElementById('fp-describir');
       var estadoDescribir = document.getElementById('fp-describir-estado');
       btnDescribir.disabled = true; estadoDescribir.textContent = T.m26;
-      fetch(D.urlDescribir, { method: 'POST' })
+      // Con «X-Requested-With» el «sin saldo» llega como 402 en JSON (con «Recargar saldo», cobros.js): desde
+      // PND-299 describir lo paga el proyecto.
+      fetch(D.urlDescribir, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d.ok) { texto.value = d.texto; texto.focus(); estadoDescribir.textContent = T.m27; }

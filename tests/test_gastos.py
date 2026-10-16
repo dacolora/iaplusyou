@@ -185,7 +185,7 @@ def test_estimar_tarifas_fijas_y_final_por_pais():
     assert gastos.estimar("guion") == {"usd": 0.13, "usd_precio": 0.13, "texto": "US$ 0,13 aprox.",
                                        "detalle": "hasta dos llamadas a Claude y la transcripción de la referencia"}
     assert gastos.estimar("regla_producto")["usd"] == 0.01
-    assert gastos.estimar("caption_organico")["usd"] == 0.01
+    assert gastos.estimar("caption_organico")["usd"] == 0.06   # el peor caso con el pensamiento (revisión 2026-10-15)
     assert gastos.estimar("final")["usd"] == 0.20
     assert gastos.estimar("final", paises=3)["usd"] == pytest.approx(0.60)
     assert gastos.estimar("reedicion", paises=2)["usd"] == 0.40

@@ -362,12 +362,18 @@ def test_la_galeria_de_triple_whale_pinta_el_alcance_de_meta(base_temporal):
                if t["veredicto"] != "sin_datos")
 
 
+def _visto(alc, a):
+    """El costo del botón de la tarjeta de `a` (lo que la ruta recibe ya pasado a costo, PND-236)."""
+    from triple_whale import pedidos
+    return pedidos.costos_de("acme", alc, [(a["canal"], a["ad_id"])])[(a["canal"], a["ad_id"])]
+
+
 def test_pedir_analisis_guarda_lo_de_la_cuenta_y_la_moneda_del_alcance(peticion):  # noqa: F811
     _dos_suecas()
     alc = _alc([SE1, SE2])
     a = pedidos.anuncio_del_alcance(alc, "facebook-ads", "a2")
     assert a["veredicto"] != "sin_datos"
-    ok, mensaje = pedidos.pedir_analisis("acme", alc, a, "daniel")
+    ok, mensaje = pedidos.pedir_analisis("acme", alc, a, "daniel", costo_visto=_visto(alc, a))
     assert ok is True, mensaje
     [fila] = twdatos.ultimos_analisis("acme", [("facebook-ads", "a2")]).values()
     assert fila["tienda_id"] is None and fila["moneda"] == "SEK" and fila["pedido_por"] == "daniel"
@@ -388,7 +394,8 @@ def test_pedir_analisis_con_monedas_mezcladas_no_guarda_una_moneda_ni_un_costo_i
     monedas mezcladas."""
     _con_euros()
     alc = _alc([SE1, EUR])
-    ok, mensaje = pedidos.pedir_analisis("acme", alc, pedidos.anuncio_del_alcance(alc, "facebook-ads", "a2"), "daniel")
+    a = pedidos.anuncio_del_alcance(alc, "facebook-ads", "a2")
+    ok, mensaje = pedidos.pedir_analisis("acme", alc, a, "daniel", costo_visto=_visto(alc, a))
     assert ok is True, mensaje
     [fila] = twdatos.ultimos_analisis("acme", [("facebook-ads", "a2")]).values()
     assert alc["config"]["moneda"] is None
@@ -421,7 +428,7 @@ def test_pedir_analisis_de_una_cuenta_que_se_solto_en_medio_no_deja_fila_ni_enco
     monkeypatch.setattr(twdatos, "crear_analisis", _crear)
     from tareas import triple_whale as tareas_tw
     monkeypatch.setattr(tareas_tw, "encolar_analisis", lambda *a, **k: pytest.fail("no se encola ni se reserva"))
-    assert pedidos.pedir_analisis("acme", alc, a, "daniel") == (False, "Esa cuenta de Meta ya no está en el proyecto.")
+    assert pedidos.pedir_analisis("acme", alc, a, "daniel", costo_visto=_visto(alc, a)) == (False, "Esa cuenta de Meta ya no está en el proyecto.")
     assert len(creadas) == 1 and twdatos.analisis_anuncio("acme", creadas[0]) is None
     assert _tareas("tw_analizar_anuncio") == []
 

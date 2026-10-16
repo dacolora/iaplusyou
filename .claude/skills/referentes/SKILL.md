@@ -127,3 +127,10 @@ Segunda ronda lote 7 (2026-10-09, regresión del estimado temprano): Apify entre
 
 
 PND-155(3) (2026-10-09, decisión del lote 8): el país de Traer referentes conserva exactamente ALL, CO, MX, AR, CL, PE, EC, US, ES y añade solo NO y SE (enmienda 2026-10-10: se había perdido EC y agregado BR al recorrer toda la lista de publicación). Los nombres usan paises_publicacion; Ecuador, ausente de esa lista, pasa por gettext. Nombres por catálogo; tests/test_lote8_locales.py.
+
+PND-243 (2026-10-15, decisión del lote 1): el precio de clasificar lo que trae un proyecto («Traer referentes», el
+formulario y la reserva de `encolar_barrer`; «Clasificar pendientes»; y la reserva de cada tramo, `_costo_fase` y
+`encolar_clasificar_pendientes`) sale de `clasificar.tarifa_bilingue(cliente)`: tarifa bilingüe (0,014) si el proyecto
+no está en inglés y en un barrido global, la de 0,012 en inglés. Motivo: 938 clasificaciones reales costaron
+0,0133–0,0138 por anuncio y el precio a la vista no puede quedarse corto. La clasificación de un proyecto sigue saliendo
+en un solo idioma (`salida_para`); solo cambian el precio y la reserva. Pruebas `tests/test_rutas_referentes.py::*pnd243*`.

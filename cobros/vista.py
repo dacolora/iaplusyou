@@ -42,6 +42,7 @@ CONCEPTOS = {
     "anulacion_wompi": N_("Pago anulado por Wompi"),
     "plan": N_("Saldo del plan del mes"),
     "vencimiento": N_("Saldo del plan sin usar que venció"),
+    "bienvenida": N_("Saldo de bienvenida"),     # PND-299: libro.dar_bienvenida
 }
 ESTADOS_RECARGA = {
     "pendiente": N_("Pendiente"), "aprobada": N_("Aprobada"), "rechazada": N_("Rechazada"),
@@ -571,6 +572,12 @@ RESULTADOS_EVENTO = {
     "rechazada": N_("Rechazada"), "anulada": N_("Anulada"), "ignorada": N_("Ignorado"),
     "recibido": N_("Recibido"), "error": N_("Error"),
     "no_cuadra": N_("No cuadra"), "pendiente": N_("Pendiente"), "otro_pago": N_("Segundo pago"),
+    # PND-328 (2026-10-15): la anulación llegó antes que la aprobación, y la aprobación tardía de ese pago anulado.
+    "anulada_sin_acreditar": N_("Anulada antes de acreditar"), "ya_anulada": N_("Aprobación de un pago anulado"),
+    # Revisión de plata 2026-10-15: la anulación de la acreditada con otro pago aprobado, el pago bueno de una recarga
+    # anulada sin acreditar y una anulación que nadie miró si tenía otro pago.
+    "reemplazada": N_("Anulada; queda pagada con otra transacción"), "acreditada_otra": N_("Acreditada con otra transacción"),
+    "anulacion_sin_revisar": N_("Anulación sin revisar"),
 }
 PROVEEDORES_EVENTO = {"bold": "Bold", "wompi": "Wompi"}
 
@@ -636,7 +643,7 @@ def resumen_admin(ahora_iso=None):
         cuentas = {f.cliente: f for f in con.execute(sa.select(db.cuenta_saldo))}
         saldos = _por_cliente(con, sa.select(m.c.cliente, suma).group_by(m.c.cliente))
         reservas = _por_cliente(con, sa.select(r.c.cliente, sa.func.coalesce(sa.func.sum(r.c.milesimas), 0))
-                                .where(r.c.job_id.in_(libro._vivas(con))).group_by(r.c.cliente))
+                                .where(libro.viva(con, r)).group_by(r.c.cliente))
         recargado, vencido = {}, {}
         for c, entro, vence in con.execute(
                 sa.select(m.c.cliente, suma_si(m.c.tipo.in_(TIPOS_RECARGADO)), suma_si(m.c.tipo == "vencimiento"))
@@ -1055,6 +1062,7 @@ NOMBRES_AVISO_PLATA = {
     "renovacion_apagada": N_("Renovación apagada"),
     "trm_sin_tasa": N_("Sin tasa de cambio"),
     "deuda_pospago": N_("Deuda de pospago"),
+    "csp_tarjeta": N_("Política de la página de la tarjeta"),
 }
 
 

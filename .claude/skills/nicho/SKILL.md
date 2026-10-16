@@ -157,3 +157,12 @@ Segunda ronda lote 7 (2026-10-09, encargo de Daniel): _costo_paso devuelve 0 par
 
 
 PND-155(1)/210 (2026-10-09, decisión del lote 8): precios NOK/SEK y kr con cualquier combinación de mayúsculas conservan el número y la corona local. Los símbolos anteriores siguen leyéndose; tests/test_lote8_locales.py y test_nicho_plataformas.py. Detenida usa sprint-aviso con max-width y ajuste de líneas en pantallas/sprints.css; captura a cargo de Claude.
+
+**El cobro de Apify, conciliado (PND-315, decisión 2026-10-13, lote 1).** Antes se anotaba resultados × precio por
+resultado + arranques (un estimado) y `conciliacion_pendiente` nunca se leía. Ahora `providers.apify.correr_lote`
+guarda en cada corrida `usd_real` (el `usageTotalUsd` que viene en el mismo sondeo que dice que terminó: sin pedidos de
+más) y `plataformas.costo_conciliado(n, corridas, actor)` lo usa en `tareas/nicho._gasto_recoleccion` y
+`tareas/investigacion._gasto_apify`: con todas las corridas lanzadas conciliadas, lo mayor entre esa suma y el
+estimado (la regla del barrido de referentes: `usageTotalUsd` puede no traer lo que cobra un actor por resultado), con
+`usd_apify` y `usd_formula` en el extra; si falta alguna (terminó al arrancar, sondeo malo), el estimado con
+`conciliacion_pendiente`. Pruebas: `tests/test_cobros_lo_real.py`.

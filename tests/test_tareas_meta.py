@@ -7,6 +7,15 @@ def _creds_falsas(cliente):
     return {"token": "T", "ad_account_id": "act_1", "page_id": "p", "ig_user_id": "ig"}
 
 
+def _meta_lee(monkeypatch, tm, moneda):
+    """Lo que `publicar` le lee a Meta desde PND-324 (la cuenta y el diario de cada conjunto), con el Meta falso de
+    `tests/test_lanzador.py`. Quien crea un conjunto anota su diario en `meta.presupuestos`."""
+    from tests.test_lanzador import MetaFalsa
+    meta = MetaFalsa(moneda=moneda)
+    monkeypatch.setattr(tm.meta_auth, "llamar", meta._llamar)
+    return meta
+
+
 def test_registra_tipos(base_temporal):
     import tareas
     import tareas.meta as tm
@@ -138,10 +147,12 @@ def test_publicar_crea_campana_y_deja_pausado(base_temporal, monkeypatch):
     monkeypatch.setattr(tm.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
     monkeypatch.setattr(tm.meta_auth, "configurar", lambda *a, **k: llamadas.setdefault("configurar", a))
     monkeypatch.setattr(tm.meta_auth, "limpiar", lambda: llamadas.setdefault("limpiar", True))
+    meta = _meta_lee(monkeypatch, tm, "COP")      # la cuenta y el diario que se leen de vuelta (PND-324)
     monkeypatch.setattr(tm.meta_campaign, "crear_campaign", lambda nombre, objetivo: {"id": "c1"})
 
     def _adset(nombre, campaign_id, objetivo, targeting, centavos, dias):
         llamadas["adset"] = (campaign_id, objetivo, targeting, centavos, dias)
+        meta.presupuestos["s1"] = centavos
         return {"id": "s1"}
     monkeypatch.setattr(tm.meta_adset, "crear_adset", _adset)
     def _creative(*a, **k):
@@ -177,6 +188,7 @@ def test_publicar_guarda_campaign_id_apenas_la_crea(base_temporal, monkeypatch):
     monkeypatch.setattr(tm.meta_conexion, "cargar", lambda c: {"moneda": "USD"})
     monkeypatch.setattr(tm.meta_auth, "configurar", lambda *a, **k: None)
     monkeypatch.setattr(tm.meta_auth, "limpiar", lambda: None)
+    _meta_lee(monkeypatch, tm, "USD")
     monkeypatch.setattr(tm.meta_campaign, "crear_campaign", lambda nombre, objetivo: {"id": "c7"})
 
     def _boom(*a, **k):
@@ -208,6 +220,7 @@ def test_publicar_mapea_error_sin_metodo_de_pago(base_temporal, monkeypatch):
     monkeypatch.setattr(tm.meta_conexion, "cargar", lambda c: {"moneda": "USD"})
     monkeypatch.setattr(tm.meta_auth, "configurar", lambda *a, **k: None)
     monkeypatch.setattr(tm.meta_auth, "limpiar", lambda: None)
+    _meta_lee(monkeypatch, tm, "USD")
 
     def _boom(nombre, objetivo):
         raise RuntimeError("(#2) subcode 1359188 todo de pago")
@@ -311,6 +324,7 @@ def test_pnd096_error_desarrollo_no_se_confunde_con_permisos(base_temporal, monk
     monkeypatch.setattr(tm.meta_conexion, 'credenciales_ads', _creds_falsas)
     monkeypatch.setattr(tm.meta_auth, 'configurar', lambda *a: None)
     monkeypatch.setattr(tm.meta_auth, 'limpiar', lambda: None)
+    _meta_lee(monkeypatch, tm, 'USD')
     monkeypatch.setattr(tm.bitacora, 'registrar', lambda *a: None)
     def falla(*a):
         raise RuntimeError('Meta Ads (campaigns) respondió 400: {"error":{"code":3,"error_subcode":1885183}}')
@@ -322,3 +336,134 @@ def test_pnd096_error_desarrollo_no_se_confunde_con_permisos(base_temporal, monk
     error = ads.cargar('acme')[aid]['error']
     assert 'modo Desarrollo' in error and 'Live' in error
     assert 'Desconecta' not in error and 'no se duplica' not in error
+
+
+# ---------- PND-324 (2026-10-15): la tarea vieja pasa por los mismos frenos que el lanzador ----------
+
+PAYLOAD_COP = {"objetivo": "OUTCOME_TRAFFIC", "presupuesto_diario": 20000.0, "dias": 3, "pais": "CO", "edad_min": 18,
+               "edad_max": 45, "destino_url": "https://tienda.com/p"}
+
+
+def _meta_falsa(monkeypatch, tm, moneda="COP", guarda=None):
+    """El Meta falso de `tests/test_lanzador.py`: contesta la cuenta (moneda y mínimo diario, en la unidad de Meta) y
+    el diario guardado de cada conjunto. `guarda(unidades)` es lo que Meta se queda del diario enviado (por defecto,
+    lo mismo). Devuelve el Meta falso y el registro de llamadas."""
+    from tests.test_lanzador import MetaFalsa
+    meta = MetaFalsa(moneda=moneda)
+    hechas = []
+    monkeypatch.setattr(tm.meta_conexion, "credenciales_ads", _creds_falsas)
+    monkeypatch.setattr(tm.meta_conexion, "cargar", lambda c: {"moneda": moneda})
+    monkeypatch.setattr(tm.meta_auth, "configurar", lambda *a, **k: None)
+    monkeypatch.setattr(tm.meta_auth, "limpiar", lambda: None)
+    monkeypatch.setattr(tm.meta_auth, "llamar", meta._llamar)
+    monkeypatch.setattr(tm.bitacora, "registrar", lambda *a, **k: None)
+
+    def _campaign(nombre, objetivo):
+        hechas.append("campaign")
+        return {"id": "c1"}
+
+    def _adset(nombre, campaign_id, objetivo, targeting, unidades, dias):
+        hechas.append(("adset", unidades))
+        meta.presupuestos["s1"] = int(guarda(unidades) if guarda else unidades)
+        return {"id": "s1"}
+
+    def _creative(*a, **k):
+        hechas.append("creative")
+        return {"id": "cr1"}
+
+    def _ad(nombre, adset_id, creative_id):
+        hechas.append("ad")
+        return {"id": "a1"}
+    monkeypatch.setattr(tm.meta_campaign, "crear_campaign", _campaign)
+    monkeypatch.setattr(tm.meta_adset, "crear_adset", _adset)
+    monkeypatch.setattr(tm.meta_adset, "actualizar_estado",
+                        lambda oid, status, dry_run=False: hechas.append(("estado", oid, status)))
+    monkeypatch.setattr(tm.meta_creative, "crear_creative_imagen", _creative)
+    monkeypatch.setattr(tm.meta_ad, "crear_ad", _ad)
+    monkeypatch.setattr(tm.triple_whale_tiendas, "tiendas", lambda cliente: [])
+    return meta, hechas
+
+
+def _anuncio(**campos):
+    import ads
+    aid = ads.crear("acme", "flowplus", "cf", "https://r2/f.png", "foto", "Pieza")
+    ads.actualizar("acme", aid, estado="publicando", **campos)
+    return aid
+
+
+def test_publicar_no_crea_nada_si_la_cuenta_factura_en_otra_moneda(base_temporal, monkeypatch):
+    import ads
+    import lanzador
+    import tareas.meta as tm
+    aid = _anuncio()
+    meta, hechas = _meta_falsa(monkeypatch, tm)
+    meta.cuenta = {"currency": "USD", "min_daily_budget": 100}
+    with pytest.raises(lanzador.PresupuestoNoCoincide):
+        tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, **PAYLOAD_COP}, "job_id": "j"})
+    assert hechas == []                                   # ni campaña: no se manda ningún monto
+    e = ads.cargar("acme")[aid]
+    assert e["estado"] == "error" and "factura en USD" in e["error"]
+
+
+def test_publicar_no_crea_nada_si_la_unidad_no_cuadra(base_temporal, monkeypatch):
+    """Con la lista vieja (COP ×100) el diario habría salido 100 veces más alto: el mínimo de la cuenta lo frena."""
+    import ads
+    import lanzador
+    import tareas.meta as tm
+    aid = _anuncio()
+    meta, hechas = _meta_falsa(monkeypatch, tm)
+    meta.cuenta["min_daily_budget"] = 332200
+    with pytest.raises(lanzador.PresupuestoNoCoincide):
+        tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, **PAYLOAD_COP}, "job_id": "j"})
+    assert hechas == []
+    assert ads.cargar("acme")[aid]["estado"] == "error"
+
+
+def test_publicar_no_crea_nada_si_meta_no_dice_el_minimo(base_temporal, monkeypatch):
+    import lanzador
+    import tareas.meta as tm
+    aid = _anuncio()
+    meta, hechas = _meta_falsa(monkeypatch, tm)
+    del meta.cuenta["min_daily_budget"]
+    with pytest.raises(lanzador.PresupuestoNoCoincide):
+        tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, **PAYLOAD_COP}, "job_id": "j"})
+    assert hechas == []
+
+
+def test_publicar_usa_la_moneda_de_la_ficha(base_temporal, monkeypatch):
+    """El diario se escribió en la moneda guardada en la ficha: si la cuenta factura en otra, se frena aunque meta.json
+    diga la misma que la cuenta."""
+    import lanzador
+    import tareas.meta as tm
+    aid = _anuncio(moneda="USD")
+    meta, hechas = _meta_falsa(monkeypatch, tm, moneda="COP")
+    with pytest.raises(lanzador.PresupuestoNoCoincide):
+        tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, **PAYLOAD_COP}, "job_id": "j"})
+    assert hechas == []
+
+
+def test_publicar_lee_de_vuelta_el_diario_y_pausa_si_meta_guardo_otro(base_temporal, monkeypatch):
+    import ads
+    import lanzador
+    import tareas.meta as tm
+    aid = _anuncio()
+    meta, hechas = _meta_falsa(monkeypatch, tm, guarda=lambda unidades: unidades * 100)
+    with pytest.raises(lanzador.PresupuestoNoCoincide):
+        tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, **PAYLOAD_COP}, "job_id": "j"})
+    assert ("estado", "s1", "PAUSED") in hechas
+    assert "creative" not in hechas and "ad" not in hechas   # nada más se crea sobre un diario que nadie vio
+    e = ads.cargar("acme")[aid]
+    assert e["estado"] == "error" and "presupuesto diario distinto" in e["error"]
+    assert e["meta_ids"]["campaign_id"] == "c1" and e["meta_ids"]["adset_id"] == "s1"   # para revisarlo en Meta
+
+
+def test_publicar_con_el_diario_correcto_lo_deja_en_la_ficha(base_temporal, monkeypatch):
+    """Lo que Meta confirmó queda en la ficha: «Activar» de un anuncio suelto lo vuelve a leer contra Meta."""
+    import ads
+    import tareas.meta as tm
+    aid = _anuncio()
+    meta, hechas = _meta_falsa(monkeypatch, tm)
+    tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, **PAYLOAD_COP}, "job_id": "j"})
+    assert hechas == ["campaign", ("adset", 20000), "creative", "ad"]
+    e = ads.cargar("acme")[aid]
+    assert e["estado"] == "pausado" and e["presupuesto_diario"] == 20000.0 and e["moneda"] == "COP"

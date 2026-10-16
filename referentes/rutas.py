@@ -29,7 +29,7 @@ import proyectos
 import tiendas
 from nicho.avatares import costo_real, modelo_actual
 from providers import flowplus_modelos
-from referentes import datos, fuentes, lectura, recrear, traducir
+from referentes import clasificar, datos, fuentes, lectura, recrear, traducir
 from referentes.fuentes.base import ErrorFuente
 from sprints import datos as sprints_datos
 from tareas import referentes as tareas_referentes
@@ -161,7 +161,7 @@ def traer_form(cliente):
     if fuente and not llaves_faltantes and not modo_no_admitido and (consulta.get("pagina_id") or consulta.get("palabra")):
         modulo = fuentes.por_tipo(fuente)
         est_fuente = modulo.estimar(consulta, tope)
-        est_clasificacion = gastos.estimar("clasificacion", n=tope)
+        est_clasificacion = gastos.estimar("clasificacion", n=tope, bilingue=clasificar.tarifa_bilingue(cliente))
         precio = {"fuente": est_fuente, "clasificacion": est_clasificacion,
                   "total_usd": est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)}
     return render_template("_referentes_traer.html", cliente=cliente, fuentes_tipos=fuentes.tipos(),
@@ -196,7 +196,7 @@ def traer_post(cliente):
     except ErrorFuente as e:
         flash(e.usuario, "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
-    est_clasificacion = gastos.estimar("clasificacion", n=tope)
+    est_clasificacion = gastos.estimar("clasificacion", n=tope, bilingue=clasificar.tarifa_bilingue(cliente))
     usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
     # Cobros (spec 2026-10-08 §5.2): el saldo se pide ANTES de traducir la
     # palabra (esa llamada a Claude ya se cobra al proyecto). El estimado no
@@ -347,16 +347,17 @@ def recrear_leer(cliente, rid):
         return jsonify({"error": gettext("Ese referente no existe.")}), 404
     if lectura.de(r):
         return jsonify({"ok": True, "cobrado": False})
-    libro.exigir(cliente, gastos.estimar("leer_referente")["usd"], tipo="adaptar_referente")     # cobros §5.2: antes de llamar a Claude
-    try:
-        lec, ent, sal = lectura.leer(r)
-    except lectura.LecturaInvalida as e:
-        if e.tokens_entrada or e.tokens_salida:
-            _registrar_lectura(cliente, rid, r, e.tokens_entrada, e.tokens_salida, fallo=True)
-        return jsonify({"error": str(e)}), 502
-    except Exception as e:
-        return jsonify({"error": gettext("No se pudo leer la referencia (%(tipo)s).", tipo=type(e).__name__)}), 502
-    _registrar_lectura(cliente, rid, r, ent, sal)
+    # Cobros §5.2: el saldo antes de llamar a Claude, con reserva propia hasta que se anota (PND-300).
+    with libro.pedido(cliente, gastos.estimar("leer_referente")["usd"], tipo="adaptar_referente"):
+        try:
+            lec, ent, sal = lectura.leer(r)
+        except lectura.LecturaInvalida as e:
+            if e.tokens_entrada or e.tokens_salida:
+                _registrar_lectura(cliente, rid, r, e.tokens_entrada, e.tokens_salida, fallo=True)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            return jsonify({"error": gettext("No se pudo leer la referencia (%(tipo)s).", tipo=type(e).__name__)}), 502
+        _registrar_lectura(cliente, rid, r, ent, sal)
     lec["ancho"], lec["alto"] = lectura.medir(r["imagen_url"])
     datos.guardar_lectura(rid, lec)
     return jsonify({"ok": True, "cobrado": True})
@@ -384,7 +385,13 @@ def recrear_adaptar(cliente, rid):
     lec = lectura.de(r)
     crudos = cuerpo.get("textos")
     campos = {f"texto_{i}": str(v or "") for i, v in enumerate(crudos)} if isinstance(crudos, list) else {}
-    libro.exigir(cliente, gastos.estimar("adaptar_referente")["usd"], tipo="adaptar_referente")     # cobros §5.2: antes de llamar a Claude
+    # Cobros §5.2: el saldo antes de llamar a Claude, con reserva propia hasta que se anota (PND-300).
+    with libro.pedido(cliente, gastos.estimar("adaptar_referente")["usd"], tipo="adaptar_referente"):
+        return _adaptar(cliente, rid, r, cuerpo, producto, idioma, familia, lec, campos)
+
+
+def _adaptar(cliente, rid, r, cuerpo, producto, idioma, familia, lec, campos):
+    """La llamada a Claude de «Adaptar con IA» y su gasto (dentro de la reserva del pedido)."""
     try:
         resultado, ent, sal = recrear.adaptar(datos.localizado(r, idioma), familia, producto,
                                               str(cuerpo.get("titular") or ""), marca_mod.guia_efectiva(cliente),
@@ -625,7 +632,9 @@ def barridos(cliente):
         b["imagenes_error"] = datos.contar_imagenes_de_barrido(b["id"])[2]
         # «Clasificar pendientes» re-factura (spec §11): el precio va en el
         # botón igual que en cualquier otro click pagado del panel (Critical 1).
-        b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"])["texto"] if b["pendientes"] else None
+        b["precio_clasificar"] = (gastos.estimar("clasificacion", n=b["pendientes"],
+                                                 bilingue=clasificar.tarifa_bilingue(cliente))["texto"]
+                                  if b["pendientes"] else None)
         if vista_cobros.ver_cobrado_aqui(cliente):
             # «lo que costó»: a un cliente de un proyecto que cobra, lo cobrado por los trabajos de este
             # barrido (traer y clasificar comparten job_id, base o base + SUFIJO_CONT; cobros §7).

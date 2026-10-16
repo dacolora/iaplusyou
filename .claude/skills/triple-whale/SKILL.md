@@ -585,8 +585,8 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   The scene chain still closes a recoverable clip as an error (PND-229; the hooks no longer do, fix C below). The
   originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-230). The `|precio` filter
   keeps showing the cost when the margin read fails in ~25 other templates (PND-231). preparar's own failure path does
-  not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch do
-  not compare the price seen (PND-236; Cobros is off everywhere today). `doctrina.verificar_cifras` does not check
+  not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch
+  compare the price seen since 2026-10-15 (PND-236, below). `doctrina.verificar_cifras` does not check
   single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-237). When `SaldoInsuficiente` hits a clip, its
   Crear session, already created, stays orphan in error (PND-238; no money). The 20 000 cap was measured in real
   (end_turn, 13 013 output tokens, US$ 0,1696; PND-232 closed).
@@ -647,11 +647,20 @@ anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (ski
   la regla `visitantes.REGLA_PROMPT`; el NVP no le cambió el tope ni el costo (los de «Ganchos y copy»: 20 000 y 0,17).
   La regla es una instrucción y no entra en `mejorar.datos_verificables` (sus cortes no son cifras del anuncio; al
   mezclar main en tw-ganchos el 2026-10-10). «Evaluar con IA» guarda los visitantes en
-  la muestra (`analisis.CAMPOS_M`) pero su PROMPT todavía no los lleva: medido el 2026-10-09
-  (`docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`), su tope de 16 000 ya corta la primera respuesta con 10 anuncios,
-  y con el NVP una corrida falló en las dos llamadas. Con 32 000 acertaba la etapa de 10 de 10 (sin NVP, 4 de 10), pero
-  subir el tope cambia lo que cuesta: decide Daniel (PND-217). Desde la revisión, `analisis._llamar` va con
-  `max_retries=0`, como «Cómo mejorarlo» (un reintento del SDK podía cobrarse sin anotarse).
+  la muestra (`analisis.CAMPOS_M`) y, desde PND-217 (2026-10-15, decisión de Daniel del 2026-10-13: «con precios por
+  debajo de 1 USD no debe ser un estoper de nada»), también su PROMPT: `{regla_nvp}` (`visitantes.REGLA_PROMPT`) bajo
+  las medianas, una línea `visitantes.texto_prompt(...)` por anuncio en `_bloque` y la regla de que «etapa» es la medida.
+  Con eso Claude acertó la etapa en 10 de 10 (sin NVP, 4 de 10; `docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`). El
+  tope de 16 000 ya cortaba la primera respuesta con 10 anuncios y con el NVP una corrida falló en las dos llamadas: va
+  con `MAX_TOKENS` = 32 000 y `TIMEOUT_CLAUDE_S` = 900 (sin tope de tiempo explícito el SDK exige streaming), siempre
+  `max_retries=0` como «Cómo mejorarlo» (un reintento del SDK podía cobrarse sin anotarse). El precio a la vista
+  (`gastos.EVALUACION_TW_BASE_USD` 0,67 + `_POR_ANUNCIO_USD` 0,005, US$ 0,72 con 10) es el del peor caso: las dos
+  llamadas agotando 32 000 de salida más su entrada; lo medido sale muy por debajo y se cobra lo real × margen. Cada
+  anuncio que manda los fotogramas de su video (una pieza de Creatv: hasta 8 de 640 px en cada llamada) suma
+  `EVALUACION_TW_POR_VIDEO_USD` 0,032 (revisión del gasto, 2026-10-15: con 10 así el peor caso llegaba a ≈ 1,00).
+  `analisis.estimado(cliente, muestra, creatv=None)` (`n_con_fotogramas`) es la ÚNICA cuenta: el botón
+  (`panel.contexto`), la ruta que cobra (`pedidos.pedir_evaluacion`) y los estimados de la tarea.
+  Medición del cambio: `docs/superpowers/evals/2026-10-15-tw-evaluar-32000-nvp.md`.
 - La copia de 90 días del NVP deja la marca `backfill_visitantes` solo si trajo visitantes en todo el rango, o tras
   `sync.MAX_INTENTOS_VISITANTES` (3) copias sin lograrlo (`intentos_visitantes`); un error de red o de límite en
   `web_analytics_table` deja la tienda sin su NVP (`fallos.visitantes`) pero no corta la copia (llave y tienda sí).
@@ -704,6 +713,36 @@ evaluados del panel, productos con gasto y ROAS (por la página de destino contr
 iterar, los que mejor convierten (`metricas()["cv_sesion"]` = pedidos / sesiones; `resumen_cuenta` ahora suma
 `sesiones`) y las mejores imágenes y videos (`datos.tipos_creativo(cliente)`: `{(canal, ad_id): tipo}` en una
 consulta). Detalle y reglas en la skill `rendimiento`, «Las métricas que faltaban».
+
+**«Evaluar con IA» cortada a mitad (PND-268, 2026-10-15).** `tw_evaluar` deja la fila «en_cola» mientras baja
+miniaturas y saca fotogramas, y la pone en «analizando» justo antes de llamar a Claude (revisión del gasto: así
+«analizando» quiere decir «la llamada empezó»). Si un reinicio del worker la mata ahí, `_evaluar_interrumpida` anota el
+estimado (`analisis.estimado`) con `entregado=False`, la
+referencia de la tarea (`tw_eval:<id>:t<tarea>`) y el detalle «estimado: se interrumpió durante el análisis»
+(`anotar_estimado_cortado`, que también usa la de Meta). Si ya había un gasto con esa referencia (la tarea anota a
+Claude ANTES de dejar la fila «lista»), no lo pisa: el worker ya revirtió el cobro de la cadena. Con la fila «en_cola»
+(el respaldo sin saldo: no corrió) no anota nada. Y como la de Meta (E2-R7), una llamada sin respuesta (tope de tiempo,
+conexión cortada) anota el estimado con «estimado: sin respuesta de Claude». Pruebas: `tests/test_triple_whale_analisis.py`
+(`test_interrumpida_*`, `test_tarea_evaluar_si_claude_no_responde_*`) y `tests/test_tareas_meta_rendimiento.py`.
+
+**«Cómo mejorarlo» y el lote comparan el precio visto (PND-236, 2026-10-15).** Motivo: la ruta recalculaba el costo al
+recibir el clic y se lo pedía al libro, así que una pestaña abierta antes de un cambio de tarifa (0,10 → 0,17 entre el
+2026-10-09 y el 10) cobraba la nueva sin mostrarla, y desde el 2026-10-12 happyflops cobra (pospago, margen 3). Ahora
+cada formulario de la tarjeta (`_tw_galeria.html`: el principal y «Analizar con estos datos») manda `precio_visto` =
+`a.precio_analisis.usd_precio` (el PRECIO, con el margen; sin él, el botón apagado) y el del lote, el total
+`g.lote.precio.usd_precio`. La ruta (`pestana_rendimiento.rutas`) lo pasa a costo UNA vez con `gastos.costo_de_precio`.
+`pedidos.pedir_analisis(..., *, costo_visto)` (obligatorio, por nombre) lo compara con `pedidos.coincide` (±0,005)
+DESPUÉS de lo que no cobra (sin datos, en curso, fresco) y ANTES de `libro.exigir`: si no coincide, (False, «El precio
+cambió (ahora: X). Revisa y vuelve a confirmar.») sin fila ni reserva, y por fetch la tarjeta vuelve con el precio
+nuevo. El lote: `galeria.pedir_lote(..., *, costo_visto)` suma el costo de AHORA de las claves confirmadas que siguen en
+su alcance (`galeria.costos_confirmados` → `pedidos.costos_de`, la misma cuenta que la tarjeta, dos lecturas por
+fuente; las que no están no cuentan ni se cobran); si alguna no tiene precio o el total no es el visto, lanza
+`galeria.PrecioCambiado` y la ruta avisa «El precio cambió desde que lo viste…» sin pedir nada. Después cada fuente
+cobra con `pedidos.pedir_lote(..., *, costos_vistos)`, cada clave con el costo de esa suma: se cobra lo visto o menos
+(una que otra pestaña ya analizó se salta), nunca más. Prender «Cobrar» también cambia el precio (el margen): un botón
+pintado antes no cobra. Pruebas: `tests/test_tw_tarjetas_rutas.py` (`test_si_el_precio_cambio_*`,
+`test_la_tarjeta_manda_el_precio_que_muestra`) y `tests/test_rendimiento_e2_pedidos.py`; las demás piden la tarjeta y
+mandan su precio (`tests/test_rutas_triple_whale.py::precio_visto`, `con_total` para un lote armado a mano).
 
 **Sumas precalculadas e historia (2026-10-15).** `triple_whale/memo.py` es el único escritor de `tw_memo` (0041): las
 sumas pesadas de `datos.py` llevan `@memo.precalculable` y la tarea `tw_precalcular` las graba después de la última

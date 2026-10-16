@@ -53,8 +53,8 @@
         <div class="gp-botones">
           <button type="button" class="{{ 'btn-generar' if loop.first else 'btn-guardar' }} btn-sm" data-gpg-accion="/videos/{{ video.id }}/cadena"
                   data-gpg-cuerpo='{{ {"desde": cadena_primera, "total_visto": o.precio|precio, "modelo": o.modelo}|tojson }}'
-                  data-gpg-confirmar="{{ ngettext('Se genera %(num)s escena con %(modelo)s por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?', 'Se generan %(num)s escenas con %(modelo)s, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?', C.total, modelo=o.nombre|traducir, precio='%.2f' % (o.precio | precio)) }}">
-            {{ ngettext('Generar %(num)s escena con %(modelo)s', 'Generar las %(num)s escenas con %(modelo)s', C.total, modelo=o.nombre|traducir) }} · ≈ US$ {{ '%.2f' % (o.precio | precio) }}</button>
+                  data-gpg-confirmar="{{ ngettext('Se genera %(num)s escena con %(modelo)s por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?', 'Se generan %(num)s escenas con %(modelo)s, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?', C.total, modelo=o.nombre|traducir, precio=(o.precio | precio_fmt('%.2f'))) }}">
+            {{ ngettext('Generar %(num)s escena con %(modelo)s', 'Generar las %(num)s escenas con %(modelo)s', C.total, modelo=o.nombre|traducir) }} · ≈ {{ o.precio | precio_fmt('US$ %.2f') }}</button>
         </div>
       {% endif %}
       {% for a in o.avisos %}<p class="gp-ayuda gpg-cadena-aviso">{{ o.nombre|traducir }} · {{ _('Escena %(n)s: ', n=a.indice) }}{{ a.motivo }}</p>{% endfor %}
@@ -72,7 +72,7 @@
       {% if f.rehacer_precio is not none %}
       <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/cadena"
               data-gpg-cuerpo='{{ {"desde": f.indice, "total_visto": f.rehacer_precio|precio}|tojson }}'
-              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes con %(modelo)s por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, modelo=C.modelo_nombre|traducir, precio='%.2f' % (f.rehacer_precio | precio)) }}">{{ _('Rehacer desde aquí') }} · ≈ US$ {{ '%.2f' % (f.rehacer_precio | precio) }}</button>
+              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes con %(modelo)s por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, modelo=C.modelo_nombre|traducir, precio=(f.rehacer_precio | precio_fmt('%.2f'))) }}">{{ _('Rehacer desde aquí') }} · ≈ {{ f.rehacer_precio | precio_fmt('US$ %.2f') }}</button>
       {% endif %}
     </li>
     {% endfor %}

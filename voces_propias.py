@@ -92,7 +92,7 @@ def listar(cliente):
 
 
 
-def _guardar_ficha(cliente, cobro):
+def _guardar_ficha(cliente, cobro, cobrar=False):
     ficha = (cobro.get("extra") or {}).get("ficha") or {}
     if not (ficha.get("extra") or {}).get("voice_id"):
         raise ValueError(gettext("La voz todavía no tiene una respuesta del proveedor; no se vuelve a cobrar."))
@@ -105,6 +105,14 @@ def _guardar_ficha(cliente, cobro):
     gastos.registrar_seguro(cliente, cobro["tipo"], cobro["usd"], cobro["referencia"],
                             detalle=cobro["detalle"], proveedor=cobro["proveedor"],
                             extra={**cobro["extra"], "ficha_guardada": True})
+    if cobrar:
+        # Auditoría de PND-013: si la tarea que la pagó falló después y se le devolvió el cobro, la voz que ahora sí
+        # se entrega se cobra aquí, DENTRO de la tarea que la persona lanzó con su precio a la vista (nunca en el GET
+        # de Mis voces; decisión de quien orquesta, 2026-10-15). Sin contar dos veces el costo; un proyecto que no
+        # cobra no cambia.
+        gastos.registrar_trasladando_seguro(cliente, cobro["tipo"], 0, f"{cobro['referencia']}:recuperada",
+                                            [{"referencia": cobro["referencia"]}], proveedor=cobro["proveedor"],
+                                            detalle=cobro["detalle"])
     return _como_voz(mat)
 
 
@@ -295,6 +303,17 @@ def _subir_mp3(cliente, url_fuente, key):
         return url, os.path.getsize(local), int(round(cortes.duracion(local) * 1000))
 
 
+def _anotar_cobrado_sin_voz(cliente, e, ref, detalle):
+    """PND-313: clonar o diseñar que se agotó esperando (o volvió sin `voice_id`) y fal cobró igual: se anota lo
+    cobrado con `entregado=False` (al cliente no se le cobra una voz que no recibió). Sin `ficha` en el extra:
+    no hay voice_id que recuperar. Nunca lanza."""
+    usd = float(getattr(e, "costo_usd", 0) or 0)
+    if usd > 0:
+        gastos.registrar_seguro(cliente, "voz_propia", usd, ref, proveedor=PROVEEDOR, entregado=False,
+                                detalle=gettext("%(detalle)s · fal cobró y no devolvió la voz", detalle=detalle),
+                                extra={"voice_id": "", "sin_voz": True, "request_id": getattr(e, "request_id", None)})
+
+
 def crear(cliente, payload, ref_sufijo="", reportar=None):
     """Lo corre la tarea `voz_propia_crear`. Crea la voz en MiniMax (clonar o
     diseñar), registra ese gasto apenas fal responde, la estrena leyendo su
@@ -312,7 +331,7 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
     ref = f"voz_propia:{forma}{ref_sufijo}"
     anterior = gastos.por_referencia(cliente, ref)
     if anterior and (anterior.get("extra") or {}).get("ficha"):
-        recuperada = _guardar_ficha(cliente, anterior)
+        recuperada = _guardar_ficha(cliente, anterior, cobrar=True)
         return recuperada, recuperada["estrenada"]
     extra = {"nombre": nombre, "forma": "clonada" if forma == "clonar" else "disenada", "proveedor": "minimax",
              "voice_id": "", "idioma_muestra": idioma, "estrenada": False}
@@ -342,14 +361,19 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
         reservar()
         try:
             r = fal_audio.clonar_voz_minimax(grabacion["url"], frase)
-        except Exception:
-            # fal no devolvió una voz (nada que registrar): la grabación de la
-            # persona no se queda en R2 sin una voz que la use.
+        except Exception as e:
+            # fal no devolvió una voz: la grabación de la persona no se queda en R2
+            # sin una voz que la use. Si fal igual cobró, se anota (PND-313).
+            _anotar_cobrado_sin_voz(cliente, e, ref, detalle)
             _borrar_grabacion_si_huerfana(cliente, grabacion["id"])
             raise
     else:
         reservar()
-        r = fal_audio.disenar_voz_minimax(payload["descripcion"], frase)
+        try:
+            r = fal_audio.disenar_voz_minimax(payload["descripcion"], frase)
+        except Exception as e:
+            _anotar_cobrado_sin_voz(cliente, e, ref, detalle)
+            raise
     usd = float(r["costo_usd"])
     extra["voice_id"] = r["voice_id"]
     ficha.update(url=r.get("url_vista_previa") or "", costo_usd=usd,
@@ -367,9 +391,14 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
                                 detalle=gettext("MiniMax · estreno · %(nombre)s", nombre=nombre),
                                 proveedor=PROVEEDOR)
         fuente, estrenada = t["url"], True
-    except Exception:
+    except Exception as e:
         log.warning("voz propia %s: no pude estrenarla", r["voice_id"], exc_info=True)
         fuente = r.get("url_vista_previa")
+        if getattr(e, "costo_usd", 0):
+            # El estreno se agotó o volvió sin audio y fal lo cobró igual (PND-313): se anota, sin cobrarlo.
+            gastos.registrar_seguro(cliente, "locucion", float(e.costo_usd), f"voz_propia_estreno{ref_sufijo}",
+                                    detalle=gettext("MiniMax · estreno que no llegó · %(nombre)s", nombre=nombre),
+                                    proveedor=PROVEEDOR, entregado=False)
     extra["estrenada"] = estrenada
     ficha["url"] = fuente or ficha["url"]
     gastos.registrar_seguro(cliente, "voz_propia", usd, ref, detalle=detalle,
@@ -419,18 +448,26 @@ def muestra(cliente, valor, idioma):
 
     def _producir():
         # Cobros (spec 2026-10-08 §5.2): la muestra se sintetiza en la petición
-        # (au_muestra) y la paga el proyecto; solo cuando no está en caché.
-        libro.exigir(cliente, gastos.estimar("locucion", caracteres=len(frase))["usd"])
-        t = sintetizar(cliente, vp, frase, idioma, timeout=45)
-        usd = float(t["costo_usd"])
-        # La pide quien mira (ruta au_muestra), pero el detalle se GUARDA: va en
-        # el idioma del proyecto (spec 2026-09-26 §B8).
-        with idiomas.en_idioma(idiomas.de_tarea({"cliente": cliente})):
-            detalle = gettext("muestra de voz propia · %(nombre)s · %(idioma)s", nombre=vp["nombre"], idioma=idioma)
-        gastos.registrar_seguro(cliente, "locucion", usd,
-                                f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}",
-                                detalle=detalle, proveedor=PROVEEDOR)
-        url, bytes_, dur = _subir_mp3(cliente, t["url"], f"clientes/{cliente}/materiales/muestra_propia_{h[:16]}.mp3")
+        # (au_muestra) y la paga el proyecto; solo cuando no está en caché. Con
+        # reserva propia mientras fal responde (PND-300).
+        with libro.pedido(cliente, gastos.estimar("locucion", caracteres=len(frase))["usd"]):
+            t = sintetizar(cliente, vp, frase, idioma, timeout=45)
+            usd = float(t["costo_usd"])
+            # La pide quien mira (ruta au_muestra), pero el detalle se GUARDA: va en
+            # el idioma del proyecto (spec 2026-09-26 §B8).
+            with idiomas.en_idioma(idiomas.de_tarea({"cliente": cliente})):
+                detalle = gettext("muestra de voz propia · %(nombre)s · %(idioma)s", nombre=vp["nombre"],
+                                  idioma=idioma)
+            referencia = f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}"
+            gastos.registrar_seguro(cliente, "locucion", usd, referencia, detalle=detalle, proveedor=PROVEEDOR)
+        try:
+            url, bytes_, dur = _subir_mp3(cliente, t["url"], f"clientes/{cliente}/materiales/muestra_propia_{h[:16]}.mp3")
+        except Exception:
+            # Auditoría de PND-013: fal cobró pero la muestra no llegó (y el próximo clic la vuelve a pagar): el
+            # costo queda, al cliente no se le cobra.
+            gastos.registrar_seguro(cliente, "locucion", usd, referencia, detalle=detalle, proveedor=PROVEEDOR,
+                                    entregado=False)
+            raise
         return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": bytes_, "duracion_ms": dur,
                 "costo_usd": usd, "extra": {"texto": frase, "voz": vp["valor"], "idioma": idioma, "muestra": True,
                                             "voz_propia_id": vp["id"]}}

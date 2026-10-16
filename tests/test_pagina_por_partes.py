@@ -629,7 +629,7 @@ def test_entrega2_precarga_llega_al_compositor(pagina, monkeypatch, origen):
     _ejecutar_crear(html)
 
 
-def _ejecutar_crear(html, hash='#referencias', guardado=None):
+def _ejecutar_crear(html, hash='#referencias', guardado=None, sin_precio=False):
     import json
     import subprocess
     from pathlib import Path
@@ -647,7 +647,8 @@ def _ejecutar_crear(html, hash='#referencias', guardado=None):
     scripts.insert(0, {'archivo': 'formatearUSD-inline', 'codigo': formato, 'defer': False})
     r = subprocess.run(['node', 'tests/js/crear_estaticos.cjs'], text=True, capture_output=True,
                        input=json.dumps({'dom': serializar(arbol), 'scripts': scripts, 'modos': modos,
-                                         'hash': hash, 'modo': modo, 'guardado': guardado}))
+                                         'hash': hash, 'modo': modo, 'guardado': guardado,
+                                         'sinPrecio': sin_precio}))
     assert r.returncode == 0, r.stdout + r.stderr
 
 
@@ -658,3 +659,13 @@ def test_entrega2_inicializacion_defer_y_eventos_en_node(pagina, monkeypatch, ha
     import idiomas
     monkeypatch.setattr(idiomas, 'de_usuario', lambda *a: idioma)
     _ejecutar_crear(pagina['c'].get('/cliente/acme').get_data(as_text=True), hash, guardado)
+
+
+def test_pnd231_sin_margen_el_compositor_y_audios_dicen_precio_no_disponible(pagina, monkeypatch):
+    """PND-231: si el margen de la petición no se pudo leer, |precio pinta «precio no disponible» en las tarifas y
+    el JS lo muestra tal cual en «Generar» y en Audios, nunca un costo ni «US$ 0,00»."""
+    from cobros import libro
+    libro.configurar('acme', usuario='admin', cobrar=True, margen=1.5)
+    monkeypatch.setattr(libro, 'margen_precio', lambda c: (_ for _ in ()).throw(RuntimeError('base caída')))
+    html = pagina['c'].get('/cliente/acme').get_data(as_text=True)
+    _ejecutar_crear(html, '#referencias', None, sin_precio=True)

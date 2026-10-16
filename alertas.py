@@ -62,6 +62,7 @@ DIAS_NO_COBRADO = 7                                  # una pieza que no se cobr�
 MINUTOS_RECARGA_PENDIENTE = 15                       # una recarga de Bold o Wompi pendiente más vieja que esto avisa
 DIAS_AVISO_RENOVACION = 3                            # el plan avisa que se renueva (o termina) con esta anticipación
 PORCENTAJE_BOLSA_PLAN = 80                           # la bolsa del plan avisa al usarse este porcentaje del periodo
+DIAS_AVISO_ACCESO_META = 14                          # el acceso a los datos de Meta avisa estos días antes de vencer (PND-058)
 TOPE_COBROS = 20                                     # lo más que se lista de piezas no cobradas o recargas pendientes
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")      # lo que cuenta como logo en clientes/<c>/logos/
 
@@ -350,6 +351,43 @@ def _fuente_meta(cliente, ahora):
                     gettext("Revisa el método de pago de tu cuenta publicitaria de Meta"),
                     gettext("La cuenta publicitaria necesita un método de pago en business.facebook.com › Facturación: "
                             "sin él Meta no activa ningún anuncio."), "settings")]
+
+
+def _fuente_meta_acceso(cliente, ahora):
+    """PND-058 (2026-10-15): el acceso de Creatv a los datos de Meta del proyecto vence (`data_access_expires_at`, que
+    la conexión y la periódica diaria `meta_revisar_acceso` leen con debug_token y guardan en meta.json). Avisa desde
+    DIAS_AVISO_ACCESO_META días antes (`atencion`) y, ya vencido, bloquea: sin ese acceso Meta deja de dar métricas y
+    de aceptar anuncios. La ven el admin y el cliente del proyecto (el cliente es quien reconecta con su app). Solo lee
+    meta.json: ni la base ni Meta. Modo agencia: el token es de Creatv y no tiene esta fecha. Una sola clave; la
+    huella es la fecha y si ya venció, así un descarte de «por vencer» no esconde el «vencido» ni la de otra fecha."""
+    import meta_conexion  # noqa: PLC0415 — arrastra requests; aquí solo se lee meta.json
+    vence = meta_conexion.acceso_datos_vence_en(cliente)
+    if not vence:
+        return []
+    try:
+        fin = datetime.fromisoformat(str(vence)[:19])
+        hoy = datetime.fromisoformat(str(ahora)[:19])
+    except ValueError:
+        return []
+    if fin - hoy > timedelta(days=DIAS_AVISO_ACCESO_META):
+        return []
+    fecha = idiomas.fecha_larga(fin.date())
+    if fin <= hoy:
+        return [_alerta("meta_acceso:datos", huella(fin.date().isoformat(), "vencido"), "bloquea", "puesta_a_punto",
+                        gettext("Venció el acceso de Creatv a los datos de Meta"),
+                        # Sin nombrar el botón: ya vencido, la tarjeta puede estar «rota» y ofrecer «Volver a conectar».
+                        gettext("Venció el %(fecha)s: hasta que vuelvas a conectar Meta, Creatv no lee sus métricas y no "
+                                "puede lanzar ni activar anuncios. Vuelve a conectar en Configuración › Conexiones, con "
+                                "la misma cuenta; no se borra nada.", fecha=fecha),
+                        "settings", ancla="config-meta")]
+    dias = (fin.date() - hoy.date()).days
+    cuando = (ngettext("Falta %(num)s día.", "Faltan %(num)s días.", dias) if dias > 0 else gettext("Vence hoy."))
+    return [_alerta("meta_acceso:datos", huella(fin.date().isoformat(), "por_vencer"), "atencion", "puesta_a_punto",
+                    gettext("El acceso de Creatv a los datos de Meta vence el %(fecha)s", fecha=fecha),
+                    gettext("%(cuando)s Vuelve a conectar Meta antes de esa fecha en Configuración › Conexiones › "
+                            "«Renovar el acceso», con la misma cuenta; no se borra nada. Si vence, Creatv deja de leer "
+                            "sus métricas y no puede lanzar ni activar anuncios.", cuando=cuando),
+                    "settings", ancla="config-meta")]
 
 
 # Meta rendimiento (spec E2 §10): el título y el detalle de cada tipo de recomendación que puede ser «alta»
@@ -960,5 +998,6 @@ FUENTES.extend([
     ("nicho", _fuente_nicho),
     ("cobros", _fuente_cobros),
     ("meta", _fuente_meta),
+    ("meta_acceso", _fuente_meta_acceso),
     ("meta_rendimiento", _fuente_meta_rendimiento),
 ])

@@ -110,7 +110,8 @@ from cobros import vista as vista_cobros
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
-from tareas.flowplus import ETAPAS_CREATIVE_FLOW
+from tareas.flowplus import ETAPAS_CREATIVE_FLOW, anotar_posible_cobro_al_descartar, lanzamiento_pendiente, \
+    medir_video_url
 from tareas import final_edition as tareas_fe
 from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
@@ -126,7 +127,8 @@ from final_edition import ETAPAS_FINAL, cortes as fe_cortes, mezcla as fe_mezcla
 from final_edition import tablero as fe_tablero
 from providers import fal_audio
 from providers import wavespeed_imagen as wavespeed_imagen_prov
-from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
+from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA, ETAPAS_SWAP_RECUPERAR
+from tareas.swap import MODELOS_WAVESPEED as SWAP_RECUPERABLES
 from publicador import publicar_brief
 
 from storage import r2_uploader
@@ -480,8 +482,11 @@ METODOS_QUE_ESCRIBEN = frozenset(("POST", "PUT", "PATCH", "DELETE"))
 # los manda el servidor de la pasarela, no un navegador nuestro. Su protección
 # es la firma del cuerpo (cobros.recargas.procesar_webhook y
 # procesar_evento_wompi), no la cookie ni Sec-Fetch-Site. Por nombre de
-# endpoint, nunca por prefijo de URL.
-ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook", "cobros.wompi_eventos"))
+# endpoint, nunca por prefijo de URL. El tercero (PND-304 a, 2026-10-15) son los
+# reportes de la política de scripts de la página de la tarjeta: los manda el
+# navegador, sin cookie, y no se pueden firmar; no mueven nada (solo anotan lo
+# justo, con topes de tamaño y cantidad: cobros.csp).
+ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook", "cobros.wompi_eventos", "cobros.csp_tarjeta"))
 
 
 @app.before_request
@@ -492,8 +497,9 @@ def _solo_mismo_origen():
     un POST desde otro subdominio del mismo sitio ni el «login CSRF» (un
     formulario ajeno que inicia sesión con la cuenta del atacante). La app no
     recibe webhooks ni POST legítimos de otros sitios: los callbacks de OAuth
-    son GET. Las únicas excepciones, el webhook firmado de Bold y los eventos
-    firmados de Wompi, van en ENDPOINTS_OTRO_ORIGEN."""
+    son GET. Las únicas excepciones, el webhook firmado de Bold, los eventos
+    firmados de Wompi y los reportes de la política de la página de la tarjeta
+    (que solo anotan, con topes), van en ENDPOINTS_OTRO_ORIGEN."""
     if request.method not in METODOS_QUE_ESCRIBEN or _mismo_origen():
         return None
     if request.endpoint in ENDPOINTS_OTRO_ORIGEN:
@@ -513,7 +519,7 @@ def _solo_mismo_origen():
 ENDPOINTS_SIN_GUARD_SESION = frozenset((
     "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
     "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
-    "cambiar_idioma", "salud_publica", "cobros.bold_webhook", "cobros.wompi_eventos",
+    "cambiar_idioma", "salud_publica", "cobros.bold_webhook", "cobros.wompi_eventos", "cobros.csp_tarjeta",
 ))
 
 
@@ -1080,15 +1086,29 @@ def analizar_marca(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     job_id = _job_id_marca(cliente)
+    idioma = idiomas.de_proyecto(cliente)
+    detalle = _detalle_imagenes(cliente, min(len(urls), 5))
+    # PND-299: la paga el proyecto (antes nadie la anotaba): precio a la vista en el botón, freno y una reserva propia
+    # hasta que el hilo termina (PND-300). Sin saldo, el aviso con «Recargar saldo» y nada se lanza.
+    pedido = libro_cobros.reservar_pedido(cliente, gastos.estimar("analizar_marca")["usd"])
 
     def trabajo():
-        guia = generador_prompts.analizar_marca(urls, idioma=idiomas.de_proyecto(cliente))
+        usos = []
+        try:
+            guia = generador_prompts.analizar_marca(urls, idioma=idioma, on_usage=usos.append)
+        except generador_prompts.RespuestaInvalida:
+            # Claude cobró pero la guía vino vacía o cortada: se anota sin cobrarle al proyecto y la guía no se toca.
+            for uso in usos:
+                _registrar_usage_ayuda(cliente, "analizar_marca", uso, detalle, entregado=False)
+            raise
+        for uso in usos:
+            _registrar_usage_ayuda(cliente, "analizar_marca", uso, detalle)
         data = marca_mod.cargar(cliente)
         data["guia_estilo"] = guia
         marca_mod.guardar(cliente, data)
         return idiomas.N_("Guía de estilo generada.")
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=15, cliente=cliente):
+    if trabajos.iniciar_con_pedido(job_id, trabajo, cliente, pedido, duracion_estimada=15):
         flash(gettext("Analizando referencias de marca…"), "ok")
     else:
         flash(gettext("Ya se está analizando — espera a que termine."), "warn")
@@ -1729,14 +1749,22 @@ def verificar_correo(token):
         return _volver_cuenta() if sesion else redirect(url_for("login"))
     usuario = resultado["usuario"]
     try:
-        usuarios.actualizar(usuario, correo=resultado["correo"], correo_verificado=True)
+        _entry, regalo = cuentas.confirmar_correo(usuario, correo=resultado["correo"])
     except ValueError as e:
         flash(gettext("No pude confirmar el correo: %(error)s", error=str(e)), "error")
         return _volver_cuenta() if sesion else redirect(url_for("login"))
     flash(gettext("Correo confirmado. ¡Gracias!"), "ok")
+    _avisar_bienvenida(regalo)
     # Con sesión abierta (la suya o la de otro usuario en este navegador) se
     # vuelve a su cuenta; sin sesión, al login.
     return _volver_cuenta() if sesion else redirect(url_for("login"))
+
+
+def _avisar_bienvenida(milesimas):
+    """El aviso de quien confirma su correo y estrena el saldo de bienvenida (PND-299)."""
+    if milesimas:
+        flash(gettext("Te regalamos %(monto)s de saldo para que empieces a crear.",
+                      monto=gastos.formatear(milesimas / 1000)), "ok")
 
 
 @app.route("/reenviar-verificacion", methods=["POST"])
@@ -1813,10 +1841,12 @@ def restablecer(token):
     # Abrir el enlace que llegó a ese correo demuestra que es suyo: si sigue
     # siendo el correo de la cuenta, queda confirmado de paso.
     entry = usuarios.obtener(usuario) or {}
+    regalo = 0
     if entry.get("correo") == resultado["correo"] and not entry.get("correo_verificado"):
-        usuarios.actualizar(usuario, correo_verificado=True)
+        regalo = cuentas.confirmar_correo(usuario)[1]
     session.clear()
     flash(gettext("Contraseña cambiada. Entra con la nueva."), "ok")
+    _avisar_bienvenida(regalo)
     return redirect(url_for("login"))
 
 
@@ -1947,11 +1977,14 @@ def admin_usuario_verificar(usuario):
     if not _mismo_origen():
         abort(403)
     try:
-        usuarios.actualizar(usuario, correo_verificado=True)
+        entry, regalo = cuentas.confirmar_correo(usuario)
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("panel"))
     flash(gettext("Usuario '%(usuario)s' marcado como verificado.", usuario=usuario), "ok")
+    if regalo:
+        flash(gettext("El proyecto %(proyecto)s recibió %(monto)s de saldo de bienvenida.",
+                      proyecto=entry.get("cliente"), monto=gastos.formatear(regalo / 1000)), "ok")
     return redirect(url_for("panel"))
 
 
@@ -2272,7 +2305,7 @@ def ver_cliente(cliente):
         plantillas_anuncio=plantillas_anuncio.PLANTILLAS,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
         preferencias_swap=proyectos.preferencias(cliente),
-        precios_swap=_precios_swap(proyectos.preferencias(cliente)),
+        precios_swap=_precios_swap(proyectos.preferencias(cliente), _revision_marca_swap(cliente)),
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
@@ -3058,6 +3091,8 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=False):
     if "hijas_b" not in ctx:
         ctx["hijas_b"] = _hijas_b(data)
     item["tiene_hija_b"] = cf_id in ctx["hijas_b"]
+    # PND-214: el pedido salió sin respuesta y pudo cobrarse: «Recuperar», nunca «Reintentar».
+    item["lanzamiento_pendiente"] = lanzamiento_pendiente(entry)
     # Estimado real vía wan3_client.estimate_video() en vez de un número
     # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
     # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
@@ -3357,7 +3392,7 @@ def generar_swap(cliente):
     # con la medida de /swap/medir, la misma de aquí) y aquí se recalcula. Sin precio visto, o si el de verdad pasa de
     # medio centavo más (como nicho/rutas y guiones/rutas_pipeline), no se guarda ni se cobra nada.
     costo = _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas,
-                         _n_referencias_swap(producto))
+                         _n_referencias_swap(producto), _revision_marca_swap(cliente))
     visto = gastos.costo_de_precio(request.form.get("precio_visto"))
     if costo is None or visto is None or costo > visto + 0.005:
         flash(gettext("Este envío cuesta %(precio)s. Revisa el precio y vuelve a generar.",
@@ -3439,7 +3474,16 @@ def _medir_en_temporal(archivo, tempfile, swap_video_precio):
     return (duracion, fps) if duracion else None
 
 
-def _precios_swap(prefs):
+def _revision_marca_swap(cliente):
+    """¿Cada swap de este proyecto pasa por la revisión de marca con Claude (tiene reglas de marca)? Entonces se
+    cobra y va en el precio que se ve antes (`gastos.TARIFAS["revision_marca"]`)."""
+    try:
+        return bool((marca_mod.cargar_root(cliente) or {}).get("invariants"))
+    except Exception:  # noqa: BLE001 — un root.json roto: la tarea tampoco puede revisarla
+        return False
+
+
+def _precios_swap(prefs, con_revision=False):
     """Lo que ve la persona en «Cambiar producto» antes de generar (PND-312), ya con el margen: por cada modelo de
     video su regla (`swap_video_precio.TARIFAS`, con `usd_s` y `fijo` en precio) y por cada modelo de foto su
     precio. None si el margen no se pudo leer: la pantalla dice «precio no disponible», nunca el costo."""
@@ -3469,15 +3513,19 @@ def _precios_swap(prefs):
     if gastos._margen_fallido():
         return None
     return {"video": video, "foto": foto, "fps": swap_video_precio.FPS_SUPUESTO,
-            "necesita_fps": list(swap_video_precio.NECESITA_FPS)}
+            "necesita_fps": list(swap_video_precio.NECESITA_FPS),
+            # Lo que suma la revisión de marca a cada archivo (0 si el proyecto no tiene reglas de marca).
+            "revision": gastos.precio(gastos.TARIFAS["revision_marca"]) if con_revision else 0}
 
 
-def _costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad, medida=None, n_referencias=1):
+def _costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad, medida=None, n_referencias=1,
+                   con_revision=False):
     if es_video:
         duracion, fps = medida or (None, None)
-        return gastos.estimar("swap", proveedor=proveedor_video, formato="video", duracion=duracion, fps=fps)["usd"]
+        return gastos.estimar("swap", proveedor=proveedor_video, formato="video", duracion=duracion, fps=fps,
+                              con_revision=con_revision)["usd"]
     return gastos.estimar("swap", proveedor=proveedor_foto, formato="foto", mejorar_calidad=mejorar_calidad,
-                          n_referencias=n_referencias)["usd"]
+                          n_referencias=n_referencias, con_revision=con_revision)["usd"]
 
 
 def _n_referencias_swap(producto):
@@ -3485,13 +3533,14 @@ def _n_referencias_swap(producto):
     return min(len((producto or {}).get("referencias") or []), 9)
 
 
-def _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas=None, n_referencias=1):
+def _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas=None, n_referencias=1,
+                 con_revision=False):
     """USD (sin margen) de los swaps de un envío; None si alguno no tiene tarifa. `medidas`: la (duración, fps) de
     cada video, en el orden de `archivos`."""
     total = 0.0
     for a, medida in zip(archivos, medidas or [None] * len(archivos)):
         usd = _costo_un_swap(_ext_de(a.filename) in VIDEO_EXTS, proveedor_foto, proveedor_video, mejorar_calidad,
-                             medida, n_referencias)
+                             medida, n_referencias, con_revision)
         if usd is None:
             return None
         total += float(usd)
@@ -3549,7 +3598,7 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
             "proveedor": proveedor, "tipo": tipo, "mejorar_calidad": bool(mejorar_calidad),
         }, cliente=cliente, duracion_estimada=duracion_estimada, etapas=etapas, max_intentos=1,
             costo_estimado=_costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad, medida,
-                                          _n_referencias_swap(producto)))
+                                          _n_referencias_swap(producto), _revision_marca_swap(cliente)))
     except SaldoInsuficiente as e:
         # Un swap guardado sin trabajo detrás quedaría «generando» para siempre.
         swaps_mod.actualizar(cliente, swap_id, estado="error", error=e.frase_proyecto())
@@ -3573,6 +3622,40 @@ def imagen_swap_original(cliente, swap_id):
     if tipo is None:
         return send_file(ruta, mimetype="application/octet-stream", as_attachment=True)
     return send_file(ruta, mimetype=tipo)
+
+
+@app.route("/cliente/<cliente>/swap/<swap_id>/recuperar", methods=["POST"])
+def recuperar_swap(cliente, swap_id):
+    """«Recuperar el resultado» (PND-318, como `cf_recuperar` de Crear): el swap quedó en error porque el worker
+    dejó de esperar a WaveSpeed, pero guardó el id de la predicción; el worker vuelve a preguntar por ese id y,
+    si terminó, lo entrega. WaveSpeed no cobra de nuevo, pero lo que ya cobró se le cobra al cliente al
+    entregarlo: el botón dice el precio y esto pasa por el freno de saldo como cualquier cobro (`swap_recuperar`
+    está en TIPOS_QUE_COBRAN; decisión de quien orquesta, 2026-10-15). `max_intentos=1`."""
+    entry = swaps_mod.cargar(cliente).get(swap_id)
+    pred = (entry or {}).get("prediccion") or {}
+    if (not entry or entry.get("estado") != "error" or not pred.get("id")
+            or (pred.get("proveedor") or entry.get("proveedor")) not in SWAP_RECUPERABLES):
+        flash(gettext("Ese swap no tiene nada que recuperar."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    # El freno (y la reserva) ANTES de tocar el swap: sin saldo, la tarjeta queda como estaba, con su botón.
+    costo = pred.get("usd")
+    libro_cobros.exigir(cliente, costo)
+    # El estado va ANTES de encolar (como cf_recuperar): la tarjeta muestra la barra del mismo job_id.
+    swaps_mod.actualizar(cliente, swap_id, estado="generando", error=None)
+    try:
+        encolado = trabajos.encolar(f"{cliente}__{swap_id}__swap", "swap_recuperar",
+                                    {"cliente": cliente, "swap_id": swap_id}, cliente=cliente, duracion_estimada=150,
+                                    etapas=ETAPAS_SWAP_RECUPERAR, max_intentos=1, costo_estimado=costo)
+    except SaldoInsuficiente:
+        # Otro clic gastó el saldo en medio: el swap vuelve a error con su predicción (se puede recuperar luego).
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=entry.get("error"))
+        raise
+    if encolado:
+        flash(gettext("Preguntando a WaveSpeed por el resultado… si ya terminó, aparece aquí y se cobra al llegar."),
+              "ok")
+    else:
+        flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/eliminar", methods=["POST"])
@@ -3810,6 +3893,9 @@ def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina=None):
         "token": pendiente["token"],
         "tipo_token": pendiente.get("tipo_token", ""),
         "expira_en": pendiente.get("expira_en"),
+        # PND-058: lo que de verdad vence es el acceso a los datos (debug_token); Alertas avisa 14 días antes.
+        "acceso_datos_vence_en": pendiente.get("acceso_datos_vence_en"),
+        "acceso_revisado_en": pendiente.get("acceso_revisado_en"),
         "business_id": pendiente.get("business_id"),
         "ad_account_id": cuenta["id"],
         "ad_account_nombre": cuenta.get("name"),
@@ -5022,6 +5108,11 @@ def _filtro_usd(valor):
 
 # `{% if margen_precio() == 1 %}`: el margen de la petición (1.0 si el proyecto no cobra).
 app.jinja_env.globals["margen_precio"] = gastos.margen_vigente
+# `{{ precio_de('director').texto }}`: el estimado (con el margen de la petición) de un botón que cobra; las ayudas con
+# IA lo muestran desde PND-299. `precio_describir(refs)`: el de «Describir con IA» según lo que hay en la bandeja.
+app.jinja_env.globals["precio_de"] = lambda tipo, **params: gastos.estimar(tipo, **params)
+app.jinja_env.globals["precio_describir"] = lambda refs: gastos.estimar(
+    "describir_referencias", imagenes=referencias_link.imagenes_a_describir(refs))
 
 
 @app.template_filter("cobrado")
@@ -5055,7 +5146,10 @@ app.jinja_env.globals["ver_cobrado"] = _ver_cobrado
 
 @app.template_filter("usd_fino")
 def _filtro_usd_fino(valor):
-    """«US$ 0,042»: tarifas por segundo, donde dos decimales mentirían."""
+    """«US$ 0,042»: tarifas por segundo, donde dos decimales mentirían. Un
+    `gastos.SinPrecio` (el `|precio` sin margen, PND-231) pasa tal cual."""
+    if isinstance(valor, gastos.SinPrecio):
+        return valor
     try:
         return f"US$ {idiomas.numero(float(valor), 3)}"
     except (TypeError, ValueError):
@@ -5074,13 +5168,43 @@ def _filtro_precio(_contexto, usd):
     constante: Jinja 3.1 pliega todo filtro sobre una constante salvo los que
     piden el contexto (`pass_eval_context` no basta), y `{{ 0.04|precio }}`
     quedaría con el margen de la primera petición que compiló la plantilla,
-    para todos los proyectos."""
+    para todos los proyectos.
+
+    Si el margen de la petición no se pudo leer, «precio no disponible»
+    (`gastos.SinPrecio`, PND-231): nunca el costo con cara de precio, igual
+    que `gastos.texto_precio`. Es texto, así que para darle formato de número
+    se usa `|precio_fmt('US$ %.2f')`, nunca `'%.2f' % (x|precio)`."""
     if usd is None or usd == "":
         return usd
+    if gastos._margen_fallido():
+        return gastos.SinPrecio.ahora()
     try:
         return round(float(usd) * gastos.margen_vigente(), 6)
     except (TypeError, ValueError):
         return usd
+
+
+@app.template_test("sin_precio")
+def _prueba_sin_precio(valor):
+    """`{% if x is sin_precio %}`: el `|precio` (o `|precio_fmt`) sin margen
+    legible (PND-231), para no pegarle «/s con sonido» a «precio no disponible»."""
+    return isinstance(valor, gastos.SinPrecio)
+
+
+@app.template_filter("precio_fmt")
+@jinja2.pass_context
+def _filtro_precio_fmt(contexto, usd, formato):
+    """`|precio` con formato de número: `{{ m.usd|precio_fmt('$%.3f/s') }}`.
+    Sin margen legible, «precio no disponible» entero (el formato, con su
+    «US$» o su «/s», no se pinta): `'%.3f' % (x|precio)` reventaría la página
+    con ese texto (PND-231)."""
+    valor = _filtro_precio(contexto, usd)
+    if valor is None or valor == "" or isinstance(valor, gastos.SinPrecio):
+        return valor
+    try:
+        return formato % float(valor)
+    except (TypeError, ValueError):
+        return valor
 
 
 def _pauta_mes(tablero_ctx, parte="resumen"):
@@ -6230,13 +6354,15 @@ def org_redactar(cliente):
     # Cobros (spec 2026-10-08 §5.2): sin saldo, 402 (organico.redactar
     # caería en silencio al texto determinista, y la persona pidió IA).
     # Con plan y tope libre es «incluido» y no pide saldo (spec planes §4): por eso el tipo.
-    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico")
-    try:
-        textos = organico.redactar(cliente, pieza_id, plataformas)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:  # noqa: BLE001 — el error vuelve al form, nunca un token
-        return jsonify({"error": gettext("No pude redactar el texto: %(error)s", error=cola.sin_token(str(e)))}), 500
+    # Reserva propia mientras Claude responde (PND-300); dentro, el `exigir` de redactar no cuenta esta reserva.
+    with libro_cobros.pedido(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico"):
+        try:
+            textos = organico.redactar(cliente, pieza_id, plataformas)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:  # noqa: BLE001 — el error vuelve al form, nunca un token
+            return jsonify({"error": gettext("No pude redactar el texto: %(error)s",
+                                             error=cola.sin_token(str(e)))}), 500
     return jsonify({p: {"titulo": t.get("titulo") or "", "caption": t.get("caption") or "",
                         "fallback": bool((t.get("extra") or {}).get("fallback"))} for p, t in textos.items()})
 
@@ -7178,6 +7304,18 @@ def fe_detalle_final(cliente, cf_id, final_id):
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/descartar", methods=["POST"])
 def cf_descartar(cliente, cf_id):
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if entry and ((entry.get("lanzamiento_incierto") or {}).get("estado") == "buscando"
+                  and not (entry.get("prediccion") or {}).get("id")):
+        # R4 (revisión del guardián de gasto): mientras se busca un pedido que pudo
+        # cobrarse, la pieza no se descarta.
+        flash(gettext("Estamos buscando en WaveSpeed un pedido de esta pieza que pudo cobrarse: espera a que termine "
+                      "la búsqueda antes de descartarla."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if entry:
+        # Lo que pudo cobrarse sin llegar (dudoso, imagen incierta, predicción sin traer)
+        # queda anotado; `eliminar` conserva la predicción y el lanzamiento en `kv`.
+        anotar_posible_cobro_al_descartar(cliente, cf_id, entry)
     creative_flow.eliminar(cliente, cf_id)
     flash(gettext("Sesión de CreativeFlowPlus descartada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
@@ -7542,13 +7680,42 @@ def _guardar_referencia_archivo(cliente, archivo, i):
 
 
 def _duracion_video(ruta):
-    """Segundos de un video de referencia (ffprobe), a centésimas; None si no
-    se pudo medir. Nunca lanza: una medida que falla no frena la subida
-    (2026-09-30: Crear la usa para el límite de Wan 3.0 y su precio)."""
-    try:
-        return round(fe_cortes.duracion(ruta), 2) if ruta else None
-    except Exception:  # noqa: BLE001
+    """Segundos de un video de referencia, a centésimas; None si no se pudo
+    medir. Nunca lanza: una medida que falla no frena la subida (2026-09-30:
+    Crear la usa para el límite de Wan 3.0 y su precio).
+
+    PND-319 (decisión 2026-10-13, lote 1): se mide como el swap de PND-312
+    (`swap_video_precio.medir`: la mayor entre la cabecera y los paquetes del
+    video, solo archivos del disco), nunca con la cabecera sola, que se
+    falsifica (12 s que dicen 2 s pagaban la sexta parte). Comparte los dos
+    turnos de ffprobe de «Cambiar producto»: sin turno en un minuto, None."""
+    from providers import swap_video_precio  # noqa: PLC0415
+    if not ruta:
         return None
+    if not _MEDIR_VIDEO_TURNOS.acquire(timeout=60):
+        return None
+    try:
+        duracion, _fps = swap_video_precio.medir(ruta)
+    except Exception:  # noqa: BLE001 — medir ya no lanza; defensa extra
+        duracion = None
+    finally:
+        _MEDIR_VIDEO_TURNOS.release()
+    return round(duracion, 2) if duracion else None
+
+
+def _duracion_video_url(url):
+    """Como `_duracion_video`, para una referencia que no está en disco (una
+    reusada con «Editar y crear otra», R7): se baja de R2 a un temporal y se
+    mide por sus paquetes (`tareas.flowplus.medir_video_url`), con los mismos
+    turnos de ffprobe. None si no se pudo."""
+    if not _MEDIR_VIDEO_TURNOS.acquire(timeout=60):
+        return None
+    try:
+        return medir_video_url(url)
+    except Exception:  # noqa: BLE001 — medir_video_url ya no lanza; defensa extra
+        return None
+    finally:
+        _MEDIR_VIDEO_TURNOS.release()
 
 
 def _quiere_json():
@@ -7978,10 +8145,14 @@ def fp_reusar(cliente, cf_id):
     for r in entry.get("referencias") or []:
         if r.get("logo") or r.get("url") in ya:
             continue
+        # R7 (PND-319): un video reusado no tiene archivo en disco; se mide bajándolo de
+        # R2 para que el precio a la vista sea el que se cobrará (None si no se pudo:
+        # Crear lo vuelve a intentar y, con Wan, no genera sin medida).
+        duracion = _duracion_video_url(r["url"]) if r.get("tipo") == "video" else None
         referencias_flowplus.agregar(
             cliente, r.get("tipo") or "imagen", r["url"], frame_url=r.get("frame_url"),
             origen="reutilizada", titulo=r.get("activo") or r.get("etiqueta"), producto=r.get("producto"),
-            duracion_s=r.get("duracion_s"),
+            duracion_s=duracion,
         )
         ya.add(r["url"])
     if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
@@ -8025,19 +8196,30 @@ def _prefill_para(cliente):
     return pre
 
 
-def _registrar_usage_claude_interno(cliente, origen, uso):
-    """Las ayudas inmediatas de Claude las paga el proyecto interno de Creatv."""
+def _registrar_usage_ayuda(cliente, tipo, uso, detalle="", entregado=True):
+    """Lo que cobró Claude por una ayuda con IA (describir referencias, sugerir sonido, analizar marca) va al gasto
+    del PROYECTO con su tipo (PND-299, decisión 2026-10-13: antes lo pagaba Creatv en `_creatv`). Con «Cobrar», sale
+    de su saldo al precio de la reserva del pedido (`libro.pedido`/`en_pedido`). Claude respondió: se anota como
+    entregado (spec cobros §3.5), salvo que quien llama sepa que no sirvió (`entregado=False`: no se le cobra). Nunca
+    lanza: anotar no convierte una sugerencia que sirvió en un error."""
     if not uso:
         return
     try:
         from nicho.avatares import costo_real
-        usd = costo_real(getattr(uso, "input_tokens", 0) or 0, getattr(uso, "output_tokens", 0) or 0)
-        gastos.registrar_seguro("_creatv", "otro", usd, f"claude:{origen}:{secrets.token_hex(6)}",
-                                detalle=gettext("Claude · %(origen)s", origen=origen), proveedor="anthropic",
-                                extra={"cliente": cliente})
+        entrada = int(getattr(uso, "input_tokens", 0) or 0)
+        salida = int(getattr(uso, "output_tokens", 0) or 0)
+        gastos.registrar_seguro(cliente, tipo, costo_real(entrada, salida), f"{tipo}:{secrets.token_hex(6)}",
+                                detalle=detalle, proveedor="anthropic",
+                                extra={"tokens_entrada": entrada, "tokens_salida": salida}, entregado=entregado)
     except Exception:
         # El registro nunca debe convertir una sugerencia utilizable en error.
-        logging.getLogger(__name__).warning("No pude registrar el gasto interno de Claude (%s)", origen)
+        logging.getLogger(__name__).warning("No pude registrar el gasto de Claude (%s)", tipo)
+
+
+def _detalle_imagenes(cliente, n):
+    """«3 imágenes» en el idioma del proyecto: el detalle de un gasto se GUARDA (spec 2026-09-26 §B8)."""
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        return ngettext("%(num)s imagen", "%(num)s imágenes", n)
 
 
 @app.route("/cliente/<cliente>/flowplus/describir", methods=["POST"])
@@ -8047,13 +8229,20 @@ def fp_describir(cliente):
     refs = referencias_flowplus.listar(cliente)
     if not refs:
         return jsonify({"ok": False, "error": gettext("Agrega primero una imagen, un video o un link.")}), 400
-    try:
-        texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente),
-                                           idioma=idiomas.de_proyecto(cliente),
-                                           on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "describir_referencias", uso))
-    except Exception as e:
-        bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
-        return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).", tipo=type(e).__name__)}), 502
+    n = referencias_link.imagenes_a_describir(refs)
+    detalle = _detalle_imagenes(cliente, n)
+    # PND-299: la paga el proyecto (antes Creatv), con el precio del botón, el freno y una reserva propia mientras
+    # Claude mira (PND-300). Sin saldo, 402 y Claude no se llama.
+    with libro_cobros.pedido(cliente, gastos.estimar("describir_referencias", imagenes=n)["usd"]):
+        try:
+            texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente),
+                                               idioma=idiomas.de_proyecto(cliente),
+                                               on_usage=lambda uso: _registrar_usage_ayuda(
+                                                   cliente, "describir_referencias", uso, detalle))
+        except Exception as e:
+            bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
+            return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).",
+                                                          tipo=type(e).__name__)}), 502
     bitacora.registrar(cliente, "flowplus", "describir", "ok", texto[:120])
     return jsonify({"ok": True, "texto": texto})
 
@@ -8134,16 +8323,28 @@ def cf_crear_video(cliente):
             return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
         bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
+    remedidos = {}     # etiqueta -> (id en la bandeja, segundos medidos ahora) si no es lo que se vio
+    # Solo Wan 3.0 factura los segundos de sus videos de referencia: con los demás modelos no se baja nada.
+    factura_videos = tipo == "video" and bool((flowplus_modelos.VIDEO.get(modelo) or {}).get("max_videos"))
     for r in bandeja:
         ref = {"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
                "etiqueta": r["etiqueta"], "origen": r.get("origen")}
         if r["tipo"] == "video":
-            # Lo que dura el video (2026-09-30): lo medido al subirlo; las
-            # referencias anteriores se miden acá si el archivo sigue en disco
-            # (sin tocar la red en la petición: si no, lo mide el worker).
-            dur = r.get("duracion_s")
-            if dur is None and r.get("ruta_local") and os.path.exists(r["ruta_local"]):
+            # Lo que dura el video (2026-09-30), que Wan 3.0 factura, se vuelve a
+            # medir por sus paquetes (PND-319: una referencia subida antes guardó la
+            # duración de la cabecera, que se falsifica): el archivo si sigue en
+            # disco; si no (una referencia reusada, R7), bajándolo de R2. Si el
+            # modelo la factura y no se pudo medir, no se genera (abajo).
+            dur = None
+            en_disco = bool(r.get("ruta_local") and os.path.exists(r["ruta_local"]))
+            if en_disco:
                 dur = _duracion_video(r["ruta_local"])
+            elif factura_videos:
+                dur = _duracion_video_url(r["url"])
+            if dur is None:
+                dur = r.get("duracion_s") if (en_disco or not factura_videos) else None
+            elif r.get("duracion_s") is None or abs(float(r["duracion_s"]) - dur) > 0.05:
+                remedidos[r["etiqueta"]] = (r.get("id"), dur)
             ref["duracion_s"] = dur
         referencias.append(ref)
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
@@ -8225,6 +8426,29 @@ def cf_crear_video(cliente):
                           "Quita las que sobran o cambia de modelo — no se cobró nada.",
                           modelo=nombre_modelo, n=info_modelo.get("max_referencias"), sobran=", ".join(sobran)), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # PND-319: Wan 3.0 factura los segundos de cada video de referencia; uno que
+    # no se pudo medir dejaría el precio visto (y lo anotado) por debajo de lo
+    # que cobra WaveSpeed. Se avisa y no se genera: nada se cobra.
+    sin_medida = flowplus_modelos.videos_sin_duracion(modelo, referencias) if tipo == "video" else []
+    # La pantalla mostró el precio con la duración guardada en la bandeja: si al volver
+    # a medir cambió, no se cobra un precio que no se vio (revisión del guardián de gasto).
+    cambiados = [r["etiqueta"] for r in flowplus_modelos.videos_facturados(modelo, referencias)
+                 if r["etiqueta"] in remedidos] if tipo == "video" else []
+    if cambiados:
+        for etiqueta in cambiados:
+            rid, segundos = remedidos[etiqueta]
+            if rid:
+                referencias_flowplus.fijar_duracion(cliente, rid, segundos)
+        flash(gettext("Volví a medir %(videos)s y la duración no era la que usó el precio de la pantalla. Revisa el "
+                      "precio nuevo y vuelve a generar — no se cobró nada.",
+                      videos=", ".join(f"{e} ({format_decimal(remedidos[e][1], format='#,##0.#')} s)" for e in cambiados)),
+              "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if sin_medida:
+        flash(gettext("No pude medir cuánto dura %(videos)s, y %(modelo)s cobra cada segundo de un video de "
+                      "referencia. Vuelve a intentarlo en un momento o súbelo otra vez — no se cobró nada.",
+                      videos=", ".join(sin_medida), modelo=gettext(flowplus_modelos.VIDEO[modelo]["nombre"])), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # Incidente 2026-09-30 (Forja): un video de referencia de 14,9 s y 20 s
     # pedidos → WaveSpeed 1405 «exceeds 30s limit». Wan 3.0 no admite más de
     # 15 s de videos de referencia ni más de 30 s entre entrada y salida: se
@@ -8267,11 +8491,14 @@ def cf_crear_video(cliente):
     if tipo == "imagen" or request.form.get("modo_prompt") != "director":
         # Cobros (spec 2026-10-08 §5): sin saldo no se crea la sesión ni se toca
         # la bandeja; el manejador de SaldoInsuficiente responde. La reserva la
-        # hace flowplus_lanzar al encolar. El director es gratis: su freno es
-        # el del botón «Generar» de la tarjeta.
+        # hace flowplus_lanzar al encolar.
         libro_cobros.exigir(cliente, flowplus_lanzar.costo_estimado(dict(
             tipo=tipo, modelo=modelo, duracion_objetivo=duracion_objetivo, referencias=referencias,
             referencias_urls=referencias_urls, con_sonido=con_sonido, musica_estilo=musica_estilo, calidad=calidad)))
+    else:
+        # PND-299: el director lo paga el proyecto (antes Creatv): su precio va en el botón y se pide aquí, antes de
+        # crear la sesión; la reserva la hace el encolado. El video se cobra aparte, con «Generar» en la tarjeta.
+        libro_cobros.exigir(cliente, tareas_director.costo_estimado())
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [],
         accion_central, duracion_objetivo, "", "A",
@@ -8305,6 +8532,7 @@ def cf_crear_video(cliente):
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
         _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.IMAGEN[modelo]["nombre"]
+        nombre_modelo = gettext(nombre_modelo)     # N_ del registro (PND-243)
         if lanzado:
             detalle_flash = " · " + aspect_ratio if aspect_ratio else ""
             flash(gettext("Generando la imagen con %(modelo)s%(detalle)s…", modelo=nombre_modelo, detalle=detalle_flash), "ok")
@@ -8322,6 +8550,7 @@ def cf_crear_video(cliente):
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
         _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.VIDEO[modelo]["nombre"]
+        nombre_modelo = gettext(nombre_modelo)     # N_ del registro (PND-243)
         if lanzado:
             detalle = f" · {aspect_ratio}" if aspect_ratio else ""
             flash(gettext("Generando el video con %(modelo)s%(detalle)s · %(duracion)s s…",
@@ -8334,20 +8563,27 @@ def cf_crear_video(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", **campos)
-    encolado = _encolar_director(cliente, cf_id)
+    try:
+        encolado = _encolar_director(cliente, cf_id)
+    except SaldoInsuficiente as e:
+        # Otro clic se llevó el saldo entre el freno y el encolado: la sesión no queda en `prompt_pendiente` sin
+        # trabajo; queda en error con la frase (en el idioma del proyecto: se guarda) y la bandeja sigue intacta.
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=e.frase_proyecto())
+        raise
     _consumir_bandeja(cliente, usadas)
     if encolado:
         flash(gettext("Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes."), "ok")
         if aviso_duracion is not None:
             flash(gettext("%(modelo)s llega a %(aviso)s s: se armará para %(aviso)s s.",
-                          modelo=flowplus_modelos.VIDEO[modelo]["nombre"], aviso=aviso_duracion), "warn")
+                          modelo=flowplus_modelos.nombre_visible(modelo), aviso=aviso_duracion), "warn")
     else:
         flash(gettext("Ya se estaba armando ese prompt — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 def _encolar_director(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
-    """Encola la compilación del prompt (gratis, idempotente: max_intentos=1)."""
+    """Encola la compilación del prompt (idempotente: max_intentos=1). Desde PND-299 la paga el proyecto: reserva su
+    precio y, sin saldo, SaldoInsuficiente sin encolar nada."""
     return tareas_director.encolar(cliente, cf_id, auto_lanzar=auto_lanzar, prioridad=prioridad)
 
 
@@ -8397,8 +8633,20 @@ def cf_rearmar(cliente, cf_id):
     if not puede_rearmar:
         flash(gettext("Esa sesión no se puede rearmar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if lanzamiento_pendiente(entry):
+        # PND-214: rearmar la sacaría de «error», donde se ofrece «Recuperar el video».
+        flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
+                      "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # PND-299: rearmar es otra llamada al director y la paga el proyecto: sin saldo no se toca la sesión.
+    libro_cobros.exigir(cliente, tareas_director.costo_estimado())
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", error=None)
-    if _encolar_director(cliente, cf_id):
+    try:
+        encolado = _encolar_director(cliente, cf_id)
+    except SaldoInsuficiente:
+        creative_flow.actualizar(cliente, cf_id, estado=estado, error=entry.get("error"))
+        raise
+    if encolado:
         flash(gettext("Rearmando el prompt con IA…"), "ok")
     else:
         flash(gettext("Ya se estaba rearmando."), "warn")
@@ -8413,7 +8661,10 @@ def cf_recuperar(cliente, cf_id):
     terminó, cierra la pieza. No genera ni paga de nuevo (max_intentos=1)."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     pred = (entry or {}).get("prediccion") or {}
-    if not entry or entry.get("estado") != "error" or not pred.get("id") or (entry.get("tipo") or "video") == "imagen":
+    # PND-214: también un lanzamiento incierto (el pedido salió sin respuesta):
+    # la tarea lo busca en el historial de WaveSpeed.
+    recuperable = pred.get("id") or lanzamiento_pendiente(entry)
+    if not entry or entry.get("estado") != "error" or not recuperable or (entry.get("tipo") or "video") == "imagen":
         flash(gettext("Esa pieza no tiene nada que recuperar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # Mismo orden que flowplus_lanzar.lanzar: el estado va ANTES de encolar.
@@ -8445,12 +8696,14 @@ def fp_sugerir_sonido(cliente):
         return jsonify({"error": gettext("Escribe primero qué tiene que pasar en el video.")}), 400
     e = cuerpo.get("enfoque")
     enfoque = e if isinstance(e, str) and e in flowplus_prompt.ENFOQUES else "producto"
-    try:
-        texto = sonido_mod.sugerir_descripcion(
-            escena, enfoque, idioma=idiomas.de_proyecto(cliente),
-            on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "sugerir_sonido", uso))
-    except Exception as e:
-        return jsonify({"error": gettext("No se pudo sugerir (%(tipo)s).", tipo=type(e).__name__)}), 502
+    # PND-299: la paga el proyecto (antes Creatv), con freno y reserva propia mientras Claude responde (PND-300).
+    with libro_cobros.pedido(cliente, gastos.estimar("sugerir_sonido")["usd"]):
+        try:
+            texto = sonido_mod.sugerir_descripcion(
+                escena, enfoque, idioma=idiomas.de_proyecto(cliente),
+                on_usage=lambda uso: _registrar_usage_ayuda(cliente, "sugerir_sonido", uso))
+        except Exception as e:
+            return jsonify({"error": gettext("No se pudo sugerir (%(tipo)s).", tipo=type(e).__name__)}), 502
     return jsonify({"sonido": texto})
 
 
@@ -8469,10 +8722,24 @@ def cf_generar_video(cliente, cf_id):
     if entry.get("estado") not in ("prompt_listo", "error"):
         flash(gettext("Este video ya se generó o se está generando — no se puede volver a disparar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if lanzamiento_pendiente(entry):
+        # PND-214: el pedido anterior salió sin respuesta y pudo cobrarse.
+        flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
+                      "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    incierto_imagen = (entry.get("lanzamiento_incierto") or {}).get("estado") == "imagen"
+    if incierto_imagen and request.form.get("confirmo_posible_cobro") != "1":
+        # R5 (revisión del guardián de gasto): una imagen no se recupera; reintentar
+        # paga otra vez, y se dice con el precio antes de hacerlo.
+        precio = gastos.texto_precio(flowplus_lanzar.costo_estimado(entry))
+        flash(gettext("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta "
+                      "%(precio)s más: confírmalo en «Reintentar».", precio=precio), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    nombre_modelo = flowplus_modelos.nombre_modelo(entry.get("modelo")) or gettext("el modelo")
+    nombre_modelo = flowplus_modelos.nombre_modelo(entry.get("modelo"))
+    nombre_modelo = gettext(nombre_modelo) if nombre_modelo else gettext("el modelo")     # N_ del registro (PND-243)
     es_imagen = (entry.get("tipo") or "video") == "imagen"
     que = gettext("la imagen") if es_imagen else gettext("el video")
     prompt_b = (entry.get("director") or {}).get("prompt_b")
@@ -8501,6 +8768,10 @@ def cf_generar_video(cliente, cf_id):
     if not _lanzar_video_cf(cliente, cf_id, entry):
         flash(gettext("Ya se está generando %(que)s — espera a que termine.", que=que), "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if incierto_imagen:
+        # Ya se avisó y se aceptó el precio: el aviso no se repite en un fallo siguiente.
+        creative_flow.actualizar(cliente, cf_id, lanzamiento_incierto=dict(
+            entry["lanzamiento_incierto"], estado="imagen_reintentada"))
     if hija:
         _lanzar_video_cf(cliente, hija, creative_flow.cargar(cliente)[hija])
         flash(gettext("Generando las versiones A y B con %(modelo)s…", modelo=nombre_modelo), "ok")
