@@ -728,21 +728,31 @@ def desgloses(cliente, cuentas, ventana):
                  clave=f["clave"], calculado_en=f["calculado_en"], **_medidas(f, METRICAS_DESGLOSE)) for f in filas]
 
 
-def objetos_activos(cliente, cuentas):
+ESTADOS_PROBLEMA_CONJUNTO = ("WITH_ISSUES", "DISAPPROVED")
+
+
+def objetos_activos(cliente, cuentas, con_problemas=False):
     """Las campañas y los conjuntos ACTIVE de esas cuentas, en UNA consulta (las reglas de diagnóstico miran su
     presupuesto diario y su aprendizaje): `objeto_id`, `ad_account_id`, `nivel`, `nombre`, `estado`,
-    `presupuesto_diario`, `aprendizaje`, `campaign_id` y `padre_id`. Los anuncios no vienen: la pestaña ya los trae
-    con sus métricas."""
+    `presupuesto_diario`, `aprendizaje`, `campaign_id`, `padre_id` y `problemas_meta` (lo que Meta dice de sus
+    problemas, `extra.problemas`). Los anuncios no vienen: la pestaña ya los trae con sus métricas. `con_problemas`
+    (PND-287): en la misma consulta, también los conjuntos WITH_ISSUES o DISAPPROVED; quien llama los separa por
+    `estado`."""
     if not cuentas:
         return []
     t = db.meta_objeto
+    estado = t.c.estado == "ACTIVE"
+    if con_problemas:
+        estado = sa.or_(estado, sa.and_(t.c.nivel == "conjunto", t.c.estado.in_(ESTADOS_PROBLEMA_CONJUNTO)))
     q = (sa.select(t.c.objeto_id, t.c.ad_account_id, t.c.nivel, t.c.nombre, t.c.estado, t.c.presupuesto_diario,
-                   t.c.aprendizaje, t.c.campaign_id, t.c.padre_id)
-         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), t.c.estado == "ACTIVE",
+                   t.c.aprendizaje, t.c.campaign_id, t.c.padre_id, t.c.extra)
+         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), estado,
                 t.c.nivel.in_(("campana", "conjunto")))
          .order_by(t.c.ad_account_id, t.c.nivel, t.c.objeto_id))
     with db.conectar() as con:
-        return [dict(f) for f in con.execute(q).mappings().all()]
+        filas = con.execute(q).mappings().all()
+    return [dict({k: v for k, v in f.items() if k != "extra"}, problemas_meta=_problemas_meta(f["extra"]))
+            for f in filas]
 
 
 def gasto_por_conjunto(cliente, cuentas, desde, hasta):

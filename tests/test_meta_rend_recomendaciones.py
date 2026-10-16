@@ -388,6 +388,54 @@ def test_pnd258_problemas_dicen_lo_que_meta_marca_a_cada_anuncio_sin_tocar_lo_qu
     assert len(una(rec.calcular(muchos), "anuncios_con_problemas")["problemas"]) == rec.MAX_PROBLEMAS_VISIBLES
 
 
+# ------------------------------------------------------------ PND-287: las dos reglas jubiladas de Rendimiento E2 ---
+
+def test_pnd287_conjuntos_rechazados_o_con_problemas_alta_con_lo_que_dice_meta():
+    """Un conjunto WITH_ISSUES o DISAPPROVED frena todos sus anuncios: alta (va a Alertas), aunque ya no gaste, con el
+    motivo de Meta de cada uno y los conjuntos seleccionados en el Administrador."""
+    bloqueado = conjunto("901", "800", estado="WITH_ISSUES", nombre="Mujeres 25-34")
+    bloqueado["problemas_meta"] = [{"resumen": "Ad set has issues", "mensaje": "The payment method failed."}]
+    e = entrada(conjuntos_problema=[conjunto("902", "800", estado="DISAPPROVED"), bloqueado,
+                                    conjunto("903", "800", estado="PAUSED"), conjunto("904", "800")],
+                conjuntos_7={"901": {"gasto": 70.0, "compras": 0.0, "valor": 0.0}})
+    r = una(rec.calcular(e), "conjuntos_con_problemas")
+    assert r["nivel"] == "alta" and [o["id"] for o in r["objetos"]] == ["901", "902"]   # el de más gasto primero
+    assert r["enlace"] == administrador.enlace(ACT, "conjunto", ["901", "902"])
+    assert r["impacto"]["monto"] == pytest.approx(10.0) and r["fila"]["cifra"] == "2 conjuntos"
+    assert r["problemas"] == [{"nombre": "Mujeres 25-34", "texto": "Ad set has issues: The payment method failed."}]
+    assert r["id"] == rec.huella("conjuntos_con_problemas", ACT, "alta")
+    assert de_tipo(rec.calcular(entrada(conjuntos_problema=[conjunto("903", "800", estado="PAUSED")])),
+                   "conjuntos_con_problemas") == []
+
+
+def test_pnd287_un_conjunto_bloqueado_sin_gasto_tambien_cuenta():
+    r = una(rec.calcular(entrada(conjuntos_problema=[conjunto("902", "800", estado="DISAPPROVED")])),
+            "conjuntos_con_problemas")
+    assert r["impacto"] is None and r["fila"]["nota"] == "sin gasto en 7 días" and r["problemas"] == []
+
+
+@pytest.mark.parametrize("codigo, motivo", [(1, "incumplimiento de las políticas de publicidad"),
+                                            (3, "riesgo en los pagos"),
+                                            (15, "cuenta comprometida (alguien entró sin permiso)")])
+def test_pnd287_cuenta_desactivada_dice_el_motivo_en_palabras(codigo, motivo):
+    c = cuenta(status=2)
+    c["extra"]["cuenta"]["disable_reason"] = codigo
+    r = una(rec.calcular(entrada(cuentas=[c])), "cuenta_estado")
+    assert r["fila"]["cifra"] == "No está activa" and r["fila"]["nota"] == f"motivo según Meta: {motivo}"
+    # El motivo va en la fila, no en lo que la «Evaluación con IA» le manda a Claude.
+    assert motivo not in r["por_que"] and motivo not in r["que_hacer"]
+
+
+def test_pnd287_un_motivo_desconocido_o_sin_desactivar_no_inventa_nada():
+    c = cuenta(status=2)
+    c["extra"]["cuenta"]["disable_reason"] = 4
+    assert una(rec.calcular(entrada(cuentas=[c])), "cuenta_estado")["fila"]["nota"] is None
+    c = cuenta(status=2, spend_cap="1000000", amount_spent="950000")
+    c["extra"]["cuenta"]["disable_reason"] = 3
+    assert una(rec.calcular(entrada(cuentas=[c])), "cuenta_estado")["fila"]["nota"] == (
+        "motivo según Meta: riesgo en los pagos · 95 % de su tope de gasto")
+
+
 # ------------------------------------------------------------ cuenta con ROAS bajo ---
 
 def test_cuenta_roas_bajo_alta_bajo_0_5_con_1000_de_gasto():
@@ -585,7 +633,7 @@ def test_huella_es_la_de_alertas_sha256_completo():
     assert rec.huella("a", "b", 3) == alertas.huella("a", "b", 3)
     assert r["id"] == alertas.huella("perdedores_gastando", ACT, "media")
     assert rec.AGREGADOS == ("aprendizaje_limitado", "perdedores_gastando", "anuncios_con_problemas",
-                             "cuenta_roas_bajo", "cuenta_estado")
+                             "cuenta_roas_bajo", "cuenta_estado", "conjuntos_con_problemas")
     for x in rec.calcular(_segmentos()) + rec.calcular(_abo()) + rec.calcular(_fatiga()):
         assert re.fullmatch(alertas.HUELLA_VALIDA, x["id"])
 
@@ -713,7 +761,7 @@ def test_fila_de_aprendizaje_con_la_barra_de_conjuntos_y_la_parte_del_gasto():
 
 
 def test_cada_regla_trae_su_fila_y_no_repite_el_titulo():
-    """Las nueve reglas arman su fila (la de respaldo, solo el título, es para una recomendación sin cifras)."""
+    """Las diez reglas arman su fila (la de respaldo, solo el título, es para una recomendación sin cifras)."""
     e = _segmentos()
     e["cuentas"] = [cuenta(status=9, spend_cap="1000000", amount_spent="950000")]
     e["totales_7"] = {ACT: {"gasto": 1000.0, "valor": 2000.0, "compras": 20.0}}
@@ -727,6 +775,7 @@ def test_cada_regla_trae_su_fila_y_no_repite_el_titulo():
                      anuncio("3", adset_id="901", veredicto="perdedor", gasto_7=250.0),
                      anuncio("4", adset_id="901", estado="DISAPPROVED", gasto_7=5.0, gasto_30=60.0)]
     e["frecuencia_7"] = {"800": {"alcance": 5000, "frecuencia": 3.4}}
+    e["conjuntos_problema"] = [conjunto("903", "800", estado="WITH_ISSUES")]
     recs = rec.calcular(e)
     assert {r["tipo"] for r in recs} == set(rec.TIPOS)
     for r in recs:

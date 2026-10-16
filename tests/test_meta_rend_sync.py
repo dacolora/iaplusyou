@@ -1100,3 +1100,18 @@ def test_pnd258_la_miniatura_que_llega_despues_no_borra_el_problema(cuenta, monk
     a = _objeto("anuncio", "a1")
     assert a["miniatura_url"] == "https://scontent.xx.fbcdn.net/a1.jpg" and a["extra"]["miniatura_en"]
     assert a["extra"]["problemas"] == sync.problemas_de(ISSUES)
+
+
+def test_pnd287_la_copia_guarda_el_motivo_de_un_conjunto_con_problemas(cuenta, monkeypatch):
+    conjuntos = [{"id": "s1", "name": "Mujeres", "campaign_id": "c1", "effective_status": "ACTIVE",
+                  "daily_budget": "50000", "learning_stage_info": {"status": "FAIL"}},
+                 {"id": "s2", "name": "Hombres", "campaign_id": "c1", "effective_status": "WITH_ISSUES",
+                  "issues_info": [{"error_summary": "Ad set has issues", "error_message": "Payment failed."}]}]
+    FakeGraph(monkeypatch, conjuntos=conjuntos)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert "issues_info" in sync.CAMPOS_CONJUNTO.split(",")
+    assert [o["objeto_id"] for o in datos.objetos_activos(CLI, [ACT]) if o["nivel"] == "conjunto"] == ["s1"]
+    todos = {o["objeto_id"]: o for o in datos.objetos_activos(CLI, [ACT], con_problemas=True)
+             if o["nivel"] == "conjunto"}
+    assert todos["s2"]["estado"] == "WITH_ISSUES" and todos["s1"]["problemas_meta"] == []
+    assert todos["s2"]["problemas_meta"] == [{"resumen": "Ad set has issues", "mensaje": "Payment failed."}]

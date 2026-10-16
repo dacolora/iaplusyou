@@ -55,7 +55,7 @@ MAX_PAGINAS_LISTADO = 1000
 CAMPOS_INFO = "name,currency,timezone_name,account_status,disable_reason,amount_spent,spend_cap"
 CAMPOS_CAMPANA = "id,name,objective,effective_status,daily_budget,lifetime_budget,bid_strategy,created_time"
 CAMPOS_CONJUNTO = ("id,name,campaign_id,effective_status,daily_budget,lifetime_budget,optimization_goal,"
-                   "bid_strategy,learning_stage_info,created_time")
+                   "bid_strategy,learning_stage_info,created_time,issues_info")
 CAMPOS_ANUNCIO = ("id,name,adset_id,campaign_id,effective_status,created_time,issues_info,"
                   "creative{id,thumbnail_url,video_id}")
 # El motivo de un anuncio WITH_ISSUES o DISAPPROVED (`issues_info`, PND-258): lo que Meta dice de cada problema, acotado
@@ -143,7 +143,9 @@ def _conjunto(f, moneda):
             "optimizacion": f.get("optimization_goal"), "presupuesto_diario": _presupuesto(f.get("daily_budget"), moneda),
             "presupuesto_total": _presupuesto(f.get("lifetime_budget"), moneda),
             "estrategia_puja": f.get("bid_strategy"),
-            "aprendizaje": (f.get("learning_stage_info") or {}).get("status"), "creado_en_meta": _creado(f)}
+            "aprendizaje": (f.get("learning_stage_info") or {}).get("status"), "creado_en_meta": _creado(f),
+            # Lo que Meta dice de un conjunto rechazado o con problemas (PND-287), como en los anuncios (PND-258).
+            "extra": {"problemas": problemas_de(f.get("issues_info"))}}
 
 
 def _con_miniatura_en(o):

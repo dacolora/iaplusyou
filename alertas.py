@@ -444,6 +444,10 @@ TEXTOS_META_RENDIMIENTO = {
     "anuncios_con_problemas": (idiomas.N_("Anuncios rechazados siguen gastando en «%(cuenta)s»"),
                                idiomas.N_("Meta los rechazó y gastaron en los últimos 7 días. Revísalos en el "
                                           "Administrador de anuncios desde el Diagnóstico de la pestaña Rendimiento.")),
+    # PND-287 (2026-10-15): la regla de conjuntos rechazados o con problemas que Rendimiento E2 tenía y se jubiló.
+    "conjuntos_con_problemas": (idiomas.N_("Conjuntos rechazados o con problemas en «%(cuenta)s»"),
+                                idiomas.N_("Meta les marca un problema que frena la entrega de sus anuncios. Lo que "
+                                           "dice de cada uno está en el Diagnóstico de la pestaña Rendimiento.")),
 }
 _ACT_VALIDA = r"act_[0-9]{1,30}"
 # PND-262 (decisión 2026-10-13): lo que guardó la última copia buena de una cuenta vale 48 horas, como los desgloses

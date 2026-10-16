@@ -719,6 +719,18 @@ msgstr[0] "%(n)s ad set depends on a single ad"
 msgstr[1] "%(n)s ad sets depend on a single ad"
 
 #, python-format
+msgid "%(n)s conjunto está rechazado o con problemas en Meta y frena la entrega de sus anuncios."
+msgid_plural "%(n)s conjuntos están rechazados o con problemas en Meta y frenan la entrega de sus anuncios."
+msgstr[0] "%(n)s ad set is rejected or has issues on Meta and holds back the delivery of its ads."
+msgstr[1] "%(n)s ad sets are rejected or have issues on Meta and hold back the delivery of their ads."
+
+#, python-format
+msgid "%(n)s conjunto rechazado o con problemas en Meta"
+msgid_plural "%(n)s conjuntos rechazados o con problemas en Meta"
+msgstr[0] "%(n)s ad set rejected or with issues on Meta"
+msgstr[1] "%(n)s ad sets rejected or with issues on Meta"
+
+#, python-format
 msgid "%(n)s consultas"
 msgstr "%(n)s queries"
 
@@ -5064,8 +5076,17 @@ msgstr "Ad sets"
 msgid "Conjuntos activos en aprendizaje limitado"
 msgstr "Active ad sets in Learning limited"
 
+msgid "Conjuntos con problemas"
+msgstr "Ad sets with issues"
+
 msgid "Conjuntos por país"
 msgstr "Ad sets per country"
+
+#, python-format
+msgid "Conjuntos que Meta frena en %(n)s cuenta"
+msgid_plural "Conjuntos que Meta frena en %(n)s cuentas"
+msgstr[0] "Ad sets Meta is holding back in %(n)s account"
+msgstr[1] "Ad sets Meta is holding back in %(n)s accounts"
 
 #, python-format
 msgid "Conjuntos que dependen de un solo anuncio en %(n)s cuenta"
@@ -5075,6 +5096,10 @@ msgstr[1] "Ad sets relying on a single ad in %(n)s accounts"
 
 msgid "Conjuntos que dependen de uno"
 msgstr "Ad sets relying on one ad"
+
+#, python-format
+msgid "Conjuntos rechazados o con problemas en «%(cuenta)s»"
+msgstr "Ad sets rejected or with issues in “%(cuenta)s”"
 
 msgid "Conoce soluciones, pero no tu producto"
 msgstr "Knows of solutions, but not your product"
@@ -12583,6 +12608,9 @@ msgstr "Meta saved a different spend cap on the campaign than the one sent (%(le
 msgid "Meta le atribuye %(valor)s en ventas por %(gasto)s de gasto: por debajo de %(minimo)s× se pierde dinero casi seguro."
 msgstr "Meta attributes %(valor)s in sales to it for %(gasto)s of spend: below %(minimo)s× you are almost surely losing money."
 
+msgid "Meta les marca un problema que frena la entrega de sus anuncios. Lo que dice de cada uno está en el Diagnóstico de la pestaña Rendimiento."
+msgstr "Meta flags an issue that holds back the delivery of their ads. What it says about each one is in the Diagnosis of the Performance tab."
+
 msgid "Meta los rechazó y gastaron en los últimos 7 días. Revísalos en el Administrador de anuncios desde el Diagnóstico de la pestaña Rendimiento."
 msgstr "Meta rejected them and they spent in the last 7 days. Review them in Ads Manager from the Diagnosis of the Performance tab."
 
@@ -17092,8 +17120,16 @@ msgid_plural "Revísalos en el Administrador de anuncios: Meta les marca un prob
 msgstr[0] "Check it in Ads Manager: Meta flags an issue that slows or stops its delivery."
 msgstr[1] "Check them in Ads Manager: Meta flags an issue that slows or stops their delivery."
 
+msgid "Revísalo en el Administrador de anuncios: mientras Meta le marque un problema, sus anuncios no entregan o entregan menos."
+msgid_plural "Revísalos en el Administrador de anuncios: mientras Meta les marque un problema, sus anuncios no entregan o entregan menos."
+msgstr[0] "Review it in Ads Manager: while Meta flags an issue, its ads don't deliver or deliver less."
+msgstr[1] "Review them in Ads Manager: while Meta flags an issue, their ads don't deliver or deliver less."
+
 msgid "Revísalos en el Administrador de anuncios: Meta les marca un problema que frena o detiene su entrega."
 msgstr "Review them in Ads Manager: Meta flags an issue that slows or stops their delivery."
+
+msgid "Revísalos en el Administrador de anuncios: mientras Meta les marque un problema, sus anuncios no entregan o entregan menos."
+msgstr "Review them in Ads Manager: while Meta flags an issue, their ads don't deliver or deliver less."
 
 msgid "Ritmo de lectura (palabras por segundo; 2,4 es natural)"
 msgstr "Reading pace (words per second; 2.4 is natural)"
@@ -21448,6 +21484,9 @@ msgstr "closed"
 msgid "cf_id inválido: %(cf)s"
 msgstr "invalid cf_id: %(cf)s"
 
+msgid "cierre permanente"
+msgstr "permanently closed"
+
 msgid "cifras del mes por la fecha del gasto; ganancia = cobrado + saldo del plan vencido − costo de lo que se intentó cobrar o el plan incluyó − descuento del plan (lo que la bolsa del mes regala frente a lo que el cliente pagó por ese mes; en un plan anual, un doceavo del pago)"
 msgstr "month figures by spend date; profit = charged + expired plan balance − cost of what we tried to charge or the plan included − plan discount (what the month's plan balance gives away versus what the client paid for that month; on an annual plan, one twelfth of the payment)"
 
@@ -21654,10 +21693,16 @@ msgstr "ad creatives a month, if you need them"
 msgid "cta"
 msgstr "CTA"
 
+msgid "cuenta comprometida (alguien entró sin permiso)"
+msgstr "compromised account (someone got in without permission)"
+
 msgid "cuenta publicitaria"
 msgid_plural "cuentas publicitarias"
 msgstr[0] "ad account"
 msgstr[1] "ad accounts"
+
+msgid "cuenta sin uso"
+msgstr "unused account"
 
 msgid "cálida"
 msgstr "warm"
@@ -22563,6 +22608,12 @@ msgstr "inconclusive"
 msgid "inconsciente"
 msgstr "unaware"
 
+msgid "incumplimiento de las políticas de publicidad"
+msgstr "breach of the advertising policies"
+
+msgid "incumplimiento de las políticas del administrador comercial"
+msgstr "breach of the Business Manager policies"
+
 msgid "info"
 msgstr "info"
 
@@ -22853,6 +22904,10 @@ msgstr "mode %(modo)s"
 
 msgid "moneda"
 msgstr "currency"
+
+#, python-format
+msgid "motivo según Meta: %(motivo)s"
+msgstr "reason according to Meta: %(motivo)s"
 
 msgid "motor"
 msgstr "engine"
@@ -23533,6 +23588,12 @@ msgstr "doctrine review · invalid response"
 msgid "revisión de marca del swap %(swap)s"
 msgstr "brand review of swap %(swap)s"
 
+msgid "revisión de propiedad intelectual"
+msgstr "intellectual property review"
+
+msgid "riesgo en los pagos"
+msgstr "payment risk"
+
 msgid "roas"
 msgstr "roas"
 
@@ -23706,6 +23767,9 @@ msgstr "no photos: the Catalog asset wasn't created."
 
 msgid "sin fotos: no se enlazó al activo del catálogo."
 msgstr "no photos: it wasn't linked to the Catalog asset."
+
+msgid "sin gasto en 7 días"
+msgstr "no spend in 7 days"
 
 msgid "sin gasto medido"
 msgstr "no measured spend"

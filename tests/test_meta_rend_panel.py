@@ -650,3 +650,17 @@ def test_la_vista_de_una_evaluacion_nombra_los_objetos_y_solo_enlaza_al_administ
     assert ev["resultado"]["plan"][1]["enlace"] == "javascript:alert(1)"      # la fila guardada no se toca
     # Sin nada que decir por anuncio, no hay «Anuncio por anuncio».
     assert panel.evaluacion_vista(dict(ev, resultado={"plan": []}))["anuncios_vista"] == []
+
+
+def test_pnd287_el_diagnostico_ve_los_conjuntos_con_problemas_de_la_copia(base_temporal, conectado):
+    """PND-287: el Diagnóstico del panel (y lo que la copia guarda para Alertas) incluye los conjuntos WITH_ISSUES o
+    DISAPPROVED de la copia, con lo que Meta dice de cada uno, en la misma lectura de objetos."""
+    _sembrar_diagnostico()
+    datos.guardar_objetos("hf", A, [{"nivel": "conjunto", "objeto_id": "s9", "nombre": "Bloqueado", "campaign_id": "c1",
+                                     "estado": "WITH_ISSUES",
+                                     "extra": {"problemas": [{"resumen": "Ad set has issues", "mensaje": None}]}}])
+    recs = _contexto(30)["recomendaciones"]
+    r, = [x for x in recs if x["tipo"] == "conjuntos_con_problemas"]
+    assert r["cuenta"] == A and r["nivel"] == "alta" and [o["id"] for o in r["objetos"]] == ["s9"]
+    assert r["problemas"] == [{"nombre": "Bloqueado", "texto": "Ad set has issues"}]
+    assert "conjuntos_con_problemas" in {x["tipo"] for x in panel.recomendaciones_de_cuenta("hf", A, hoy=HOY)}

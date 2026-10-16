@@ -76,7 +76,8 @@ Detalles que ya costaron una duda:
   `meta_cuenta.extra.alertas` las recomendaciones de nivel «alta» de ESA cuenta como `[{tipo, huella}]` (calculadas con
   `panel.recomendaciones_de_cuenta`, guardadas con `cuentas.actualizar_extra`; un fallo se anota con su tipo y no tumba
   la copia). Lo que puede ser «alta» es `meta_rendimiento.recomendaciones.TIPOS_ALTA` (`cuenta_estado`,
-  `cuenta_roas_bajo`, `aprendizaje_limitado`, `perdedores_gastando`, `anuncios_con_problemas`) y cada tipo tiene su
+  `cuenta_roas_bajo`, `aprendizaje_limitado`, `perdedores_gastando`, `anuncios_con_problemas` y, desde PND-287
+  (2026-10-15), `conjuntos_con_problemas`) y cada tipo tiene su
   par `N_` (título y detalle) en `alertas.TEXTOS_META_RENDIMIENTO`: la fuente ignora un tipo sin texto, y una prueba
   exige que las tres listas coincidan. **Un tipo nuevo que pueda ser «alta» se agrega a `TIPOS_ALTA` y a
   `TEXTOS_META_RENDIMIENTO` (más su traducción), o su alerta se pierde en silencio.** Cada una sale como alerta de

@@ -733,7 +733,7 @@ def test_pnd124_plata_visible_pero_solo_admin_descarta(app, monkeypatch, clave):
 
 
 @pytest.mark.parametrize('tipo', ['cuenta_estado', 'cuenta_roas_bajo', 'aprendizaje_limitado',
-                                  'perdedores_gastando', 'anuncios_con_problemas'])
+                                  'perdedores_gastando', 'anuncios_con_problemas', 'conjuntos_con_problemas'])
 def test_pnd270_meta_rendimiento_visible_pero_solo_admin_descarta(app, monkeypatch, tipo):
     """PND-270 (decisión 2026-10-13, la regla de PND-124): las alertas del Diagnóstico de Meta las ve el cliente, pero
     solo un admin las descarta o restaura; el servidor lo frena también si la alerta ya salió del cálculo."""

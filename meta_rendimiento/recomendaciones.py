@@ -15,6 +15,8 @@ Entrada (`calcular(entrada)`), un dict que arma `panel` (Task 4) sin una consult
                    "presupuesto_diario", "aprendizaje", "campaign_id", "padre_id"}],
                        # filas de `meta_objeto` (campañas y conjuntos); solo cuentan las de estado ACTIVE;
                        # `presupuesto_diario` ya en unidades (None = sin presupuesto en ese nivel)
+      "conjuntos_problema": [{"objeto_id", "ad_account_id", "nombre", "estado", "problemas_meta"}],
+                       # los conjuntos WITH_ISSUES o DISAPPROVED (PND-287), con lo que Meta dice de cada uno
       "conjuntos_7": {adset_id: {"gasto", "compras", "valor"}},  # `datos.gasto_por_conjunto`, últimos 7 días
       "anuncios": [{"ad_id", "ad_account_id", "adset_id", "campaign_id", "nombre", "conjunto", "estado",
                     "veredicto", "problemas", "problemas_meta", "m", "gasto_7", "gasto_30"}],
@@ -36,7 +38,7 @@ van después en su nivel). `fila` son las cifras sueltas de la fila del Diagnós
 Daniel 2026-10-13: cinco tarjetas repetían el mismo consejo con las cifras enterradas en la prosa): `etiqueta` es lo
 que nombra la fila cuando no es la cuenta (la campaña o el conjunto de `escalar`, el segmento de `segmento_caro`),
 `cifra` y `nota` lo que se ve de un vistazo, `barra` una fracción 0–1 o None y `gasto` la parte del gasto de la cuenta
-en texto o None. `anuncios_con_problemas` trae además `problemas`: [{"nombre", "texto"}] de sus anuncios con lo que
+en texto o None. `anuncios_con_problemas` y `conjuntos_con_problemas` traen además `problemas`: [{"nombre", "texto"}] de sus anuncios con lo que
 Meta dice de cada uno (como mucho `MAX_PROBLEMAS_VISIBLES`, los de más gasto; PND-258). No va en `que_hacer` ni en
 `por_que`, que la «Evaluación con IA» le manda a Claude: así su prompt y su precio no cambian. Los montos van en la moneda de
 la cuenta: en «Todas» el orden por impacto es nominal entre monedas (como PND-196). `impacto.monto` es siempre «por
@@ -100,15 +102,15 @@ DIAS_MES = 30
 MAX_OBJETOS = administrador.MAX_IDS
 NIVELES = ("alta", "media", "baja")
 TIPOS = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perdedores_gastando", "anuncios_con_problemas",
-         "escalar", "fatiga", "segmento_caro", "concentracion")
+         "conjuntos_con_problemas", "escalar", "fatiga", "segmento_caro", "concentracion")
 # Tipos que juntan todo lo de una cuenta en una sola recomendación: su huella no lleva los objetos (ruling E2-R4).
 AGREGADOS = ("aprendizaje_limitado", "perdedores_gastando", "anuncios_con_problemas", "cuenta_roas_bajo",
-             "cuenta_estado")
+             "cuenta_estado", "conjuntos_con_problemas")
 # Tipos que alguna regla puede marcar «alta»: los que la copia guarda para Alertas, y cada uno tiene su título en
 # `alertas.TEXTOS_META_RENDIMIENTO` (la fuente ignora un tipo sin texto). Una prueba exige que coincidan con las
 # reglas y con esos textos, para que un «alta» nuevo no se pierda en silencio (revisión de la Task 4 de E2).
 TIPOS_ALTA = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perdedores_gastando",
-              "anuncios_con_problemas")
+              "anuncios_con_problemas", "conjuntos_con_problemas")
 # effective_status de un anuncio que entrega (o puede entregar): WITH_ISSUES sigue gastando en muchos casos.
 ESTADOS_ENTREGA = ("ACTIVE", "WITH_ISSUES")
 ESTADOS_PROBLEMA = ("WITH_ISSUES", "DISAPPROVED")
@@ -125,6 +127,8 @@ CONSEJOS = {
     "perdedores_gastando": N_("Páusalos: libera su presupuesto para los anuncios que venden."),
     "anuncios_con_problemas": N_("Revísalos en el Administrador de anuncios: Meta les marca un problema que frena o "
                                  "detiene su entrega."),
+    "conjuntos_con_problemas": N_("Revísalos en el Administrador de anuncios: mientras Meta les marque un problema, "
+                                  "sus anuncios no entregan o entregan menos."),
     "escalar": N_("Venden mejor que su cuenta: sube %(pct)s %% el presupuesto diario (más de %(pct)s %% reinicia el "
                   "aprendizaje)."),
     "fatiga": N_("Prepara variantes antes de que se apaguen: «Evaluar con IA» propone ideas a partir de lo que ya "
@@ -142,6 +146,7 @@ CABECERA_CIFRA = {
     "aprendizaje_limitado": N_("Conjuntos activos en aprendizaje limitado"),
     "perdedores_gastando": N_("Perdedores activos"),
     "anuncios_con_problemas": N_("Anuncios con problemas"),
+    "conjuntos_con_problemas": N_("Conjuntos con problemas"),
     "escalar": N_("ROAS de 7 días"),
     "fatiga": N_("Anuncios que se cansan"),
     "segmento_caro": N_("ROAS de 30 días"),
@@ -169,6 +174,14 @@ ESTADOS_CUENTA = {
 }
 OTRO_ESTADO = (N_("Meta marca la cuenta con el estado %(codigo)s: no está activa."),
                N_("Revisa el estado de la cuenta en Meta."))
+# disable_reason de una cuenta publicitaria (Graph API, AdAccount), en palabras (PND-287: la regla jubilada de
+# Rendimiento E2 lo decía y el Diagnóstico no). Solo los que se pueden decir con certeza; otro código no lleva motivo.
+MOTIVOS_DESACTIVACION = {
+    1: N_("incumplimiento de las políticas de publicidad"), 2: N_("revisión de propiedad intelectual"),
+    3: N_("riesgo en los pagos"), 7: N_("cierre permanente"), 9: N_("cuenta sin uso"),
+    11: N_("incumplimiento de las políticas del administrador comercial"),
+    15: N_("cuenta comprometida (alguien entró sin permiso)"),
+}
 
 # Dimensiones de los desgloses en palabras (las usa también la sección «Segmentos» del panel).
 DIMENSIONES = {"edad_genero": N_("Edad y género"), "ubicacion": N_("Ubicación"), "pais": N_("País"),
@@ -294,7 +307,7 @@ def _objeto(nivel, objeto_id, nombre):
 class _Cuenta:
     """Lo de UNA cuenta que miran las reglas, ya filtrado y sumado."""
 
-    def __init__(self, c, t7, t30, objetos, conj7, anuncios, frecuencia, desgloses):
+    def __init__(self, c, t7, t30, objetos, conj7, anuncios, frecuencia, desgloses, conjuntos_problema=()):
         self.act = c["ad_account_id"]
         self.nombre = _una_linea(c.get("nombre")) or self.act
         self.moneda = (c.get("moneda") or "").upper() or None
@@ -307,6 +320,7 @@ class _Cuenta:
         self.anuncios = anuncios
         self.frecuencia = frecuencia
         self.desgloses = desgloses
+        self.conjuntos_problema = list(conjuntos_problema)
         # conjunto -> campaña: de los conjuntos activos y, para los que no lo están, de sus anuncios.
         self.campana_de = {}
         for a in anuncios:
@@ -569,6 +583,37 @@ def _texto_problema(p):
     return resumen or mensaje
 
 
+def _conjuntos_con_problemas(cx):
+    """PND-287 (la regla jubilada de Rendimiento E2 que el Diagnóstico no tenía): los conjuntos que Meta rechazó o marca
+    con problemas (WITH_ISSUES/DISAPPROVED) frenan TODOS sus anuncios, aunque cada anuncio esté bien. Alta, como la
+    regla vieja: es un conjunto que el anunciante quiere entregando. No depende del gasto (uno bloqueado no gasta);
+    se ordenan por su gasto de 7 días y lo que estaba en juego es ese gasto por día."""
+    malos = sorted(cx.conjuntos_problema, key=lambda o: (-_f(cx.g7(o["objeto_id"]).get("gasto")), str(o["objeto_id"])))
+    if not malos:
+        return []
+    n = len(malos)
+    gasto = sum(_f(cx.g7(o["objeto_id"]).get("gasto")) for o in malos)
+    titulo = ngettext("%(n)s conjunto rechazado o con problemas en Meta",
+                      "%(n)s conjuntos rechazados o con problemas en Meta", n, n=_num(n))
+    que_hacer = ngettext(
+        "Revísalo en el Administrador de anuncios: mientras Meta le marque un problema, sus anuncios no entregan o "
+        "entregan menos.",
+        "Revísalos en el Administrador de anuncios: mientras Meta les marque un problema, sus anuncios no entregan o "
+        "entregan menos.", n)
+    por_que = ngettext("%(n)s conjunto está rechazado o con problemas en Meta y frena la entrega de sus anuncios.",
+                       "%(n)s conjuntos están rechazados o con problemas en Meta y frenan la entrega de sus anuncios.",
+                       n, n=_num(n))
+    objetos = [_objeto("conjunto", o["objeto_id"], o.get("nombre")) for o in malos]
+    nota = (gettext("%(gasto)s en 7 días", gasto=cx.dinero(gasto)) if gasto > 0
+            else gettext("sin gasto en 7 días"))
+    fila = _fila(ngettext("%(n)s conjunto", "%(n)s conjuntos", n, n=_num(n)), nota)
+    r = cx.rec("conjuntos_con_problemas", "alta", titulo, que_hacer, por_que, objetos, cx.impacto(gasto / DIAS_SEMANA),
+               fila=fila)
+    r["problemas"] = [{"nombre": _una_linea(o.get("nombre")) or str(o["objeto_id"]), "texto": _texto_problema(p)}
+                      for o in malos for p in (o.get("problemas_meta") or [])[:1]][:MAX_PROBLEMAS_VISIBLES]
+    return [r]
+
+
 def _cuenta_roas_bajo(cx):
     roas = _div(cx.valor_30, cx.gasto_30)
     if cx.gasto_30 < CUENTA_GASTO_MIN or roas is None or roas >= CUENTA_ROAS_MIN:
@@ -595,13 +640,18 @@ def _cuenta_roas_bajo(cx):
 def _cuenta_estado(cx):
     estado = _entero(cx.info.get("account_status"))
     motivos, acciones, cifras = [], [], []
-    titulo, barra = None, None
+    titulo, barra, razon = None, None, None
     if estado is not None and estado != CUENTA_ACTIVA:
         motivo, accion = ESTADOS_CUENTA.get(estado, OTRO_ESTADO)
         motivos.append(gettext(motivo, codigo=estado))
         acciones.append(gettext(accion))
         titulo = gettext("La cuenta no está activa en Meta")
         cifras.append(gettext("No está activa"))
+        # PND-287: por qué la desactivó, en palabras. Va en la fila (lo que se ve de un vistazo), no en `por_que`, que
+        # la «Evaluación con IA» le manda a Claude: su prompt y su precio no cambian.
+        if MOTIVOS_DESACTIVACION.get(_entero(cx.info.get("disable_reason"))):
+            razon = gettext("motivo según Meta: %(motivo)s",
+                            motivo=gettext(MOTIVOS_DESACTIVACION[_entero(cx.info.get("disable_reason"))]))
     tope = _monto_menor(cx.info.get("spend_cap"), cx.moneda)
     gastado = _monto_menor(cx.info.get("amount_spent"), cx.moneda)
     if tope > 0 and gastado >= TOPE_FRACCION * tope:
@@ -614,7 +664,8 @@ def _cuenta_estado(cx):
         barra = gastado / tope
     if not motivos:
         return []
-    fila = _fila(cifras[0], cifras[1] if len(cifras) > 1 else None, barra=barra)
+    nota = " · ".join(t for t in (razon, cifras[1] if len(cifras) > 1 else None) if t) or None
+    fila = _fila(cifras[0], nota, barra=barra)
     return [cx.rec("cuenta_estado", "alta", titulo, " ".join(acciones), " ".join(motivos), fila=fila)]
 
 
@@ -744,7 +795,7 @@ def _concentracion(cx):
 
 
 _REGLAS = (_cuenta_estado, _cuenta_roas_bajo, _aprendizaje_limitado, _perdedores_gastando, _anuncios_con_problemas,
-           _escalar, _fatiga, _segmento_caro, _concentracion)
+           _conjuntos_con_problemas, _escalar, _fatiga, _segmento_caro, _concentracion)
 
 
 # ---------------------------------------------------------------- entrada y orden ---
@@ -770,6 +821,8 @@ def calcular(entrada):
                           and o.get("objeto_id"))
     anuncios = _por_cuenta(a for a in entrada.get("anuncios") or () if a.get("ad_id"))
     desgloses = _por_cuenta(entrada.get("desgloses_30"))
+    problema = _por_cuenta(o for o in entrada.get("conjuntos_problema") or () if o.get("objeto_id")
+                           and o.get("nivel", "conjunto") == "conjunto" and o.get("estado") in ESTADOS_PROBLEMA)
     conj7 = {str(k): v for k, v in (entrada.get("conjuntos_7") or {}).items()}
     frecuencia = {str(k): v for k, v in (entrada.get("frecuencia_7") or {}).items()}
     salida = []
@@ -779,7 +832,7 @@ def calcular(entrada):
         if not act or _f(totales_30.get("gasto")) <= 0:
             continue    # sin datos en el período: ninguna regla
         cx = _Cuenta(c, t7.get(act) or {}, totales_30, objetos.get(act, []), conj7, anuncios.get(act, []),
-                     frecuencia, desgloses.get(act, []))
+                     frecuencia, desgloses.get(act, []), problema.get(act, []))
         for regla in _REGLAS:
             salida.extend(regla(cx))
     salida.sort(key=_orden)
@@ -804,6 +857,9 @@ def _titulo_grupo(tipo, n):
                         "Perdedores que siguen gastando en %(n)s cuentas", n, n=_num(n))
     if tipo == "anuncios_con_problemas":
         return ngettext("Anuncios que Meta frena en %(n)s cuenta", "Anuncios que Meta frena en %(n)s cuentas", n,
+                        n=_num(n))
+    if tipo == "conjuntos_con_problemas":
+        return ngettext("Conjuntos que Meta frena en %(n)s cuenta", "Conjuntos que Meta frena en %(n)s cuentas", n,
                         n=_num(n))
     if tipo == "escalar":
         return ngettext("%(n)s presupuesto listo para subir", "%(n)s presupuestos listos para subir", n, n=_num(n))

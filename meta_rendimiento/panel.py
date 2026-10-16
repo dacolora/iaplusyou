@@ -287,11 +287,13 @@ def _entrada_reglas(cliente, en_alcance, hoy, reglas, filas_dia=None, anuncios=N
     if desgloses_30 is None:
         desgloses_30 = datos.desgloses(cliente, ids, DIAS_REGLAS)
     ahora = ahora or _ahora()
+    objetos = datos.objetos_activos(cliente, ids, con_problemas=True)   # y los conjuntos con problemas (PND-287)
     return {
         "cuentas": en_alcance,
         "totales_7": _totales_por_cuenta(filas_dia, desde_7, hasta),
         "totales_30": _totales_por_cuenta(filas_dia, desde_30, hasta),
-        "objetos": datos.objetos_activos(cliente, ids),
+        "objetos": [o for o in objetos if o["estado"] == "ACTIVE"],
+        "conjuntos_problema": [o for o in objetos if o["estado"] != "ACTIVE"],
         "conjuntos_7": _por_conjunto(a7),
         "anuncios": evaluados,
         "frecuencia_7": frecuencia_7,

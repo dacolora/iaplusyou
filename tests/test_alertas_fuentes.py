@@ -1482,7 +1482,8 @@ def test_meta_rendimiento_cada_tipo_alto_tiene_su_texto(base_temporal):
     assert set(alertas.TEXTOS_META_RENDIMIENTO) == set(altos) and set(altos) <= set(recomendaciones.TIPOS)
     _cuenta_meta("act_1", "Norway", [{"tipo": t, "huella": f"{i:064x}"} for i, t in enumerate(altos)])
     a = alertas._fuente_meta_rendimiento("acme", AHORA)
-    assert len(a) == 5 and len({x["titulo"] for x in a}) == 5 and all("Norway" in x["titulo"] for x in a)
+    assert len(a) == len(altos) and len({x["titulo"] for x in a}) == len(altos)
+    assert all("Norway" in x["titulo"] for x in a)
 
 
 def test_meta_rendimiento_ignora_lo_guardado_que_no_vale(base_temporal):
@@ -1549,7 +1550,7 @@ def test_meta_rendimiento_la_huella_no_depende_del_idioma_y_el_texto_si(base_tem
     es = _por_clave(alertas._fuente_meta_rendimiento("acme", AHORA))
     with idiomas.en_idioma("en"):
         en = _por_clave(alertas._fuente_meta_rendimiento("acme", AHORA))
-    assert set(es) == set(en) and len(en) == 5
+    assert set(es) == set(en) and len(en) == len(alertas.TEXTOS_META_RENDIMIENTO)
     assert all(en[c]["huella"] == es[c]["huella"] for c in en)
     assert [(c, campo) for c in en for campo in ("titulo", "detalle") if en[c][campo] == es[c][campo]] == []
     assert en["meta_rendimiento:cuenta_roas_bajo:act_1"]["titulo"] == "“Norway” sells less than it spends"
