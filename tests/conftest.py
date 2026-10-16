@@ -1,5 +1,6 @@
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -134,6 +135,75 @@ def _sin_cache_meta():
     limpiar()
     yield
     limpiar()
+
+
+@pytest.fixture(autouse=True)
+def registros_en_tmp(tmp_path, monkeypatch):
+    """PND-269 (decisión 2026-10-13): la bitácora (`registro_generaciones.csv` en la raíz) y la bandeja de
+    referencias de Crear (`clientes/<c>/referencias_pendientes.json`) se escriben en la carpeta temporal del
+    test, nunca en el árbol de trabajo: en el checkout principal se mezclaban con los datos reales. Un test que
+    necesita otra carpeta la repunta con su propio monkeypatch (gana el último). Ojo con el nombre: pytest arma
+    los autouse por orden alfabético, y uno que pida `monkeypatch` antes de `_sin_cache_meta` hace que este limpie
+    con los parches del test todavía puestos (test_rutas_alertas::test_invalidar_tras_escribir… fallaba al cerrar)."""
+    import bitacora
+    import referencias_flowplus
+    monkeypatch.setattr(bitacora, "LOG_FILE", str(tmp_path / "registro_generaciones.csv"))
+    monkeypatch.setattr(referencias_flowplus, "BASE_DIR", str(tmp_path))
+
+
+# ---- PND-269: guarda del árbol de trabajo ----
+# Lo que una corrida de pruebas deja en el checkout (un archivo nuevo, ignorado o no, o uno versionado que cambió)
+# hace fallar la corrida al final, con la lista. Fuera de la cuenta: venv, worktrees de otras conversaciones, el
+# submódulo y los __pycache__. `CREATV_SIN_GUARDA_ARBOL=1` la apaga (por ejemplo, si a la vez estás editando
+# archivos en el mismo checkout o la app corre ahí y escribe sus datos).
+_ARBOL_FUERA = (":(exclude)venv", ":(exclude).venv", ":(exclude).claude/worktrees", ":(exclude)meta_ads",
+                ":(exclude)node_modules")
+
+
+def foto_arbol(raiz=RAIZ):
+    """Las líneas de `git status` (cambiados, sin seguir e ignorados, archivo por archivo) del árbol de `raiz`.
+    None si no es un repositorio de git o git no responde: entonces no hay guarda."""
+    try:
+        r = subprocess.run(["git", "status", "--porcelain", "--ignored", "--untracked-files=all", "--", ".",
+                            *_ARBOL_FUERA], cwd=raiz, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    return {linea for linea in r.stdout.splitlines()
+            if "__pycache__" not in linea and ".pytest_cache" not in linea}
+
+
+def arbol_nuevo(antes, despues):
+    """Lo que apareció en el árbol entre las dos fotos (lo que ya estaba antes no cuenta)."""
+    return sorted((despues or set()) - (antes or set()))
+
+
+def pytest_configure(config):
+    # pytest_configure y no pytest_sessionstart: con `pytest` a secas desde la raíz este conftest se carga al
+    # recolectar, después de sessionstart, y la guarda quedaba apagada sin decirlo.
+    if os.environ.get("CREATV_SIN_GUARDA_ARBOL") or hasattr(config, "_creatv_arbol"):
+        return
+    config._creatv_arbol = (RAIZ, foto_arbol(RAIZ))
+
+
+def pytest_sessionfinish(session, exitstatus):
+    raiz, antes = getattr(session.config, "_creatv_arbol", (None, None))
+    if antes is None:
+        return
+    nuevos = arbol_nuevo(antes, foto_arbol(raiz))
+    if not nuevos:
+        return
+    lineas = ["", "Guarda del árbol (PND-269): las pruebas dejaron esto en el checkout; deben escribir en tmp_path:"]
+    lineas += ["  " + n for n in nuevos]
+    lineas.append("(Si lo cambiaste tú mientras corrían, o la app corre en este checkout: CREATV_SIN_GUARDA_ARBOL=1.)")
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    for linea in lineas:
+        if reporter is not None:
+            reporter.write_line(linea, red=True)
+        else:
+            print(linea, file=sys.stderr)
+    session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 @pytest.fixture(autouse=True)

@@ -201,3 +201,15 @@ mismas claves que se llevó: si su tarea falla después y se le devuelve el cobr
 próxima que lo reuse lo encuentra. `pendientes_por_clave(cliente, prefijos, claves)` lista lo pendiente por clave;
 `registrar_trasladando_seguro` nunca lanza (si falla, anota la entrega sola). `registrar` se partió en `_normalizar` +
 `_escribir(con, …)` para poder escribir varias filas en una transacción. Pruebas: `tests/test_gastos_traslado.py`.
+
+**Las pruebas no escriben en el checkout (PND-269, decisión 2026-10-13; 2026-10-15).** La suite dejaba
+`registro_generaciones.csv` (la bitácora, `bitacora.LOG_FILE`) y `clientes/acme/referencias_pendientes.json` (la bandeja
+de Crear, `referencias_flowplus.BASE_DIR`) en el árbol; en el checkout principal se mezclaban con los datos reales. El
+autouse `registros_en_tmp` de `tests/conftest.py` los manda a `tmp_path` (su nombre importa: pytest arma los autouse por
+orden alfabético y uno que pida `monkeypatch` antes de `_sin_cache_meta` rompe la limpieza de este). La guarda del
+árbol (`foto_arbol` en `pytest_configure` y `pytest_sessionfinish`) compara `git status --porcelain --ignored
+--untracked-files=all` antes y después de la corrida (sin venv, worktrees, el submódulo ni `__pycache__`) y, si
+apareció algo, lista los archivos y la corrida termina con código 1 aunque todas las pruebas pasen. Un módulo nuevo
+que escriba junto a su `__file__` necesita su monkeypatch en ese autouse o en el fixture de su prueba. Si a la vez
+editas archivos en el mismo checkout (o la app corre ahí), `CREATV_SIN_GUARDA_ARBOL=1` la apaga. Pruebas:
+`tests/test_guarda_arbol.py`.
