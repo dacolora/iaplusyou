@@ -74,8 +74,13 @@ ESTADOS_VIVOS = ("armando", "lanzando", "pausado", "corriendo", "decidido")
 
 
 def _pais_nuevo(p):
-    return {"pais": p["pais"], "idioma": p.get("idioma") or "es",
-            "presupuesto_dia": float(p.get("presupuesto_dia") or 0), "meta_adset_id": None, "estado": "en_cola"}
+    nuevo = {"pais": p["pais"], "idioma": p.get("idioma") or "es",
+             "presupuesto_dia": float(p.get("presupuesto_dia") or 0), "meta_adset_id": None, "estado": "en_cola"}
+    if p.get("ad_account_id"):
+        # PND-148: la cuenta publicitaria donde se lanza el país (sin el campo, la de meta.json). Un hijo de una
+        # derivación la hereda: sus países se lanzan en las mismas cuentas que los del padre.
+        nuevo["ad_account_id"] = p["ad_account_id"]
+    return nuevo
 
 
 def atribucion_sugerida(cliente):
@@ -267,6 +272,27 @@ def actualizar_pais(cliente, experimento_id, pais, **campos):
                 p.update(campos)
         con.execute(db.experimento.update().where(db.experimento.c.id == experimento_id)
                     .values(paises=paises, actualizado_en=db.ahora()))
+
+
+def fijar_campana(cliente, experimento_id, paises_, campaign_id):
+    """PND-148: la campaña de Meta de una cuenta queda en cada país de esa cuenta (`paises[i]["meta_campaign_id"]`)
+    y, si el experimento todavía no tiene campaña, también como la suya (la de la cuenta por defecto, que se crea
+    primero, o la primera). UNA transacción con el candado tomado antes de leer, como `actualizar_pais`: un reintento
+    la encuentra entera o no la encuentra, nunca a medias (y no crea una segunda campaña en la misma cuenta)."""
+    with db.conectar() as con:
+        if not _bloquear(con, db.experimento, experimento_id, cliente):
+            return
+        f = _fila_experimento(con, cliente, experimento_id)
+        if not f:
+            return
+        paises = [dict(p) for p in (f._mapping[db.experimento.c.paises] or [])]
+        for p in paises:
+            if p["pais"] in paises_:
+                p["meta_campaign_id"] = campaign_id
+        valores = {"paises": paises, "actualizado_en": db.ahora()}
+        if not f._mapping[db.experimento.c.meta_campaign_id]:
+            valores["meta_campaign_id"] = campaign_id
+        con.execute(db.experimento.update().where(db.experimento.c.id == experimento_id).values(**valores))
 
 
 def agregar_pieza(cliente, experimento_id, pieza_id, pais):

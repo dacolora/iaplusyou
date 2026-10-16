@@ -17,6 +17,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import cuentas_lanzamiento
 import db
 import idiomas
 from meta_rendimiento import cuentas, datos, desgloses, graph, tasas
@@ -52,7 +53,9 @@ LIMITE_ANUNCIOS = 100   # con `creative{…}` Meta responde «reduce the amount 
 # límite reducido a 25 (graph.paginar).
 MAX_PAGINAS_LISTADO = 1000
 
-CAMPOS_INFO = "name,currency,timezone_name,account_status,disable_reason,amount_spent,spend_cap"
+# `user_tasks`: lo que la persona conectada puede hacer en la cuenta; con ADVERTISE o MANAGE la cuenta puede lanzar
+# experimentos (PND-148, `cuentas_lanzamiento`).
+CAMPOS_INFO = "name,currency,timezone_name,account_status,disable_reason,amount_spent,spend_cap,user_tasks"
 CAMPOS_CAMPANA = "id,name,objective,effective_status,daily_budget,lifetime_budget,bid_strategy,created_time"
 CAMPOS_CONJUNTO = ("id,name,campaign_id,effective_status,daily_budget,lifetime_budget,optimization_goal,"
                    "bid_strategy,learning_stage_info,created_time")
@@ -368,7 +371,8 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
                                  ("zona_horaria", info.get("timezone_name"))) if v}
     cuentas.actualizar(cliente, act, **cambios, estado="copiando", error=None)
     cuentas.actualizar_extra(cliente, act, {"cuenta": {k: info.get(k) for k in (
-        "account_status", "disable_reason", "amount_spent", "spend_cap")}})
+        "account_status", "disable_reason", "amount_spent", "spend_cap")},
+        "puede_lanzar": cuentas_lanzamiento.puede_lanzar(info.get("user_tasks")), "lanzar_revisado_en": db.ahora()})
     hoy = hoy or _hoy_local(info.get("timezone_name") or guardada.get("zona_horaria"))
     extra = guardada.get("extra") or {}
     # `backfill_hecho` (copias anteriores) vale por las dos; así un fallo en el alcance no repite los 13 meses.

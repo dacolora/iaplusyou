@@ -1,6 +1,7 @@
 """Las cuentas publicitarias que un proyecto LEE (spec §2.5 y §5). Único escritor de `meta_cuenta`.
 
-Aparte de la cuenta única de `meta.json` (la que lanza experimentos). Una cuenta
+Aparte de la cuenta de `meta.json` (la de defecto al lanzar; desde PND-148 una de estas también lanza su país,
+`cuentas_lanzamiento`). Una cuenta
 solo puede estar en un proyecto: el índice único `uq_meta_cuenta_act` lo
 garantiza y `elegir` la rechaza antes, así los datos de un cliente nunca
 aparecen en otro."""

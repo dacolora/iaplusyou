@@ -19,7 +19,8 @@ of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anun
 sueltos" is the one `legado=True` row per client and is untouched) names countries with
 a daily budget each, a total cap, days, objective and destination URL; pieces (finals
 for their own country, or text-free clones for any country) are attached as
-`experimento_pieza` rows. `lanzador.lanzar` maps it onto Meta as 1 campaign
+`experimento_pieza` rows. `lanzador.lanzar` maps it onto Meta as 1 campaign per ad account (one, the `meta.json`
+account, unless the project launches countries in other accounts: «Varias cuentas por país» below)
 (`spend_cap` = tope total, only when it clears Meta's minimum) -> 1 adset per country
 (`Targeting().edad().paises([pais])`, budget in the ad ACCOUNT's currency, never the
 country's) -> 1 ad per piece, all created `PAUSED`, saving every id as soon as Meta returns it so
@@ -131,6 +132,44 @@ frenos y se niega si la ficha no tiene su `presupuesto_diario`. La tarea vieja q
 `meta.json`), y `_confirmar_presupuesto` después de crear el conjunto; si Meta guardó otro diario, el conjunto queda en
 pausa, no se crean creative ni anuncio y la ficha queda en error con el conjunto anotado. Al crear el conjunto la ficha
 guarda `presupuesto_diario` y `moneda`, que es lo que «Activar» vuelve a leer contra Meta (`tests/test_tareas_meta.py`).
+
+**Varias cuentas por país (PND-148, 2026-10-16; spec `docs/superpowers/specs/2026-10-16-varias-cuentas-meta-por-pais-design.md`).**
+happyflops tiene 7 cuentas publicitarias en SEK, una por país, y todo se lanzaba en la de `meta.json`. Ahora cada país
+dice en qué cuenta se lanza: `experimento.paises[i]["ad_account_id"]` (sin migración; sin el campo, la de `meta.json`,
+la «cuenta por defecto»: un experimento viejo hace exactamente las mismas llamadas que antes). Qué cuentas se pueden
+elegir lo decide `cuentas_lanzamiento.py` (único lugar): la de defecto y las de `meta_cuenta` del proyecto con
+`extra.puede_lanzar` (la copia de Rendimiento lo escribe desde `user_tasks`: `ADVERTISE` o `MANAGE`) y la MISMA moneda
+que el experimento (un experimento tiene una sola moneda, la de `meta.json`); en modo agencia, solo la de defecto. El
+paso «Dónde» de «Nuevo experimento» pinta, por país marcado, «🇸🇪 Suecia · se lanza en [cuenta]» con un selector
+(`cuenta_<PAÍS>`, la sugerida es la cuenta cuyo `pais` es ese país) SOLO si hay alguna cuenta además de la de defecto;
+Revisar lo repite (`#exp-cuentas-resumen`, nombres por `textContent`: vienen de Meta) y la gestión dice la cuenta de
+cada país cuando algún experimento usa otra (`nombres_cuentas_exp`, una lectura y solo entonces). `exp_probar` valida
+con `cuentas_lanzamiento.validar` (otra moneda, sin permiso, de otro proyecto o escrita a mano: nada se crea) y guarda
+solo la que no es la de defecto; `_pais_nuevo` la conserva, así un hijo de una derivación lanza en las mismas cuentas.
+**Lanzar:** agrupa los países por cuenta (la de defecto primero) y, ANTES de llamar a Meta, `_exigir_cuentas` vuelve a
+mirar que cada cuenta que no es la de defecto siga siendo del proyecto (una cuenta que salió pudo pasar a otro); después
+lee moneda y mínimos de TODAS (`_cuenta_meta_de` + `comprobar_moneda` de cada una) antes del primer monto. Una campaña
+por cuenta («<nombre> — <cuenta>» si hay más de una), guardada con `experimentos.fijar_campana` en cada país de esa
+cuenta (`paises[i]["meta_campaign_id"]`) y, la primera (la de defecto si se usa), en `experimento.meta_campaign_id`,
+en UNA transacción: un reintento retoma por cuenta sin duplicar. El tope se reparte (`_repartir_tope`) en proporción a
+la suma de los diarios de cada campaña, hacia abajo en la unidad de Meta (la suma nunca pasa el tope); una parte bajo el
+`min_campaign_group_spend_cap` de SU cuenta va sin `spend_cap`, con la fecha de fin de `_dias_que_alcanza` (la del
+experimento entero, la misma de la primera activación) y un evento que lo dice. Cada conjunto, creative, anuncio y
+subida de video se crea con la cuenta de su país configurada (`_usar_cuenta`); el caché de videos es por (cuenta,
+pieza): un video de una cuenta no sirve en otra. La Página y el Instagram son los de la conexión en todas.
+**Lo demás:** `campanas_de(ex)` (todas las campañas), `_campana_de_pais` y `_cuenta_de_pais` (con el respaldo del
+experimento viejo). Activar (`cambiar_estado`, `activar_pieza`) pasa por `_confirmar_antes_de_activar`: `_exigir_cuentas` y
+`comprobar_moneda` de la cuenta del país (o de todas) y el tope contra el gasto SUMADO de todas las campañas; activar un
+país enciende la campaña de SU cuenta (también con el experimento ya «corriendo» por otra cuenta,
+`_campana_sin_pais_activo`). `cambiar_presupuesto_pais`/escalar comprueban la cuenta del país; `lanzar_piezas_nuevas`
+crea cada anuncio en la cuenta de su país. Pausar, cerrar y repausar nunca se frenan y recorren todas las campañas (si
+una falla siguen con las demás y sale el primer error). `vigilar_gasto` suma el gasto de todas y, al llegar al tope,
+pausa todas; el ritmo se mira conjunto por conjunto en cada campaña; repausa si UNA campaña sigue activa. `refrescar`
+lee por anuncio (no depende de la cuenta) y `meta_detalle` pide cada campaña en su cuenta (`campanas_por_cuenta`).
+Fuera de alcance: modo agencia, mezclar monedas, la tarea vieja `meta_publicar`. Trampa: el Pixel (OUTCOME_SALES) y la
+app anunciada tienen que estar compartidos con cada cuenta; si no, Meta rechaza el conjunto de esa cuenta al lanzar
+(queda en error y se puede reintentar). Pruebas: `tests/test_varias_cuentas_meta.py` (el Meta falso de
+`tests/test_lanzador.py` anota en qué cuenta nace cada objeto).
 
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.

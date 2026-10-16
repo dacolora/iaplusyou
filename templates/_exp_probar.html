@@ -102,6 +102,22 @@
       </label>
       {% endfor %}
     </fieldset>
+    {# PND-148: en qué cuenta publicitaria se lanza cada país marcado. Solo con más de una cuenta que pueda anunciar en la
+       moneda del experimento (`cuentas_exp`, de exp_nuevo); sin eso no hay nada aquí y todo va a la de la conexión. El
+       nombre de la cuenta viene de Meta: autoescape aquí y textContent en el JS. #}
+    {% if cuentas_exp %}
+    <div class="exp-cuentas" id="exp-cuentas">
+      <p class="vacio">{{ _('Cada país se lanza en una cuenta publicitaria de Meta, con su propia campaña. Solo salen las cuentas que pueden anunciar en %(moneda)s.', moneda=moneda_exp) }}</p>
+      {% for codigo, p in paises_fe.items() %}
+      <label class="exp-cuenta" data-act-pais="{{ codigo }}" hidden>
+        <span>{{ p.bandera }} {{ p.nombre|traducir }} · {{ _('se lanza en') }}</span>
+        <select name="cuenta_{{ codigo }}" disabled>
+          {% for c in cuentas_exp %}<option value="{{ c.id }}"{% if c.id == cuenta_sugerida_exp.get(codigo) %} selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
+        </select>
+      </label>
+      {% endfor %}
+    </div>
+    {% endif %}
     <label>{{ _('Edad') }} <input type="number" name="edad_min" value="18" min="13" max="65" class="exp-ancho-4"> – <input type="number" name="edad_max" value="65" min="13" max="65" class="exp-ancho-4"></label>
     <div class="exp-pasos-botones"><button type="button" class="btn-guardar btn-sm" data-ir="2">{{ _('Siguiente →') }}</button></div>
   </section>
@@ -136,6 +152,7 @@
   <section data-paso="3" hidden>
     <h4>{{ _('Revisar') }}</h4>
     {{ resumen_presupuesto('exp-resumen-final') }}
+    {% if cuentas_exp %}<ul class="exp-cuentas-resumen" id="exp-cuentas-resumen" hidden></ul>{% endif %}
     <p class="vacio">{{ _('Cada casilla es un anuncio (pieza × país). Las finales solo van a su país.') }}</p>
     <p class="vacio" id="exp-doctrina-aviso" hidden></p>
     <div id="exp-cuadricula" class="exp-cuadricula"></div>
@@ -265,7 +282,34 @@
     var PLANTILLA_DOCTRINA_N = {{ _('Doctrina: %(n)s por mejorar', n='{n}')|tojson }};
     var AVISO_DOCTRINA_UNA = {{ _('%(n)s pieza elegida tiene puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual.', n='{n}')|tojson }};
     var AVISO_DOCTRINA_VARIAS = {{ _('%(n)s piezas elegidas tienen puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual.', n='{n}')|tojson }};
+    var PLANTILLA_PAIS_CUENTA = {{ _('%(pais)s · se lanza en %(cuenta)s', pais='{pais}', cuenta='{nombre}')|tojson }};
 
+    // PND-148: la fila de la cuenta de cada país marcado (las demás, ocultas y sin viajar) y su resumen en Revisar.
+    var filasCuenta = Array.prototype.slice.call(form.querySelectorAll('[data-act-pais]'));
+    var resumenCuentas = document.getElementById('exp-cuentas-resumen');
+    function refrescarCuentas() {
+      if (!filasCuenta.length) return;
+      var ps = paisesMarcados();
+      filasCuenta.forEach(function (f) {
+        var dentro = ps.indexOf(f.dataset.actPais) !== -1;
+        f.hidden = !dentro;
+        f.querySelector('select').disabled = !dentro;
+      });
+      if (!resumenCuentas) return;
+      resumenCuentas.textContent = '';
+      ps.forEach(function (p) {
+        var fila = filasCuenta.filter(function (f) { return f.dataset.actPais === p; })[0];
+        if (!fila) return;
+        var sel = fila.querySelector('select'), opcion = sel.options[sel.selectedIndex];
+        var li = document.createElement('li');
+        // Funciones de reemplazo: un nombre de Meta con «$&» no se interpreta.
+        li.textContent = PLANTILLA_PAIS_CUENTA.replace('{pais}', function () { return etiquetaPais(p); })
+          .replace('{nombre}', function () { return opcion ? opcion.text : ''; });
+        resumenCuentas.appendChild(li);
+      });
+      resumenCuentas.hidden = !ps.length;
+    }
+    filasCuenta.forEach(function (f) { f.querySelector('select').addEventListener('change', refrescarCuentas); });
     function irA(n) {
       form.querySelectorAll('[data-paso]').forEach(function (s) { s.hidden = s.dataset.paso !== String(n); });
       form.querySelectorAll('.exp-pasos-nav li').forEach(function (li) { li.classList.toggle('activo', li.dataset.ir === String(n)); });
@@ -273,6 +317,7 @@
       alEntrar = true;
       if (n === 2) refrescarCuenta();
       if (n === 3) { armarCuadricula(); refrescarCuenta(); }
+      refrescarCuentas();
       alEntrar = false;
       form.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
@@ -412,6 +457,7 @@
         nombre.value = PLANTILLA_NOMBRE.replace('{fecha}', hoy.getDate() + ' ' + MESES[hoy.getMonth()])
           .replace('{piezas}', (n === 1 ? UNA_PIEZA : VARIAS_PIEZAS).replace('{n}', n)).replace('{paises}', ps.slice().sort().join(', '));
       }
+      refrescarCuentas();
     }
     function campoPaisesVisibles(ps) { form.querySelectorAll('[data-reparto]').forEach(function (l) { l.hidden = !ps.includes(l.dataset.reparto); }); }
     // El deslizador del total: del total mínimo que respeta a Meta hasta el doble de la sugerencia «Fuerte». El PASO y el tope
@@ -527,7 +573,7 @@
     totalInput.addEventListener('input', function () { manual = false; refrescarCuenta(); });
     diasInput.addEventListener('input', refrescarCuenta);
     form.querySelectorAll('[name^=presupuesto_]').forEach(function (i) { i.addEventListener('input', function () { manual = true; refrescarCuenta(); }); });
-    paises.forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
+    paises.forEach(function (i) { i.addEventListener('input', refrescarCuenta); i.addEventListener('change', refrescarCuentas); });
     if (nombre) nombre.addEventListener('input', function () { nombre.dataset.tocado = '1'; });
     form.addEventListener('submit', function (ev) {
       var motivo = problema();

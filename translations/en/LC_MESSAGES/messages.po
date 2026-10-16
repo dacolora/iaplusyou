@@ -1709,6 +1709,10 @@ msgid "%(p)s se queda 3 s"
 msgstr "%(p)s stay 3 s"
 
 #, python-format
+msgid "%(pais)s · se lanza en %(cuenta)s"
+msgstr "%(pais)s · launches in %(cuenta)s"
+
+#, python-format
 msgid "%(palabras)s palabras · unos %(segundos)s s leído completo a ritmo natural."
 msgstr "%(palabras)s words · about %(segundos)s s read in full at a natural pace."
 
@@ -3911,6 +3915,10 @@ msgid "Cada marca necesita un nombre."
 msgstr "Each brand needs a name."
 
 #, python-format
+msgid "Cada país se lanza en una cuenta publicitaria de Meta, con su propia campaña. Solo salen las cuentas que pueden anunciar en %(moneda)s."
+msgstr "Each country launches in a Meta ad account, with its own campaign. Only accounts that can advertise in %(moneda)s are listed."
+
+#, python-format
 msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
 msgstr "Each country has its own daily budget. The total is also sent to Meta as the campaign cap from %(minimo)s up, the minimum Meta accepts for a cap; with a smaller total, the limit comes from the daily budgets and the end date."
 
@@ -4072,6 +4080,10 @@ msgstr "Campaign added."
 
 msgid "Campaña creada en Meta (en pausa)"
 msgstr "Campaign created on Meta (paused)"
+
+#, python-format
+msgid "Campaña creada en Meta en %(cuenta)s (en pausa)"
+msgstr "Campaign created on Meta in %(cuenta)s (paused)"
 
 msgid "Campaña eliminada"
 msgstr "Campaign deleted"
@@ -7489,6 +7501,10 @@ msgstr "Get started today"
 #, python-format
 msgid "Empieza por las campañas con más conjuntos limitados: %(campanas)s."
 msgstr "Start with the campaigns with the most limited ad sets: %(campanas)s."
+
+#, python-format
+msgid "En %(cuenta)s Meta no acepta un tope tan bajo como %(parte)s (su parte del total): esa campaña va sin tope en Meta y la frenan la fecha de fin y la vigilancia del gasto del experimento."
+msgstr "In %(cuenta)s Meta doesn't accept a cap as low as %(parte)s (its share of the total): that campaign runs without a cap on Meta and is held back by the end date and the experiment's spend watch."
 
 #, python-format
 msgid "En %(moneda)s, la moneda de la cuenta de Meta"
@@ -11131,11 +11147,19 @@ msgstr "The account isn’t active in Meta"
 msgid "La cuenta publicitaria %(cuenta)s no está entre las que ve el Business de la agencia."
 msgstr "The ad account %(cuenta)s isn't among the ones the agency's Business can see."
 
+#, python-format
+msgid "La cuenta publicitaria %(cuentas)s ya no se puede usar en este proyecto (salió de sus cuentas de Meta, perdió el permiso para anunciar o factura en otra moneda): no se manda nada a Meta."
+msgstr "The ad account %(cuentas)s can no longer be used in this project (it left its Meta accounts, lost permission to advertise or bills in another currency): nothing is sent to Meta."
+
 msgid "La cuenta publicitaria cambió: los experimentos anteriores de ese proyecto dejan de refrescarse."
 msgstr "The ad account changed: that project's previous experiments stop refreshing."
 
 msgid "La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."
 msgstr "The ad account changed: previous experiments stop refreshing."
+
+#, python-format
+msgid "La cuenta publicitaria elegida para %(paises)s no puede lanzar en este proyecto (no está en sus cuentas de Meta, no tiene permiso para anunciar o factura en otra moneda)."
+msgstr "The ad account chosen for %(paises)s can't launch in this project (it isn't among its Meta accounts, has no permission to advertise or bills in another currency)."
 
 msgid "La cuenta publicitaria necesita un método de pago en business.facebook.com › Facturación: sin él Meta no activa ningún anuncio."
 msgstr "The ad account needs a payment method at business.facebook.com › Billing: without one, Meta won't activate any ad."
@@ -23554,6 +23578,13 @@ msgstr "generated automatically"
 
 msgid "se guardan 10 min; si acabas de asignar un activo en Business Manager, actualiza"
 msgstr "kept for 10 min; if you just assigned an asset in Business Manager, refresh"
+
+msgid "se lanza en"
+msgstr "launches in"
+
+#, python-format
+msgid "se lanza en %(cuenta)s"
+msgstr "launches in %(cuenta)s"
 
 msgid "se leen las métricas de la cuenta; sin Página no se pueden lanzar anuncios ni publicar"
 msgstr "the account's metrics are read; without a Page you can't launch ads or publish"

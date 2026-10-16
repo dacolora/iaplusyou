@@ -310,7 +310,6 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
         hoy = hoy or date.today()
         r["desde"] = desde_para(list(ep_por_ad.values()), ex.get("creado_en"), hoy)
         desde_total = desde_creacion(ex.get("creado_en"), hoy)   # desgloses y rankings: de la creación a hoy
-        campana = ex["meta_campaign_id"]
 
         def _parte(nombre, fn):
             try:
@@ -333,15 +332,18 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
             # tiempo de esta pasada.
             plazo_token = _PLAZO.set(time.monotonic() + PLAZO_S)
             try:
-                _pasada()
+                # PND-148: una campaña por cuenta; cada una se pide en su cuenta (`act_<cuenta>/insights`).
+                for act, campana in lanzador.campanas_por_cuenta(ex, _creds["ad_account_id"]):
+                    lanzador._usar_cuenta(_creds, act)
+                    _pasada(campana)
             finally:
                 _PLAZO.reset(plazo_token)
 
-        def _pasada():
-            _parte("diario", lambda: r.__setitem__("dias", guardar_dias(ep_por_ad, pedir_diario(campana, r["desde"], hoy.isoformat()))))
+        def _pasada(campana):
+            _parte("diario", lambda: r.__setitem__("dias", r["dias"] + guardar_dias(ep_por_ad, pedir_diario(campana, r["desde"], hoy.isoformat()))))
             for dim in DIMENSIONES:
                 _parte(dim, lambda dim=dim: r.__setitem__("desgloses", r["desgloses"] + guardar_desglose(ep_por_ad, dim, pedir_desglose(campana, dim, desde_total, hoy.isoformat()))))
-            _parte("rankings", lambda: r.__setitem__("rankings", guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana, desde_total, hoy.isoformat()))))
+            _parte("rankings", lambda: r.__setitem__("rankings", r["rankings"] + guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana, desde_total, hoy.isoformat()))))
 
         try:
             lanzador._con_credenciales(cliente, _correr)

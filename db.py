@@ -1268,7 +1268,7 @@ error_app = Table("error_app", metadata,
 )
 
 # --- Meta: rendimiento de varias cuentas por proyecto (spec 2026-10-08 meta rendimiento §4, migración 0035) ---
-# Las cuentas publicitarias que un proyecto LEE (aparte de la única con la que lanza, en meta.json).
+# Las cuentas publicitarias que un proyecto LEE (aparte de la de meta.json); desde PND-148 también pueden lanzar.
 # Único escritor: meta_rendimiento/cuentas.py. Una cuenta solo puede estar en un proyecto.
 meta_cuenta = Table("meta_cuenta", metadata,
     Column("id", Integer, primary_key=True),
@@ -1285,7 +1285,8 @@ meta_cuenta = Table("meta_cuenta", metadata,
     # Lo que escribe meta_rendimiento/sync.py: cuenta {account_status, disable_reason, amount_spent, spend_cap},
     # backfill_cuenta / backfill_anuncios (cada mitad de la primera copia hecha), backfill_hecho (las dos; las copias
     # viejas solo tienen esta), cuenta_desde / anuncios_desde (día más viejo ya copiado de la primera copia en curso),
-    # listado_completo_en (cuándo se hizo el último listado completo de anuncios, con pausados).
+    # listado_completo_en (cuándo se hizo el último listado completo de anuncios, con pausados), puede_lanzar y
+    # lanzar_revisado_en (PND-148: `user_tasks` con ADVERTISE o MANAGE, la cuenta puede lanzar experimentos).
     Column("extra", JSON, default=dict),
     sa.Index("uq_meta_cuenta_act", "ad_account_id", unique=True),
     sqlite_autoincrement=True,
