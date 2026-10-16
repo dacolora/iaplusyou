@@ -72,9 +72,14 @@ def _leer(cliente, clave, version_actual):
         return _NADA
 
 
-def precalculable(fn):
+def precalculable(fn=None, *, conjuntos=()):
     """Envuelve una función de lectura de `triple_whale.datos` cuyo primer argumento es `cliente` y cuyo resultado
-    sobrevive igual a una ida y vuelta por JSON (listas de dicts, dicts con claves de texto, números, texto)."""
+    sobrevive igual a una ida y vuelta por JSON (listas de dicts, dicts con claves de texto, números, texto).
+    `conjuntos`: argumentos que la función trata como conjunto (los ids de `visitantes_por`, que ella ordena y deja
+    sin repetir): se le pasan ya ordenados y sin repetir, así la clave no depende del orden en que llegan (un
+    conjunto de texto cambia de orden entre el worker y la web)."""
+    if fn is None:
+        return lambda f: precalculable(f, conjuntos=conjuntos)
     nombre = fn.__name__
     firma = inspect.signature(fn)
 
@@ -82,6 +87,17 @@ def precalculable(fn):
     def envuelta(*args, **kwargs):
         ligados = firma.bind(*args, **kwargs)
         ligados.apply_defaults()
+        # Una colección de ids (los de la estructura de Meta en `visitantes_por`) llega como lista, conjunto, tupla o
+        # generador: lista para la clave y para la función (un conjunto cambia de orden entre procesos y un generador
+        # se gastaría al armar la clave).
+        for nombre_arg, valor in list(ligados.arguments.items()):
+            if nombre_arg in conjuntos:
+                ligados.arguments[nombre_arg] = sorted({str(i) for i in valor or () if i})
+            elif isinstance(valor, (set, frozenset)):
+                ligados.arguments[nombre_arg] = sorted(valor, key=str)
+            elif not isinstance(valor, (str, bytes, dict, list)) and hasattr(valor, "__iter__"):
+                ligados.arguments[nombre_arg] = list(valor)
+        args, kwargs = ligados.args, ligados.kwargs
         argumentos = dict(ligados.arguments)
         cliente = argumentos["cliente"]
         clave = _clave(nombre, argumentos)

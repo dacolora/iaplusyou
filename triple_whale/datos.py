@@ -230,6 +230,7 @@ def totales_anuncio(cliente, tienda_id, canal, ad_id, desde, hasta=None):
 CAMPOS_VISITANTES = ("ad_id", "conjunto_id", "campana_id", "cuenta_id")
 
 
+@memo.precalculable(conjuntos=("ids",))
 def visitantes_por(cliente, campo, ids, desde=None, hasta=None, canal="facebook-ads"):
     """Visitantes únicos y nuevos sumados por anuncio, conjunto, campaña o cuenta (`campo`), para el NVP de
     pantallas que no leen esta copia (pestaña Meta, Experimentos; spec 2026-10-09-nvp-visitantes-nuevos §4).
@@ -636,6 +637,7 @@ def cuentas_meta_de_tiendas(cliente):
     return salida
 
 
+@memo.precalculable
 def totales_por_grupo(cliente, tienda_id, desde, hasta, nivel):
     """{campana_id | conjunto_id: {"gasto", "pedidos", "ingresos"}} de los anuncios de Meta en [desde, hasta], para
     poner las ventas de Triple Whale en la tabla de campañas y conjuntos de Meta (spec 2026-10-09 §4). Gasto MAX

@@ -28,11 +28,12 @@ def dos(base_temporal, monkeypatch):
             f = _hace(n)
             datos.reemplazar_anuncios_canal(cliente, tid, f, f, [
                 {"canal": "facebook-ads", "ad_id": "A", "fecha": f, "anuncio": "Compartido", "gasto": 10 + n,
+                 "campana_id": "c1", "conjunto_id": "s1",
                  "impresiones": 1000, "clics": 30, "destino_url": "https://x/products/a"},
                 {"canal": "google-ads", "ad_id": f"G{tid}", "fecha": f, "anuncio": "Marca", "gasto": 2}])
             datos.reemplazar_anuncios_pixel(cliente, tid, f, f, [
                 {"canal": "facebook-ads", "ad_id": "A", "fecha": f, "pedidos": 1.5, "ingresos": 40.25,
-                 "sesiones": 100, "nc_ingresos": 20}])
+                 "sesiones": 100, "nc_ingresos": 20, "visitantes": 80, "visitantes_nuevos": 30}])
             datos.reemplazar_tienda(cliente, tid, f, f, [{"fecha": f, "gasto": 50, "ingresos": 120.5, "pedidos": 3}])
             datos.reemplazar_productos(cliente, tid, f, f, [{"fecha": f, "producto_id": "p1", "nombre": "Uno",
                                                               "unidades": 2, "ingresos": 60, "pedidos": 2}])
@@ -49,6 +50,8 @@ LLAMADAS = [
     ("gasto_duplicado", lambda t: datos.gasto_duplicado("acme", _hace(3), _hace(0), t)),
     ("canales", lambda t: datos.canales("acme", t, _hace(3), _hace(0))),
     ("top_productos", lambda t: datos.top_productos("acme", t, _hace(3), _hace(0))),
+    ("totales_por_grupo", lambda t: datos.totales_por_grupo("acme", t, _hace(3), _hace(0), "campana")),
+    ("visitantes_por", lambda t: datos.visitantes_por("acme", "ad_id", ["A", "B"], _hace(3), _hace(0))),
 ]
 
 
@@ -185,3 +188,16 @@ def test_grabar_dice_si_la_version_cambio_en_medio(dos):
         datos.canales("acme", se, _hace(3), _hace(0))
         tt.actualizar_tienda("acme", se, ultima_sincronizacion="2099-01-01T00:00:00")
     assert g["version_cambio"] is True and g["guardadas"] == 0
+
+
+
+def test_ids_como_conjunto_o_generador_dan_la_misma_clave_y_llegan_enteros(dos):
+    """`visitantes_por` recibe los ids de la estructura de Meta; un conjunto cambia de orden entre procesos y un
+    generador se gastaría al armar la clave: se normalizan a lista antes (revisión en producción, 2026-10-16)."""
+    with memo.grabando("acme"):
+        grabado = datos.visitantes_por("acme", "ad_id", ["B", "A"], _hace(3), _hace(0))
+    for ids in ({"A", "B"}, (i for i in ("A", "B")), ("B", "A")):
+        leido, n = _lecturas_de_la_copia(lambda: datos.visitantes_por("acme", "ad_id", ids, _hace(3), _hace(0)))
+        assert leido == grabado and n == 0, ids
+    vivo = datos.visitantes_por("acme", "ad_id", (i for i in ("A",)), _hace(2), _hace(0))
+    assert vivo == datos.visitantes_por.sin_memo("acme", "ad_id", ["A"], _hace(2), _hace(0)) and vivo
