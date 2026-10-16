@@ -56,7 +56,12 @@ CAMPOS_INFO = "name,currency,timezone_name,account_status,disable_reason,amount_
 CAMPOS_CAMPANA = "id,name,objective,effective_status,daily_budget,lifetime_budget,bid_strategy,created_time"
 CAMPOS_CONJUNTO = ("id,name,campaign_id,effective_status,daily_budget,lifetime_budget,optimization_goal,"
                    "bid_strategy,learning_stage_info,created_time")
-CAMPOS_ANUNCIO = "id,name,adset_id,campaign_id,effective_status,created_time,creative{id,thumbnail_url,video_id}"
+CAMPOS_ANUNCIO = ("id,name,adset_id,campaign_id,effective_status,created_time,issues_info,"
+                  "creative{id,thumbnail_url,video_id}")
+# El motivo de un anuncio WITH_ISSUES o DISAPPROVED (`issues_info`, PND-258): lo que Meta dice de cada problema, acotado
+# (es texto de Meta que se muestra; nunca va a Claude) y guardado en `meta_objeto.extra.problemas`.
+MAX_PROBLEMAS = 3
+LARGO_RESUMEN, LARGO_MENSAJE = 120, 300
 CAMPOS_ANUNCIO_LIGERO = "id,name,adset_id,campaign_id,effective_status"
 # Miniaturas de los anuncios con gasto reciente (ruling R25 de la revisión final, 2026-10-08): `?ids=` de 50 en 50
 # (el tope de Meta para pedir varios objetos por id), solo en la corrida del listado completo.
@@ -149,13 +154,38 @@ def _con_miniatura_en(o):
     return o
 
 
+def _linea(texto, largo):
+    return " ".join(str(texto or "").split())[:largo] or None
+
+
+def problemas_de(issues):
+    """`issues_info` de Meta (lista de {error_summary, error_message, level, …}) -> como mucho MAX_PROBLEMAS
+    {"resumen", "mensaje"} en una línea y acotados; lo que no trae texto se salta. PND-258: el Diagnóstico decía
+    «anuncios con problemas» sin decir cuál era el problema de cada uno."""
+    salida = []
+    for i in issues if isinstance(issues, list) else []:
+        if not isinstance(i, dict):
+            continue
+        p = {"resumen": _linea(i.get("error_summary"), LARGO_RESUMEN),
+             "mensaje": _linea(i.get("error_message"), LARGO_MENSAJE)}
+        if p["resumen"] or p["mensaje"]:
+            salida.append(p)
+        if len(salida) == MAX_PROBLEMAS:
+            break
+    return salida
+
+
 def _anuncio(f):
     creative = f.get("creative") or {}
-    return _con_miniatura_en({
+    o = _con_miniatura_en({
         "nivel": "anuncio", "objeto_id": str(f["id"]), "padre_id": f.get("adset_id"),
         "campaign_id": f.get("campaign_id"), "nombre": f.get("name"), "estado": f.get("effective_status"),
         "creative_id": creative.get("id"), "miniatura_url": creative.get("thumbnail_url"),
         "video_id": creative.get("video_id"), "creado_en_meta": _creado(f)})
+    # Siempre la clave (vacía si no tiene problemas): `guardar_objetos` mezcla `extra`, y así un problema resuelto
+    # deja de mostrarse en la copia siguiente.
+    o["extra"] = {**(o.get("extra") or {}), "problemas": problemas_de(f.get("issues_info"))}
+    return o
 
 
 def _anuncio_ligero(f):

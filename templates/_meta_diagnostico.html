@@ -34,6 +34,12 @@
     <div class="meta-diag-detalle">
       <p class="meta-diag-que">{{ r.que_hacer }}</p>
       <p class="meta-diag-porque"><span>{{ _('Por qué:') }}</span> {{ r.por_que }}</p>
+      {% if r.problemas %}
+      <p class="meta-diag-porque"><span>{{ _('Lo que dice Meta de cada uno:') }}</span></p>
+      <ul class="meta-diag-problemas">
+        {% for p in r.problemas %}<li><strong>{{ p.nombre }}</strong> · {{ p.texto }}</li>{% endfor %}
+      </ul>
+      {% endif %}
     </div>
   </details>
   {% if r.enlace %}<a class="btn-sm meta-diag-ir" href="{{ r.enlace }}" target="_blank" rel="noopener noreferrer" title="{{ _('Ver en el Administrador de anuncios') }}">{{ _('Ver en Meta') }} ↗</a>{% endif %}

@@ -1058,3 +1058,45 @@ def test_una_cuenta_omitida_no_pide_desgloses(base_temporal, monkeypatch):
     g = FakeGraph(monkeypatch)
     assert sync.sincronizar(CLI, ACT, "tok", hoy=HOY)["omitida"] is True
     assert g.de("desglose") == []
+
+
+# ------------------------------------------------------------ PND-258: el motivo de cada anuncio con problemas ---
+
+ISSUES = [{"error_code": 1487890, "error_summary": "Ad Rejected", "level": "AD",
+           "error_message": "Your ad wasn't approved because it doesn't follow our\nAdvertising Policies.",
+           "error_type": "HARD_ERROR"}]
+
+
+def test_pnd258_problemas_de_meta_en_una_linea_acotados_y_sin_basura():
+    assert sync.problemas_de(ISSUES) == [{"resumen": "Ad Rejected", "mensaje": (
+        "Your ad wasn't approved because it doesn't follow our Advertising Policies.")}]
+    assert sync.problemas_de(None) == [] and sync.problemas_de("texto") == [] and sync.problemas_de([1, {}]) == []
+    largos = sync.problemas_de([{"error_summary": "x" * 500, "error_message": "y" * 900}] * 5)
+    assert len(largos) == sync.MAX_PROBLEMAS
+    assert len(largos[0]["resumen"]) == sync.LARGO_RESUMEN and len(largos[0]["mensaje"]) == sync.LARGO_MENSAJE
+    assert "issues_info" in sync.CAMPOS_ANUNCIO.split(",")
+
+
+def test_pnd258_la_copia_guarda_el_problema_y_lo_quita_cuando_se_resuelve(cuenta, monkeypatch):
+    con_problema = [{"id": "a1", "name": "Video 1", "adset_id": "s1", "campaign_id": "c1",
+                     "effective_status": "WITH_ISSUES", "issues_info": ISSUES, "creative": _creative("a1")}]
+    FakeGraph(monkeypatch, anuncios=con_problema)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    a = _objeto("anuncio", "a1")
+    assert a["extra"]["problemas"] == sync.problemas_de(ISSUES) and a["extra"]["miniatura_en"]
+    assert datos.totales_por_anuncio(CLI, [ACT], "2026-09-01", HOY.isoformat())[0]["problemas_meta"] == \
+        sync.problemas_de(ISSUES)
+    FakeGraph(monkeypatch, anuncios=[dict(con_problema[0], effective_status="ACTIVE", issues_info=None)])
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert _objeto("anuncio", "a1")["extra"]["problemas"] == []
+
+
+def test_pnd258_la_miniatura_que_llega_despues_no_borra_el_problema(cuenta, monkeypatch):
+    """`extra` se mezcla: la miniatura del paso diario (`miniatura_en`) y los problemas del listado no se pisan."""
+    sin_miniatura = [{"id": "a1", "name": "Video 1", "adset_id": "s1", "campaign_id": "c1",
+                      "effective_status": "DISAPPROVED", "issues_info": ISSUES, "creative": {"id": "cr_a1"}}]
+    FakeGraph(monkeypatch, anuncios=sin_miniatura, miniaturas={"a1": _creative("a1")})
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    a = _objeto("anuncio", "a1")
+    assert a["miniatura_url"] == "https://scontent.xx.fbcdn.net/a1.jpg" and a["extra"]["miniatura_en"]
+    assert a["extra"]["problemas"] == sync.problemas_de(ISSUES)

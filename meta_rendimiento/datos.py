@@ -150,7 +150,8 @@ def guardar_objetos(cliente, act, objetos, exigir_cuenta=False):
     PRESENTES en cada dict: un objeto que llega solo con su nombre (viene de los insights, sin «estado») no borra
     el estado, el presupuesto, el aprendizaje ni la miniatura ya guardados. Un `nombre` None tampoco pisa el
     guardado. Claves: `nivel`, `objeto_id` y las columnas de meta_objeto (sin id/cliente/ad_account_id/
-    actualizado_en). Los objetos con el mismo juego de claves se escriben juntos en una tanda. Una `miniatura_url` que
+    actualizado_en). `extra` se mezcla con el guardado (sus claves reemplazan las mismas y dejan las demás). Los
+    objetos con el mismo juego de claves se escriben juntos en una tanda. Una `miniatura_url` que
     no pasa `miniatura_valida` se descarta (las demás columnas del objeto sí se guardan). Devuelve cuántos.
     `exigir_cuenta=True` (la copia): CuentaSoltada sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     t = db.meta_objeto
@@ -175,7 +176,10 @@ def guardar_objetos(cliente, act, objetos, exigir_cuenta=False):
             nuevo = insert_sqlite(t)
             set_ = {c: getattr(nuevo.excluded, c) for c in claves if c not in ("objeto_id", "extra")}
             if "extra" in claves:
-                set_["extra"] = nuevo.excluded.extra
+                # Se MEZCLA (json_patch) con lo guardado: la miniatura (`miniatura_en`) y los problemas de Meta
+                # (`problemas`, PND-258) llegan en pasos distintos de la copia y ninguno borra al otro.
+                set_["extra"] = sa.func.json_patch(sa.func.coalesce(t.c.extra, sa.literal_column("'{}'")),
+                                                   nuevo.excluded.extra)
             if "nombre" in claves:
                 set_["nombre"] = sa.func.coalesce(nuevo.excluded.nombre, t.c.nombre)
             set_["ad_account_id"] = nuevo.excluded.ad_account_id
@@ -551,8 +555,8 @@ def totales_por_anuncio(cliente, cuentas, desde, hasta):
                      *_sumas(a, METRICAS_ANUNCIO))
            .where(*_donde(a, cliente, cuentas, desde, hasta))
            .group_by(a.c.ad_account_id, a.c.ad_id).subquery("agg"))
-    q = (sa.select(agg, o.c.nombre.label("anuncio"), o.c.estado, o.c.miniatura_url, s.c.nombre.label("conjunto"),
-                   c.c.nombre.label("campana"))
+    q = (sa.select(agg, o.c.nombre.label("anuncio"), o.c.estado, o.c.miniatura_url, o.c.extra.label("extra_objeto"),
+                   s.c.nombre.label("conjunto"), c.c.nombre.label("campana"))
          .select_from(agg.outerjoin(o, sa.and_(o.c.cliente == cliente, o.c.objeto_id == agg.c.ad_id))
                       .outerjoin(s, sa.and_(s.c.cliente == cliente, s.c.objeto_id == agg.c.adset_id))
                       .outerjoin(c, sa.and_(c.c.cliente == cliente, c.c.objeto_id == agg.c.campaign_id)))
@@ -563,8 +567,17 @@ def totales_por_anuncio(cliente, cuentas, desde, hasta):
         ad_account_id=f["ad_account_id"], ad_id=f["ad_id"], adset_id=f["adset_id"], campaign_id=f["campaign_id"],
         anuncio=f["anuncio"], conjunto=f["conjunto"], campana=f["campana"], estado=f["estado"],
         miniatura_url=f["miniatura_url"], primera_fecha=f["primera_fecha"], ultima_fecha=f["ultima_fecha"],
-        dias_con_gasto=int(f["dias_con_gasto"] or 0), canal="meta", **_medidas(f, METRICAS_ANUNCIO)))
+        dias_con_gasto=int(f["dias_con_gasto"] or 0), canal="meta", problemas_meta=_problemas_meta(f["extra_objeto"]),
+        **_medidas(f, METRICAS_ANUNCIO)))
         for f in filas]
+
+
+def _problemas_meta(extra):
+    """Los problemas que Meta le marca al anuncio (`extra.problemas`, guardados por la copia desde PND-258): una lista
+    de {"resumen", "mensaje"} con texto, o [] (sin problemas, o copiado antes de PND-258)."""
+    problemas = (extra or {}).get("problemas") if isinstance(extra, dict) else None
+    return [{"resumen": p.get("resumen"), "mensaje": p.get("mensaje")} for p in problemas or []
+            if isinstance(p, dict) and (p.get("resumen") or p.get("mensaje"))] if isinstance(problemas, list) else []
 
 
 def alcance(cliente, cuentas, ventana, nivel="cuenta"):

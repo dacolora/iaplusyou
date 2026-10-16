@@ -364,6 +364,30 @@ def test_problemas_sin_gasto_30_usa_el_del_periodo_evaluado():
     assert una(rec.calcular(e), "anuncios_con_problemas")["impacto"]["monto"] == pytest.approx(1.0)
 
 
+def test_pnd258_problemas_dicen_lo_que_meta_marca_a_cada_anuncio_sin_tocar_lo_que_va_a_claude():
+    """PND-258: el Diagnóstico decía «anuncios con problemas» sin decir cuál; ahora `problemas` trae lo que Meta dice de
+    cada uno (el de más gasto primero, uno por anuncio, como mucho MAX_PROBLEMAS_VISIBLES). `que_hacer` y `por_que`
+    (lo que la «Evaluación con IA» le manda a Claude) no cambian."""
+    def con_meta(ad_id, gasto_30, *problemas, **kw):
+        a = anuncio(ad_id, gasto_30=gasto_30, **kw)
+        a["problemas_meta"] = list(problemas)
+        return a
+    rechazo = {"resumen": "Ad Rejected", "mensaje": "Your ad doesn't follow our Advertising Policies."}
+    sin_mensaje = {"resumen": "Limited delivery", "mensaje": None}
+    e = entrada(anuncios=[con_meta("1", 20.0, sin_mensaje, estado="WITH_ISSUES"),
+                          con_meta("2", 90.0, rechazo, {"resumen": "Otro", "mensaje": "otro"}, estado="DISAPPROVED"),
+                          con_meta("3", 50.0, estado="WITH_ISSUES")])          # copiado antes de PND-258: sin motivo
+    r = una(rec.calcular(e), "anuncios_con_problemas")
+    assert r["problemas"] == [
+        {"nombre": "Anuncio 2", "texto": "Ad Rejected: Your ad doesn't follow our Advertising Policies."},
+        {"nombre": "Anuncio 1", "texto": "Limited delivery"}]
+    sin = una(rec.calcular(entrada(anuncios=[anuncio(a["ad_id"], gasto_30=a["gasto_30"], estado=a["estado"])
+                                             for a in e["anuncios"]])), "anuncios_con_problemas")
+    assert (r["que_hacer"], r["por_que"], r["id"]) == (sin["que_hacer"], sin["por_que"], sin["id"])
+    muchos = entrada(anuncios=[con_meta(str(i), 10.0 + i, rechazo, estado="WITH_ISSUES") for i in range(15)])
+    assert len(una(rec.calcular(muchos), "anuncios_con_problemas")["problemas"]) == rec.MAX_PROBLEMAS_VISIBLES
+
+
 # ------------------------------------------------------------ cuenta con ROAS bajo ---
 
 def test_cuenta_roas_bajo_alta_bajo_0_5_con_1000_de_gasto():
@@ -794,3 +818,24 @@ def test_agrupado_en_ingles_con_el_catalogo():
     assert ap["recs"][0]["fila"]["gasto"] == "30%" and ap["recs"][0]["fila"]["cifra"] == "1 of 4"
     assert ap["impacto"]["texto"] == "71.43 SEK per day at stake"
     assert roas["consejo"].startswith("Pause or rebuild these accounts")
+
+
+def test_pnd258_el_diagnostico_muestra_el_motivo_de_cada_anuncio_escapado():
+    """La fila de «Anuncios que Meta frena» abre la lista de lo que Meta dice de cada anuncio. Nombres y textos de
+    Meta son texto ajeno: solo autoescape."""
+    from flask import render_template
+
+    import dashboard
+    from meta_rendimiento import panel
+    a = anuncio("1", gasto_30=60.0, estado="DISAPPROVED")
+    a["nombre"] = "<script>alert(1)</script> Video"
+    a["problemas_meta"] = [{"resumen": "Ad Rejected", "mensaje": "<b>Policy</b> issue"}]
+    recs = rec.calcular(entrada(anuncios=[a]))
+    mr = {"grupos": rec.agrupar(recs), "conteo_recomendaciones": {"alta": 0, "media": 1, "baja": 0},
+          "max_filas": panel.MAX_FILAS_GRUPO, "niveles_recomendacion": rec.NIVELES,
+          "nombres_prioridad": panel.NOMBRES_PRIORIDAD}
+    with dashboard.app.test_request_context():
+        html = render_template("_meta_diagnostico.html", mr=mr, actual=None)
+    assert "Lo que dice Meta de cada uno:" in html and 'class="meta-diag-problemas"' in html
+    assert "Ad Rejected: &lt;b&gt;Policy&lt;/b&gt; issue" in html
+    assert "<script>alert(1)</script>" not in html and "&lt;script&gt;" in html

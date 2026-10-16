@@ -4596,6 +4596,7 @@ details[open] > summary .meta-diag-etiqueta::before { transform: rotate(90deg); 
 .meta-diag-detalle p { margin: 0; font-size: .86rem; line-height: 1.45; }
 .meta-diag-porque { color: var(--muted); }
 .meta-diag-porque span { font-weight: 600; }
+.meta-diag-problemas { margin: 0; padding-left: 1.1rem; font-size: .86rem; line-height: 1.45; overflow-wrap: anywhere; }
 .meta-diag-mas > summary { padding: .5rem 0 .3rem 1.1rem; border-top: 1px solid var(--border-soft); color: var(--accent-texto); font-size: .86rem; }
 .meta-diag-acciones { display: flex; flex-wrap: wrap; gap: .4rem; }
 .meta-diag-acciones a { text-decoration: none; }

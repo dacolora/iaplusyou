@@ -17,10 +17,11 @@ Entrada (`calcular(entrada)`), un dict que arma `panel` (Task 4) sin una consult
                        # `presupuesto_diario` ya en unidades (None = sin presupuesto en ese nivel)
       "conjuntos_7": {adset_id: {"gasto", "compras", "valor"}},  # `datos.gasto_por_conjunto`, últimos 7 días
       "anuncios": [{"ad_id", "ad_account_id", "adset_id", "campaign_id", "nombre", "conjunto", "estado",
-                    "veredicto", "problemas", "m", "gasto_7", "gasto_30"}],
+                    "veredicto", "problemas", "problemas_meta", "m", "gasto_7", "gasto_30"}],
                        # los evaluados por `panel.evaluar_anuncios` más `gasto_7` (su gasto de los últimos 7 días,
                        # de la lectura `recientes` que esa función ya hace) y `gasto_30` (si falta, `m["gasto"]`:
-                       # el panel evalúa 30 días por defecto)
+                       # el panel evalúa 30 días por defecto). `problemas_meta`: lo que Meta dice de cada problema
+                       # del anuncio ([{"resumen", "mensaje"}], `issues_info` copiado; PND-258)
       "frecuencia_7": {campaign_id: {"alcance", "frecuencia"}},  # `datos.alcance(…, 7, "campana")`
       "desgloses_30": [{"ad_account_id", "dimension", "clave", "gasto", "compras", "valor", …}],
                        # `datos.desgloses(…, 30)`
@@ -35,7 +36,9 @@ van después en su nivel). `fila` son las cifras sueltas de la fila del Diagnós
 Daniel 2026-10-13: cinco tarjetas repetían el mismo consejo con las cifras enterradas en la prosa): `etiqueta` es lo
 que nombra la fila cuando no es la cuenta (la campaña o el conjunto de `escalar`, el segmento de `segmento_caro`),
 `cifra` y `nota` lo que se ve de un vistazo, `barra` una fracción 0–1 o None y `gasto` la parte del gasto de la cuenta
-en texto o None. Los montos van en la moneda de
+en texto o None. `anuncios_con_problemas` trae además `problemas`: [{"nombre", "texto"}] de sus anuncios con lo que
+Meta dice de cada uno (como mucho `MAX_PROBLEMAS_VISIBLES`, los de más gasto; PND-258). No va en `que_hacer` ni en
+`por_que`, que la «Evaluación con IA» le manda a Claude: así su prompt y su precio no cambian. Los montos van en la moneda de
 la cuenta: en «Todas» el orden por impacto es nominal entre monedas (como PND-196). `impacto.monto` es siempre «por
 día» (lo que está en juego cada día), para que se puedan comparar. `objetos` trae como mucho `MAX_OBJETOS` (los de
 más gasto) y `enlace` es el Administrador de anuncios con ellos seleccionados (`administrador.enlace`) o, para lo que
@@ -109,6 +112,7 @@ TIPOS_ALTA = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perd
 # effective_status de un anuncio que entrega (o puede entregar): WITH_ISSUES sigue gastando en muchos casos.
 ESTADOS_ENTREGA = ("ACTIVE", "WITH_ISSUES")
 ESTADOS_PROBLEMA = ("WITH_ISSUES", "DISAPPROVED")
+MAX_PROBLEMAS_VISIBLES = 10       # anuncios con su motivo de Meta en la fila de `anuncios_con_problemas` (PND-258)
 
 # El Diagnóstico agrupado (`agrupar`): un bloque por tipo con el consejo UNA vez y una fila por recomendación. Cada
 # consejo recibe las mismas cifras (`_cifras_consejo`); el título va en `_titulo_grupo` porque lleva plural.
@@ -550,8 +554,19 @@ def _anuncios_con_problemas(cx):
             gettext("%(gasto)s en 30 días", gasto=cx.dinero(gasto)))
     fila = _fila(ngettext("%(n)s anuncio", "%(n)s anuncios", n, n=_num(n)), nota,
                  gasto=min(_div(gasto, cx.gasto_30) or 0.0, 1.0))
-    return [cx.rec("anuncios_con_problemas", "alta" if rechazados_7 else "media", titulo, que_hacer, por_que,
-                   objetos, cx.impacto(gasto / DIAS_MES), fila=fila)]
+    r = cx.rec("anuncios_con_problemas", "alta" if rechazados_7 else "media", titulo, que_hacer, por_que,
+               objetos, cx.impacto(gasto / DIAS_MES), fila=fila)
+    r["problemas"] = [{"nombre": _una_linea(a.get("nombre")) or str(a["ad_id"]), "texto": _texto_problema(p)}
+                      for a in malos for p in (a.get("problemas_meta") or [])[:1]][:MAX_PROBLEMAS_VISIBLES]
+    return [r]
+
+
+def _texto_problema(p):
+    """«Resumen: mensaje» de un problema de Meta (`sync.problemas_de`), o lo que traiga de los dos."""
+    resumen, mensaje = _una_linea(p.get("resumen")), _una_linea(p.get("mensaje"))
+    if resumen and mensaje and mensaje != resumen:
+        return f"{resumen}: {mensaje}"
+    return resumen or mensaje
 
 
 def _cuenta_roas_bajo(cx):

@@ -12036,6 +12036,9 @@ msgstr "What the final cuts cost"
 msgid "Lo que costaría producir lo que pide esta propuesta (precio aproximado)"
 msgstr "What it would cost to produce what this proposal asks for (approximate price)"
 
+msgid "Lo que dice Meta de cada uno:"
+msgstr "What Meta says about each one:"
+
 msgid "Lo que dicen los números"
 msgstr "What the numbers say"
 
