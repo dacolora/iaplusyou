@@ -301,9 +301,11 @@ def actualizar_tienda(cliente, tienda_id, **campos):
 
 
 def actualizar_extra_tienda(cliente, tienda_id, cambios):
-    """Mezcla `cambios` en el `extra` de una tienda (lee y escribe en la misma transacción)."""
+    """Mezcla `cambios` en el `extra` de una tienda (lee y escribe en la misma transacción). El UPDATE sin efecto
+    toma el candado de escritura ANTES de leer (regla 5, PND-222): otro escritor no confirma en medio."""
     t = db.tw_tienda
     with db.conectar() as con:
+        con.execute(t.update().where(t.c.cliente == cliente, t.c.id == tienda_id).values(id=t.c.id))
         fila = con.execute(sa.select(t.c.extra).where(t.c.cliente == cliente, t.c.id == tienda_id)).first()
         if not fila:
             return
@@ -358,6 +360,7 @@ def cambiar_ajustes(cliente, moneda=None, modelo_atribucion=None, ventana_atribu
     última sincronización, y devuelve True. Sin cambios, o sin ajustes, devuelve False."""
     a, t = db.triple_whale, db.tw_tienda
     with db.conectar() as con:
+        con.execute(a.update().where(a.c.cliente == cliente).values(id=a.c.id))   # candado antes de leer (PND-222)
         fila = con.execute(sa.select(a.c.id, a.c.moneda, a.c.modelo_atribucion, a.c.ventana_atribucion,
                                      a.c.extra, a.c.actualizado_en).where(a.c.cliente == cliente)).first()
         if not fila:
