@@ -193,7 +193,7 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
             _evento("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
             return gettext("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
         _exigir_pagina(cliente)
-        _exigir_saldo(cliente, ex, accion, payload)
+        _exigir_saldo(cliente, ex, accion, payload, propuesta_id=propuesta_id)
         with _del_proyecto(cliente):
             hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
         # planificar ya marcó `derivado`; repetirlo es inocuo (misma bandera).
@@ -221,7 +221,7 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
             return gettext("%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada.",
                            nombre=pz["nombre"], escalon=marcado)
         _exigir_pagina(cliente)
-        _exigir_saldo(cliente, ex, accion, payload)
+        _exigir_saldo(cliente, ex, accion, payload, propuesta_id=propuesta_id)
         with _del_proyecto(cliente):
             derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
         # planificar ya dejó `rescatado_en_escalon` (I-5); acá se refuerza
@@ -478,8 +478,10 @@ def _precio_estimado(cliente, ex, accion, payload):
         if final_1["usd"] is None:
             return {"usd": None, "texto": sin_precio}
         final = n_paises * final_1["usd"]
-        # Cada re-edición es una variante: además de sus finales escribe una vez su guion variado (PND-110).
-        usd = n_re * (final + gastos.TARIFAS["variar_guion"])
+        # Cada re-edición es una variante: además de sus finales escribe su guion variado una vez por receta, y la
+        # receta lleva la voz de cada destino: en el peor caso, una vez por país (PND-110; así coincide con la
+        # reserva de cada final de la variante en `derivaciones._encolar_final`).
+        usd = n_re * n_paises * (final_1["usd"] + gastos.TARIFAS["variar_guion"])
         duracion = sesion.get("duracion_objetivo")
         con_sonido = sesion.get("con_sonido", True) is not False
         for k in range(n_rg):
@@ -488,7 +490,8 @@ def _precio_estimado(cliente, ex, accion, payload):
                                   musica_estilo=sesion.get("musica_estilo"))
             if video["usd"] is None:
                 return {"usd": None, "texto": sin_precio}
-            usd += video["usd"] + final
+            # La sesión regenerada nace sin guion base: su primera final lo escribe (guardian-gasto, 2026-10-15).
+            usd += video["usd"] + gastos.TARIFAS["guion"] + final
         return {"usd": round(usd, 4), "texto": gastos.texto_precio(usd)}
     except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la acción
         return {"usd": None, "texto": sin_precio}
@@ -505,12 +508,25 @@ def _exigir_pagina(cliente):
         raise ValueError(aviso)
 
 
-def _exigir_saldo(cliente, ex, accion, payload):
+def _exigir_saldo(cliente, ex, accion, payload, propuesta_id=None):
     """Cobros (spec 2026-10-08 §5): derivar y rescatar producen (clon y
     finales). El saldo se pide ANTES de `planificar`, que crea el experimento
     hijo y marca la pieza (`derivado`, `rescatado_en_escalon`): sin saldo no
-    se gasta la única derivación ni el escalón; lanza SaldoInsuficiente."""
-    libro.exigir(cliente, _precio_estimado(cliente, ex, accion, payload)["usd"])
+    se gasta la única derivación ni el escalón; lanza SaldoInsuficiente.
+
+    El precio visto manda (guardian-gasto, 2026-10-15): una propuesta guarda su
+    precio al crearse y la pantalla lo muestra tal cual; si al aprobarla el de
+    ahora es mayor (cambió una tarifa, el modelo, los países), no se ejecuta: se
+    guarda el precio nuevo en la propuesta y ValueError con él, para aprobar
+    viéndolo."""
+    precio = _precio_estimado(cliente, ex, accion, payload)
+    visto = payload.get("precio_estimado") if isinstance(payload.get("precio_estimado"), dict) else None
+    if (propuesta_id is not None and visto and visto.get("usd") is not None and precio["usd"] is not None
+            and precio["usd"] > float(visto["usd"]) + 0.005):
+        propuestas.actualizar_precio(cliente, propuesta_id, precio)
+        raise ValueError(gettext("El precio cambió desde que se propuso: ahora cuesta %(precio)s. Revísalo y vuelve a "
+                                 "aprobar.", precio=gastos.texto_precio(precio["usd"])))
+    libro.exigir(cliente, precio["usd"])
 
 
 def pedir(cliente, experimento_id, accion, payload, motivo):

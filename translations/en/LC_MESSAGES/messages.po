@@ -6978,6 +6978,10 @@ msgid "El precio cambió desde que lo viste: revisa el nuevo y vuelve a confirma
 msgstr "The price changed since you saw it: check the new one and confirm again."
 
 #, python-format
+msgid "El precio cambió desde que se propuso: ahora cuesta %(precio)s. Revísalo y vuelve a aprobar."
+msgstr "The price changed since it was proposed: it now costs %(precio)s. Review it and approve again."
+
+#, python-format
 msgid "El precio cambió: ahora es %(precio)s. Revisa y vuelve a pedirlo."
 msgstr "The price changed: it's now %(precio)s. Check it and ask again."
 

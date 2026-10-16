@@ -124,5 +124,5 @@ Enmienda PND-032/210 (2026-10-10, pedido de Daniel): sprint-filtros tiene margen
 pieza). El `job_id` es determinista (`<cliente>__cp<id>__qa`): con la tarea viva, la periódica no la duplica. Si la
 tarea no termina (reinicio, colgada, el respaldo sin saldo), su gancho `qa_interrumpida` deja el mismo marcador
 terminal `veredicto="error"` que un QA que falla (solo si la pieza sigue sin QA): sin él, `qa` quedaba vacío y la
-periódica lo volvía a encolar y pagar. «Repetir QA» limpia el marcador. Pruebas: `tests/test_sprint_qa_un_intento.py`.
+periódica lo volvía a encolar y pagar. Lo mismo si guardar el resultado falla después de pagar la visión (`_marcar_error_qa`, hasta tres intentos). «Repetir QA» limpia el marcador. Pruebas: `tests/test_sprint_qa_un_intento.py`.
 

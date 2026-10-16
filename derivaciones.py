@@ -525,8 +525,9 @@ def _encolar_final(cliente, cf_id, idioma, pais, opciones):
     _exigir_pagina(cliente, guardado=True)   # antes de crear la fila de la final y de reservar
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=variante)
     try:
-        # Una variante escribe además su guion variado (la primera final de la receta): se reserva también eso
-        # (PND-110; reservar de más en los demás destinos solo aparta, el cobro es lo real).
+        # Una variante escribe además su guion variado una vez por receta (y la receta lleva la voz de cada destino:
+        # en el peor caso, una vez por país): se reserva en cada final, lo mismo que suma el precio de derivar o
+        # rescatar (acciones._precio_estimado), así la reserva nunca pasa del precio aprobado (PND-110).
         costo = gastos.estimar("final", paises=1)["usd"] + (gastos.TARIFAS["variar_guion"]
                                                              if opciones.get("variante_tipo") else 0)
         trabajos.encolar(job_id, "final_producir",

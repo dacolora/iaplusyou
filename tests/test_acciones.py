@@ -569,8 +569,9 @@ def test_pedir_derivar_y_rescatar_llevan_precio_estimado(ent):
     modelos_regen = [dv.modelo_regeneracion({"modelo": "wan3"}, k) for k in range(2)]
     assert modelos_regen == ["kling_o3_pro", "seedance25"]
     videos = [gastos.estimar("video", modelo=m, duracion=8)["usd"] for m in modelos_regen]
-    variar = gastos.TARIFAS["variar_guion"]                     # PND-110: cada re-edición escribe su guion variado
-    esperado = round(3 * (final_2 + variar) + sum(v + final_2 for v in videos), 4)   # 3 re-ediciones, 2 regeneraciones
+    variar_2 = 2 * gastos.TARIFAS["variar_guion"]               # PND-110: el guion variado, en el peor caso por país
+    guion = gastos.TARIFAS["guion"]                             # la sesión regenerada escribe su guion base
+    esperado = round(3 * (final_2 + variar_2) + sum(v + guion + final_2 for v in videos), 4)   # 3 re-ed., 2 regen.
     assert precio["usd"] == esperado and precio["usd"] > 0
     assert precio["texto"] == f"{gastos.formatear(esperado)} aprox."
 
@@ -578,7 +579,7 @@ def test_pedir_derivar_y_rescatar_llevan_precio_estimado(ent):
     prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "rescatar"][0]
     precio = prop["payload"]["precio_estimado"]
     assert precio["usd"] == pytest.approx(gastos.TARIFAS["final"] + gastos.TARIFAS["variar_guion"])
-    assert precio["texto"] == "US$ 0,48 aprox."                  # la final (0,28) y el guion variado (0,20)
+    assert precio["texto"] == "US$ 0,53 aprox."                  # la final (0,33) y el guion variado (0,20)
 
 
 def test_pedir_precio_no_disponible_no_bloquea(ent):
@@ -616,10 +617,11 @@ def test_precio_estimado_del_rescate_respeta_el_salto(ent, monkeypatch):
     e = ex.obtener("acme", eid)
     variar = gastos.TARIFAS["variar_guion"]
     assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep})["usd"] == 1.0 + variar        # escalón 1: re-edición
-    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep, "salto": 3})["usd"] == 6.0     # regenerar: video + final
+    guion = gastos.TARIFAS["guion"]
+    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep, "salto": 3})["usd"] == pytest.approx(6.0 + guion)  # video + guion + final
     ex.actualizar_pieza("acme", ep, escalon_rescate=2)
     e = ex.obtener("acme", eid)
-    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep, "salto": 2})["usd"] == 6.0     # nunca vuelve atrás
+    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep, "salto": 2})["usd"] == pytest.approx(6.0 + guion)  # nunca vuelve atrás
 
 
 def test_lo_que_guardan_las_acciones_aprobadas_a_mano_va_en_el_idioma_del_proyecto(ent, monkeypatch):
@@ -676,3 +678,27 @@ def test_precio_regeneracion_incluye_musica(ent, accion, payload):
     cf.actualizar('acme', 'cf_1', musica_estilo='calmado')
     cantidad = 2 if accion == 'derivar' else 1
     assert ac._precio_estimado('acme', ex, accion, payload)['usd'] == pytest.approx(base + .02 * cantidad)
+
+
+def test_una_propuesta_con_el_precio_viejo_no_se_ejecuta_y_queda_con_el_de_ahora(ent, monkeypatch):
+    """Guardian-gasto (2026-10-15): una propuesta guarda su precio al crearse y la pantalla lo muestra tal cual; si
+    al aprobarla el de ahora es mayor (subió una tarifa), no se planifica nada: la propuesta queda con el precio de
+    ahora y la persona vuelve a aprobar viéndolo."""
+    import creative_flow as cf
+    import gastos
+    import propuestas as pr
+    ac, eid, ep = ent["ac"], ent["eid"], ent["ep"]
+    cf.crear("acme", [], ["Chancla"], [], "camina", 8, "", "A", legado_id="cf_1")
+    cf.actualizar("acme", "cf_1", modelo="wan3", estado="video_listo")
+    assert ac.pedir("acme", eid, "rescatar", {"ep_id": ep}, "perdedor")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "rescatar"][0]
+    visto = prop["payload"]["precio_estimado"]["usd"]
+    monkeypatch.setitem(gastos.TARIFAS, "final", gastos.TARIFAS["final"] + 0.10)   # la tarifa subió
+    with pytest.raises(ValueError, match="El precio cambió"):
+        ac.ejecutar("acme", eid, "rescatar", prop["payload"], propuesta_id=prop["id"])
+    assert not [l for l in ent["llamadas"] if l[0] == "planificar"]
+    nuevo = pr.obtener("acme", prop["id"])["payload"]["precio_estimado"]["usd"]
+    assert nuevo == pytest.approx(visto + 0.10)
+    # Aprobada otra vez, con el precio que ahora se ve, sí se ejecuta.
+    ac.ejecutar("acme", eid, "rescatar", pr.obtener("acme", prop["id"])["payload"], propuesta_id=prop["id"])
+    assert [l for l in ent["llamadas"] if l[0] == "planificar"]

@@ -88,7 +88,7 @@ def test_evaluar_arma_prompt_y_mezcla_formato(base_temporal, monkeypatch, tmp_pa
 def test_evaluar_borra_el_temporal_aunque_falle_la_vision(base_temporal, monkeypatch, tmp_path):
     """Fix round 1, hallazgo 1: si `analisis._llamar` (los dos intentos)
     falla, el archivo temporal que bajó `archivo_local` no debe quedar
-    huérfano en el temp dir — sprint_qa_pieza reintenta hasta 3 veces."""
+    huérfano en el temp dir — cada QA que se vuelve a pedir descarga uno nuevo."""
     from sprints import analisis, datos, qa
     pid = datos.crear_persona("acme", "Premium")
     tid = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")

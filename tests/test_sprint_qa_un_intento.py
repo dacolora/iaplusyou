@@ -76,3 +76,28 @@ def test_el_gancho_no_pisa_un_qa_que_ya_se_guardo(pieza):
                                                         "cf_id": pieza["cf"]})
     tareas.AL_INTERRUMPIR["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": pieza["cp"]}}, "colgada")
     assert datos.idea("acme", pieza["cp"])["qa"]["veredicto"] == "pasa"
+
+
+def test_un_qa_pagado_que_no_se_pudo_guardar_deja_su_marca(pieza, monkeypatch):
+    """Guardian-gasto (2026-10-15): si guardar el resultado falla después de pagar la visión, queda la marca de
+    error y la periódica no lo vuelve a pagar."""
+    import cola
+    import worker
+    from sprints import datos, qa
+    from tareas import sprints as ts
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {"score": 80, "checks": {}, "veredicto": "pasa",
+                                                                         "tokens_entrada": 100, "tokens_salida": 10})
+    original = datos.guardar_qa
+    fallos = {"n": 0}
+
+    def guardar(cliente, cp_id, cf_id, resultado):
+        if resultado.get("veredicto") == "pasa":
+            fallos["n"] += 1
+            raise RuntimeError("database is locked")
+        return original(cliente, cp_id, cf_id, resultado)
+    monkeypatch.setattr(datos, "guardar_qa", guardar)
+    ts.encolar_qa("acme", pieza["cp"])
+    worker._correr(cola.reclamar())
+    assert fallos["n"] == 1
+    assert datos.idea("acme", pieza["cp"])["qa"]["veredicto"] == "error"
+    assert ("acme", pieza["cp"]) not in ts._piezas_listas_sin_qa()

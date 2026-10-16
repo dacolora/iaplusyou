@@ -202,7 +202,7 @@ def test_el_guion_y_las_finales_muestran_el_precio(libro, app_config, monkeypatc
     assert "Preparar guion con IA ≈ US$ 0,20" in detalle            # 0,13 × 1,5
     cf.guardar_guion_base("acme", cf_id, GUION_BASE)
     detalle = app_config["c"].get(ruta).data.decode()
-    assert ">Producir finales ≈ US$ 0,42 c/u</button>" in detalle   # 0,28 × 1,5 (PND-110)
+    assert ">Producir finales ≈ US$ 0,49 c/u</button>" in detalle   # 0,33 × 1,5 = 0,495 (PND-110)
 
 
 def test_la_comparacion_de_proveedores_no_la_ve_el_cliente_de_un_proyecto_que_cobra(libro, pagina):
