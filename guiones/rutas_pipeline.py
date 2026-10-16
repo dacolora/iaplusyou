@@ -114,7 +114,7 @@ def _contexto(cliente, guion_id=None, video_id=None):
         ctx["costos"]["armar"] = _costo("armar", _palabras(v))
         ctx["no_caben"] = clips.lineas_que_no_caben(v)
         ctx["prompts"] = {f"{(p['extra'] or {}).get('variante')}:{(p['extra'] or {}).get('clip_index')}":
-                          {"id": p["id"], "estado": p["estado"]}
+                          {"id": p["id"], "estado": p["estado"], "texto": p["texto_vigente"]}
                           for p in datos.prompts_de_video(v["id"]) if p["tipo"] == "clip"}
         ctx["costos"]["imagenes"] = _costo("imagenes")
         todos = datos.prompts_de_video(v["id"])
@@ -623,7 +623,8 @@ def escena_a_crear(cliente, vid, indice):
 # (`tareas/cadena.py`) genera escena tras escena y frena si una falla.
 
 def _prompts_clip(vid):
-    return {f"principal:{(p['extra'] or {}).get('clip_index')}": {"id": p["id"], "estado": p["estado"]}
+    return {f"principal:{(p['extra'] or {}).get('clip_index')}": {"id": p["id"], "estado": p["estado"],
+                                                                   "texto": p["texto_vigente"]}
             for p in datos.prompts_de_video(vid)
             if p["tipo"] == "clip" and (p["extra"] or {}).get("variante") == "principal"}
 

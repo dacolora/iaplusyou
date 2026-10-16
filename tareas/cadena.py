@@ -101,8 +101,7 @@ def lanzar_escena(cliente, video_id, k):
     primera = k == cadena.indices(v)[0]
     if modelo == cadena.WAN:
         # Wan 3.0: todas por referencias. La primera, con el lugar primero; desde la segunda, el último cuadro de la
-        # anterior va primero (`@Imagen 1`) y después solo el lugar de la escena (PND-330: los retratos se colaban como
-        # planos).
+        # anterior va primero (`@Imagen 1`) y después la escena sin los retratos (PND-330: se colaban como planos).
         imagenes = cadena.imagenes_wan(v, k)
         prompt = cadena.prompt_escena_wan(_prompt_vigente(video_id, k), v, k, imagenes)
         urls = [medios.url_publica(cliente, x["imagen"]) for x in imagenes]
@@ -117,6 +116,7 @@ def lanzar_escena(cliente, video_id, k):
             referencias = [{"tipo": "imagen", "url": frame, "frame_url": frame, "titulo": f"{k - 1} → {k}"}] + referencias
         for i, r in enumerate(referencias, start=1):
             r["etiqueta"] = f"@Imagen {i}"
+        _sin_colgadas(prompt, len(referencias))
         flowplus_prompt.asignar_tokens(referencias, modelo)
         prompt = flowplus_prompt.sustituir_tokens(prompt, referencias)
         campos = {"referencias": referencias}
@@ -128,11 +128,13 @@ def lanzar_escena(cliente, video_id, k):
                        for i, (x, u) in enumerate(zip(imagenes, urls), start=1)]
         # Las menciones `@Imagen n` pasan al token de Kling («Image n»): hasta el
         # 2026-10-15 la primera escena le llegaba a Kling con «@Imagen n» literal.
+        _sin_colgadas(prompt, len(referencias))
         flowplus_prompt.asignar_tokens(referencias, modelo)
         prompt = flowplus_prompt.sustituir_tokens(prompt, referencias)
         campos = {"referencias": referencias}
     else:
         prompt = cadena.prompt_escena(_prompt_vigente(video_id, k), v, k, imagenes)
+        _sin_colgadas(prompt, 1)
         frame = cadena.frame_anterior(est, k)
         if not frame:
             raise ValueError(gettext("Falta el último cuadro de la escena anterior."))
@@ -173,6 +175,14 @@ def _espera_vencida(desde):
         return datetime.fromisoformat(str(desde)) <= datetime.now() - timedelta(seconds=ESPERA_RECUPERABLE_S)
     except (TypeError, ValueError):
         return True
+
+
+def _sin_colgadas(prompt, n):
+    """Ninguna mención del prompt apunta a una imagen que la escena no lleva (`cadena.menciones_colgadas`): si alguna
+    lo hace, la escena no se crea ni se cobra (la cadena se detiene con el motivo)."""
+    colgadas = cadena.menciones_colgadas(prompt, n)
+    if colgadas:
+        raise ValueError(cadena.motivo_colgadas(colgadas))
 
 
 def fallar_cadena(cliente, video_id, k, error):

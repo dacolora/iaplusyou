@@ -20,6 +20,7 @@ import re
 
 from flask_babel import gettext, ngettext
 
+import flowplus_prompt
 from guiones import escenas
 from guiones.refinador import Conflicto
 from providers import flowplus_modelos
@@ -88,14 +89,44 @@ def imagenes_wan(video, k):
     """Las imágenes de la escena k que recibe Wan 3.0 (PND-330, decisión 2026-10-15, lote 2). En la prueba real del
     2026-10-15 (Podcast de HappyCozy) Wan intercaló los retratos de referencia como planos: abría en el retrato de
     Anna contra una pared lisa y cortaba a él a mitad de la escena 2. En la primera escena van todas, con el lugar
-    primero (el entorno es Image 1 y los retratos después). En las siguientes, solo los lugares de la escena: el último
-    cuadro de la anterior, que la tarea pone delante como Image 1, ya trae las caras y los objetos. No se agrega texto
-    al prompt: lo que no va se nombra en palabras (`escenas.prompt_para_crear`). `Conflicto` si falta una imagen."""
+    primero (el entorno es Image 1 y los retratos después). En las siguientes no van los retratos de las personas
+    (`personaje`): el último cuadro de la anterior, que la tarea pone delante como Image 1, ya trae las caras; el
+    lugar, el producto y las extra sí van (la decisión solo quitó los retratos; revisión de guardian-gasto del
+    2026-10-16). No se agrega texto al prompt: lo que no va se nombra en palabras (`escenas.prompt_para_crear`).
+    `Conflicto` si falta una imagen."""
     imgs = escenas.imagenes_para_crear(video, k)
     lugares = [x for x in imgs if x["tipo"] == "entorno"]
+    resto = [x for x in imgs if x["tipo"] != "entorno"]
     if k == _primera(video):
-        return lugares + [x for x in imgs if x["tipo"] != "entorno"]
-    return lugares
+        return lugares + resto
+    return lugares + [x for x in resto if x["tipo"] != "personaje"]
+
+
+_IMAGE_SUELTA = re.compile(r"(?<![\w@])Image \d+\b")
+
+
+def menciones_colgadas(prompt, n):
+    """Lo que el prompt de una escena (con las menciones de Crear, antes de pasarlas al token del modelo) nombra y no
+    va en esa escena: una mención (`@Imagen k` en cualquier forma) más allá de las `n` imágenes que se mandan, un
+    `@Video` o `@Logo` (la cadena no manda videos ni logos) o un «Image N» suelto que quedó sin traducir. Con alguna,
+    el modelo tomaría otra imagen o ninguna (revisión de guardian-gasto, 2026-10-16): la revisión previa no deja
+    aprobar y la tarea no lanza la escena."""
+    salida = flowplus_prompt.menciones_sin_referencia(prompt, [{"etiqueta": f"@Imagen {i}"} for i in range(1, n + 1)])
+    for m in _IMAGE_SUELTA.finditer(prompt or ""):
+        if m.group(0) not in salida:
+            salida.append(m.group(0))
+    return salida
+
+
+def prompt_de_escena(texto, video, k, modelo=MODELO):
+    """(prompt con las menciones de Crear, número de imágenes que se mandan) de la escena k, como lo arma la tarea
+    (`tareas.cadena.lanzar_escena`) antes de pasar las menciones al token del modelo."""
+    primera = k == _primera(video)
+    if modelo == WAN:
+        imgs = imagenes_wan(video, k)
+        return prompt_escena_wan(texto, video, k, imgs), len(imgs) + (0 if primera else 1)
+    imgs = escenas.imagenes_para_crear(video, k)
+    return prompt_escena(texto, video, k, imgs), (len(imgs) if primera else 1)
 
 
 def id_imagen(img):
@@ -138,6 +169,11 @@ def revisar(video, prompts, desde=None, modelo=MODELO):
         except Conflicto as e:
             problemas.append({"indice": k, "motivo": str(e)})
             continue
+        texto = (prompts.get(f"principal:{k}") or {}).get("texto")
+        if texto:
+            colgadas = menciones_colgadas(*prompt_de_escena(texto, video, k, modelo))
+            if colgadas:
+                problemas.append({"indice": k, "motivo": motivo_colgadas(colgadas)})
         if modelo == WAN:
             # Las siguientes llevan además el último cuadro de la anterior (y solo su lugar: PND-330).
             maximo = info["max_referencias"] - (0 if k == primera else 1)
@@ -160,12 +196,17 @@ def revisar(video, prompts, desde=None, modelo=MODELO):
     return problemas
 
 
+def motivo_colgadas(colgadas):
+    return gettext("El prompt de esta escena nombra %(lista)s, que no va en esta escena: corrígelo en el chat antes "
+                   "de generar.", lista=", ".join(colgadas))
+
+
 def avisos(video, modelo=MODELO):
     """No bloquean: con Kling, una escena siguiente que cambia de lugar (el
     lugar nuevo solo llega por el texto: imagen a video no recibe entornos).
     Wan recibe el entorno de la escena como imagen, pero desde la segunda escena
-    solo eso y el último cuadro (PND-330): quien aparece por primera vez en una
-    escena siguiente no lleva su imagen y sale del texto."""
+    no recibe los retratos (PND-330): una persona que aparece por primera vez en
+    una escena siguiente no lleva su imagen y sale del texto."""
     if modelo == WAN:
         return _avisos_wan(video)
     salida, previo = [], None
@@ -186,12 +227,13 @@ def _avisos_wan(video):
     salida, previas = [], None
     for k in indices(video):
         claves, _ = escenas.claves_de(video, _clip(video, k))
-        propias = {c for c in claves if c in pool_ and pool_[c]["tipo"] != "entorno"}
+        propias = {c for c in claves if c in pool_ and pool_[c]["tipo"] == "personaje"}
         nuevas = sorted(propias - previas, key=lambda c: pool_[c]["numero"]) if previas is not None else []
         if nuevas:
             salida.append({"indice": k, "motivo": gettext(
-                "Aquí aparece %(lista)s, que no estaba en la escena anterior: con Wan 3.0 las escenas siguientes solo "
-                "reciben el último cuadro y el lugar, así que sale de lo que dice el texto.",
+                "Aquí aparece %(lista)s, que no estaba en la escena anterior: con Wan 3.0 las escenas siguientes no "
+                "reciben los retratos de las personas (el último cuadro ya trae las caras), así que sale de lo que "
+                "dice el texto.",
                 lista=", ".join(pool_[c]["nombre"] or f"Image {pool_[c]['numero']}" for c in nuevas))})
         previas = propias
     return salida
