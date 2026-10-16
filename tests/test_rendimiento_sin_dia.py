@@ -23,7 +23,6 @@ from triple_whale import datos as twdatos
 
 TOKEN = "t-llave-de-prueba"   # llave-de-prueba
 SE = "act_se"
-HOY = date.today()
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +37,9 @@ def meta_on(app, monkeypatch):  # noqa: F811
 
 
 def _hace(n):
-    return (HOY - timedelta(days=n)).isoformat()
+    # Hoy al llamar, no al importar: con «HOY» fijado al importar, una suite que cruzaba la medianoche comparaba
+    # el día de ayer con el «hoy» de la ruta (falló el 2026-10-15 a las 00:0x).
+    return (date.today() - timedelta(days=n)).isoformat()
 
 
 def _sembrar(dias_tienda=0, dias_meta=0):
