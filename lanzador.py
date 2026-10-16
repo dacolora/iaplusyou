@@ -679,7 +679,8 @@ def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
                         "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
                         "%(num)s día.",
                         "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
-                        "%(num)s días.", dias_meta, tope=_dinero(tope, moneda)),
+                        "%(num)s días.", dias_meta,
+                        tope=_dinero(monedas_meta.desde_unidad_meta(parte or 0, moneda) if varias else tope, moneda)),
                         {"dias_meta": dias_meta})
             if cap:
                 _confirmar_tope(campaign_id, cap)
@@ -812,6 +813,21 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
         raise ValueError(gettext("Ese experimento está cerrado."))
     local = "activo" if status == "ACTIVE" else "pausado"
     saltadas = []
+    fallos = []
+
+    def _intentar(fn, *args):
+        """Activar se corta en el primer error (lo que alcanzó a encenderse lo repausa quien llama). Pausar NO: con una
+        campaña por cuenta (PND-148), que Meta rechace la pausa en una cuenta no puede dejar a las otras gastando; se
+        sigue con todo y el primer error sale al final. True si Meta lo hizo."""
+        if status == "ACTIVE":
+            fn(*args)
+            return True
+        try:
+            fn(*args)
+            return True
+        except Exception as e:  # noqa: BLE001 — se relanza al final
+            fallos.append(e)
+            return False
 
     def _correr(_creds):
         if status == "ACTIVE":
@@ -821,12 +837,11 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
             _preparar_fin_primera_activacion(cliente, ex)
         if pais is None:
             for cid in campanas_de(ex):   # PND-148: una campaña por cuenta
-                meta_campaign.actualizar_estado(cid, status)
+                _intentar(meta_campaign.actualizar_estado, cid, status)
             for p in ex["paises"]:
                 ids = _adsets_de_pais(p)
-                for adset_id in ids:
-                    meta_adset.actualizar_estado(adset_id, status)
-                if ids:
+                hechos = [_intentar(meta_adset.actualizar_estado, adset_id, status) for adset_id in ids]
+                if ids and all(hechos):
                     experimentos.actualizar_pais(cliente, experimento_id, p["pais"], estado=local)
         else:
             p = next((p for p in ex["paises"] if p["pais"] == pais), None)
@@ -838,9 +853,9 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
                 # en Meta: sin ella, el conjunto no entrega aunque quede ACTIVE local.
                 # PND-148: la campaña de SU cuenta, que puede seguir en pausa aunque el experimento ya corra por otra.
                 meta_campaign.actualizar_estado(_campana_de_pais(ex, p), status)
-            for adset_id in ids:
-                meta_adset.actualizar_estado(adset_id, status)
-            experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
+            hechos = [_intentar(meta_adset.actualizar_estado, adset_id, status) for adset_id in ids]
+            if all(hechos):
+                experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
         for pz in _piezas_de(ex, pais):
             if status == "ACTIVE" and pieza_retirada(pz):
                 # I-1: lo que el decisor ya retiró (perdedora rescatada,
@@ -849,12 +864,15 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
                 # de rescate" volvería a gastar en las que ya perdieron.
                 saltadas.append(pz)
                 continue
-            meta_ad.actualizar_estado(pz["meta_ad_id"], status)
+            if not _intentar(meta_ad.actualizar_estado, pz["meta_ad_id"], status):
+                continue
             if local == "activo":
                 experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
                 experimentos.marcar_pieza(cliente, pz["id"], activado_en=db.ahora())
             else:
                 experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
+        if fallos:
+            raise fallos[0]
 
     # PND-322: la marca «activando» cubre desde antes de tocar Meta hasta que el estado ya dice «corriendo»; mientras
     # tanto la vigilancia no confunde un experimento a medio activar con uno pausado que sigue activo en Meta.
@@ -1005,9 +1023,21 @@ def _repausar_si_sigue_activo(cliente, ex):
     """Un experimento pausado (o en error) en Creatv cuya campaña sigue ACTIVA en Meta —una pausa que falló a medias—
     se vuelve a pausar entero (PND-322, revisión de gasto). Solo lee el estado de la campaña: un GET. No toca uno que
     alguien está activando en este momento (`_activando`)."""
-    # PND-148: basta con que UNA campaña del experimento siga activa en Meta.
-    if not any(_meta_directo(cliente, "GET", cid, params={"fields": "effective_status"}).get("effective_status")
-               == "ACTIVE" for cid in campanas_de(ex)):
+    # PND-148: basta con que UNA campaña del experimento siga activa en Meta; cada una se lee aparte (una cuenta que no
+    # se puede leer no tapa a las demás) y, si ninguna está activa, el primer error de lectura sale al final.
+    activa, error_lectura = False, None
+    for cid in campanas_de(ex):
+        try:
+            estado = _meta_directo(cliente, "GET", cid, params={"fields": "effective_status"}).get("effective_status")
+        except Exception as e:  # noqa: BLE001
+            error_lectura = error_lectura or e
+            continue
+        if estado == "ACTIVE":
+            activa = True
+            break
+    if not activa:
+        if error_lectura is not None:
+            raise error_lectura
         return None
     actual = experimentos.obtener(cliente, ex["id"])
     if not actual or actual["estado"] not in ("pausado", "error") or _activando(actual):
@@ -1043,17 +1073,28 @@ def vigilar_gasto(cliente, experimento_id):
         return None
     # PND-148: el gasto de TODAS las campañas del experimento (una por cuenta) se suma contra el tope; el ritmo se
     # mira conjunto por conjunto en cada una.
-    total, hoy = 0.0, {}
+    # Cada campaña se lee en su propio try: que no se pueda leer una cuenta no apaga el freno de las demás (se juzga con
+    # lo leído, que es un mínimo del gasto real); si nada justifica pausar, el primer error de lectura sale al final.
+    total, hoy, error_lectura = 0.0, {}, None
     for cid in campanas_de(ex):
-        total += _spend(_meta_directo(cliente, "GET", f"{cid}/insights",
-                                      params={"fields": "spend", "date_preset": "maximum"}))
-        for fila in (_meta_directo(cliente, "GET", f"{cid}/insights",
+        try:
+            gasto = _spend(_meta_directo(cliente, "GET", f"{cid}/insights",
+                                         params={"fields": "spend", "date_preset": "maximum"}))
+            filas = (_meta_directo(cliente, "GET", f"{cid}/insights",
                                    params={"fields": "adset_id,spend", "date_preset": "today", "level": "adset"})
-                     .get("data") or []):
+                     .get("data") or [])
+        except Exception as e:  # noqa: BLE001
+            error_lectura = error_lectura or e
+            continue
+        total += gasto
+        for fila in filas:
             try:
                 hoy[str(fila.get("adset_id"))] = float(fila.get("spend") or 0)
             except (TypeError, ValueError):
                 continue
+    if error_lectura is not None:
+        log.warning("Vigilancia de %s, exp %s: una campaña no se pudo leer (%s); se juzga con las demás",
+                    cliente, experimento_id, type(error_lectura).__name__)
     if total > float(ex["gasto_acumulado"] or 0):
         experimentos.actualizar(cliente, experimento_id, gasto_acumulado=round(total, 2))
     from tablero import dinero as _dinero
@@ -1073,6 +1114,8 @@ def vigilar_gasto(cliente, experimento_id):
                 datos.update(conjunto=adset_id, gasto_hoy=gastado, diario=diario)
                 break
     if not motivo:
+        if error_lectura is not None:
+            raise error_lectura
         return None
     _pausar_campana_ya(cliente, ex)   # la entrega se corta ya; lo de abajo puede esperar el candado
     cambiar_estado(cliente, experimento_id, "PAUSED")

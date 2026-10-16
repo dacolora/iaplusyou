@@ -4865,6 +4865,10 @@ msgstr "With a reference image this model doesn't choose a format: it follows th
 msgid "Con una tienda los experimentos atribuyen ventas reales. Conéctala en Configuración › Conectar tu tienda."
 msgstr "With a store, experiments attribute real sales. Connect it in Settings › Connect your store."
 
+#, python-format
+msgid "Con varias cuentas el total se reparte entre sus campañas, y alguna parte queda por debajo de %(tope)s, el mínimo de Meta para un tope duro: Creatv reparte %(total)s en presupuestos diarios por país (≈ %(dia)s al día) y la vigilancia del gasto frena el total."
+msgstr "With several accounts the total is split among their campaigns, and some share falls below %(tope)s, Meta's minimum for a hard cap: Creatv splits %(total)s into daily budgets per country (≈ %(dia)s a day) and the spend watch holds back the total."
+
 msgid "Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30."
 msgstr "With reference videos (Wan 3.0), their seconds plus the result's can't add up to more than 30."
 

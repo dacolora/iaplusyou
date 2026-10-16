@@ -262,6 +262,7 @@
     var PLANEADO_UN_DIA = {{ ngettext('Presupuesto planeado: %(total)s en %(num)s día', 'Presupuesto planeado: %(total)s en %(num)s días', 1, total='{total}', num='{n}')|tojson }};
     var PLANEADO_VARIOS_DIAS = {{ ngettext('Presupuesto planeado: %(total)s en %(num)s día', 'Presupuesto planeado: %(total)s en %(num)s días', 2, total='{total}', num='{n}')|tojson }};
     var AVISO_SIN_TOPE = {{ _('Meta no pone un tope duro a la campaña por debajo de %(tope)s: Creatv reparte %(total)s en presupuestos diarios por país (≈ %(dia)s al día).', tope='{tope}', total='{total}', dia='{dia}')|tojson }};
+    var AVISO_SIN_TOPE_VARIAS = {{ _('Con varias cuentas el total se reparte entre sus campañas, y alguna parte queda por debajo de %(tope)s, el mínimo de Meta para un tope duro: Creatv reparte %(total)s en presupuestos diarios por país (≈ %(dia)s al día) y la vigilancia del gasto frena el total.', tope='{tope}', total='{total}', dia='{dia}')|tojson }};
     var PLANTILLA_ANUNCIOS = {{ _('%(anuncios)s (%(piezas)s en %(paises)s)', anuncios='{anuncios}', piezas='{piezas}', paises='{paises}')|tojson }};
     var PLANTILLA_MINIMO = {{ _('Con este reparto no se llega al mínimo diario de Meta (%(minimo)s al día) en: %(paises)s. Con un total de al menos %(total)s alcanza.', paises='{paises}', minimo='{minimo}', total='{total}')|tojson }};
     var AVISO_MARCA_PAIS = {{ _('Marca al menos un país.')|tojson }};
@@ -434,10 +435,11 @@
       // PND-148: con países en varias cuentas, el total se reparte entre sus campañas en proporción a los diarios y cada
       // parte necesita llegar al mínimo de Meta para llevar tope duro (lanzador._repartir_tope): si alguna no llega,
       // tampoco es verdad «Máximo que puede gastar».
-      var sinTope = hayCifras && (total < topeCampana || partesPorCuenta(ps, total).some(function (x) { return x < topeCampana; }));
+      var partesBajas = hayCifras && total >= topeCampana && partesPorCuenta(ps, total).some(function (x) { return x < topeCampana; });
+      var sinTope = hayCifras && (total < topeCampana || partesBajas);
       var plantillaMaximo = sinTope ? (dias === 1 ? PLANEADO_UN_DIA : PLANEADO_VARIOS_DIAS) : (dias === 1 ? MAXIMO_UN_DIA : MAXIMO_VARIOS_DIAS);
       textoMaximo = hayCifras ? plantillaMaximo.replace('{total}', dinero(total)).replace('{n}', dias) : '';
-      var textoSinTope = sinTope ? AVISO_SIN_TOPE.replace('{tope}', dinero(topeCampana)).replace('{total}', dinero(total)).replace('{dia}', dinero(diario)) : '';
+      var textoSinTope = sinTope ? (partesBajas ? AVISO_SIN_TOPE_VARIAS : AVISO_SIN_TOPE).replace('{tope}', dinero(topeCampana)).replace('{total}', dinero(total)).replace('{dia}', dinero(diario)) : '';
       textoConfirmar = textoMaximo ? textoMaximo + (textoSinTope ? '. ' + textoSinTope : '.') : '';
       textoDia = hayCifras ? dinero(diario) : '';
       pintarResumen({
@@ -462,18 +464,16 @@
       }
       refrescarCuentas();
     }
-    // Lo que le toca a cada cuenta del total (misma regla que lanzador._repartir_tope); una sola cuenta, el total.
+    // Lo que le toca a cada cuenta del total (P.partesTope, réplica de lanzador._repartir_tope); una cuenta, el total.
     function partesPorCuenta(ps, total) {
       if (!filasCuenta.length) return [total];
-      var pesos = {}, suma = 0;
+      var grupos = {};
       ps.forEach(function (p) {
-        var sel = form.querySelector('[name=cuenta_' + p + ']'), v = Number(campoPais(p).value) || 0;
-        var clave = sel ? sel.value : '';
-        pesos[clave] = (pesos[clave] || 0) + v; suma += v;
+        var sel = form.querySelector('[name=cuenta_' + p + ']'), clave = sel ? sel.value : '';
+        (grupos[clave] = grupos[clave] || []).push(Number(campoPais(p).value) || 0);
       });
-      var claves = Object.keys(pesos);
-      if (claves.length < 2 || suma <= 0) return [total];
-      return claves.map(function (k) { return total * pesos[k] / suma; });
+      var lista = Object.keys(grupos).map(function (k) { return grupos[k]; });
+      return lista.length < 2 ? [total] : P.partesTope(total, lista, moneda);
     }
     function campoPaisesVisibles(ps) { form.querySelectorAll('[data-reparto]').forEach(function (l) { l.hidden = !ps.includes(l.dataset.reparto); }); }
     // El deslizador del total: del total mínimo que respeta a Meta hasta el doble de la sugerencia «Fuerte». El PASO y el tope

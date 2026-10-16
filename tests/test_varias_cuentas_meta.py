@@ -336,6 +336,31 @@ def test_pausar_todo_pausa_las_dos_campanas(dos):
     assert paises["NO"]["meta_campaign_id"] in pausados and paises["SE"]["meta_campaign_id"] in pausados
 
 
+def test_pausar_todo_sigue_con_la_otra_cuenta_si_meta_rechaza_la_primera(dos):
+    """Revisión de guardian-gasto: que Meta rechace la pausa en la cuenta de Noruega no puede dejar a Suecia gastando.
+    Se pausa todo lo que se pueda y el error sale al final (el experimento no se marca «pausado»)."""
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    paises = _lanzado(dos)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    meta.llamadas.clear()
+    original = meta._id
+
+    def falla_noruega(tipo, **kw):
+        if tipo == "estado" and kw.get("oid") == paises["NO"]["meta_campaign_id"]:
+            raise RuntimeError("Meta: sin permiso en esta cuenta")
+        return original(tipo, **kw)
+    meta._id = falla_noruega
+    _parchar(lz, meta, dos["monkeypatch"])
+    with pytest.raises(RuntimeError):
+        lz.cambiar_estado("acme", eid, "PAUSED")
+    pausados = [kw["oid"] for t, kw in meta.llamadas if t == "estado" and kw["status"] == "PAUSED"]
+    assert paises["SE"]["meta_campaign_id"] in pausados and paises["SE"]["meta_adset_id"] in pausados
+    assert paises["NO"]["meta_adset_id"] in pausados
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "corriendo"      # la vigilancia lo sigue mirando
+    assert all(pz["estado"] == "pausado" for pz in e["piezas"])
+
+
 # ---------- la vigilancia sobre el total ----------
 
 def _corriendo(dos):
@@ -385,6 +410,47 @@ def test_la_vigilancia_repausa_si_alguna_campana_sigue_activa(dos):
     meta.llamadas.clear()
     meta.posts.clear()
     meta.estados_meta[c_se] = "ACTIVE"     # la pausa de Suecia falló a medias en Meta
+    assert lz.vigilar_gasto("acme", eid)
+    assert (c_se, {"status": "PAUSED"}) in meta.posts
+
+
+def _directo_que_falla_en(dos, campana):
+    meta = dos["meta"]
+    original = meta._directo
+
+    def directo(cliente, metodo, edge, params=None, payload=None):
+        if metodo == "GET" and edge.split("/")[0] == campana:
+            raise RuntimeError("Meta no contestó")
+        return original(cliente, metodo, edge, params=params, payload=payload)
+    dos["monkeypatch"].setattr(dos["lz"], "_meta_directo", directo)
+
+
+def test_la_vigilancia_frena_una_cuenta_aunque_otra_no_se_pueda_leer(dos):
+    """Revisión de guardian-gasto: Noruega no se puede leer y Suecia gasta hoy más del doble de su diario."""
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    c_no, c_se = _corriendo(dos)
+    _directo_que_falla_en(dos, c_no)
+    meta.gastos_conjuntos[_por_pais(ex, eid)["SE"]["meta_adset_id"]] = 250.0
+    assert "doble" in lz.vigilar_gasto("acme", eid)
+    assert ex.obtener("acme", eid)["estado"] == "pausado"
+
+
+def test_la_vigilancia_sin_motivo_pero_con_una_cuenta_sin_leer_avisa_el_error(dos):
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    c_no, c_se = _corriendo(dos)
+    _directo_que_falla_en(dos, c_no)
+    with pytest.raises(RuntimeError):
+        lz.vigilar_gasto("acme", eid)
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"
+
+
+def test_el_repausado_mira_la_otra_campana_aunque_una_no_se_pueda_leer(dos):
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    c_no, c_se = _corriendo(dos)
+    lz.cambiar_estado("acme", eid, "PAUSED")
+    meta.posts.clear()
+    meta.estados_meta[c_se] = "ACTIVE"
+    _directo_que_falla_en(dos, c_no)
     assert lz.vigilar_gasto("acme", eid)
     assert (c_se, {"status": "PAUSED"}) in meta.posts
 
@@ -613,3 +679,37 @@ def test_el_detalle_pide_cada_campana_en_su_cuenta(monkeypatch, base_temporal):
     r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 16))
     assert r["errores"] == {}
     assert {(e, c) for e, c in pedidos} == {("act_1/insights", "cmp_1"), ("act_2/insights", "cmp_2")}
+
+
+# ---------- la pantalla: el reparto del tope en JS es el mismo que el del lanzador ----------
+
+@pytest.mark.skipif(not __import__("shutil").which("node"), reason="sin Node no se corre el JS")
+def test_el_reparto_del_tope_en_js_da_lo_mismo_que_el_lanzador():
+    """De esta cuenta depende que la pantalla diga «Máximo que puede gastar» (cada parte con tope duro) o «Presupuesto
+    planeado»: tiene que ser la de `lanzador._repartir_tope`."""
+    import json as _json
+    import os
+    import random
+    import shutil
+    import subprocess
+
+    import lanzador as lz
+    azar = random.Random(20261016)
+    casos = [(2800.0, [[300.0], [100.0]], "SEK"), (3033.38, [[333.33], [100.01]], "SEK"), (20.0, [[1.0], [1.0], [1.0]], "USD"),
+             (84028.0, [[4001.0, 4000.0], [4003.0]], "COP"), (105.0, [[15.0], [0.0]], "SEK"), (147.0, [[7.77, 3.33], [9.99]], "EUR"),
+             (5000.0, [[300.0, 100.0]], "SEK")]
+    for _ in range(300):
+        moneda = azar.choice(["SEK", "NOK", "COP", "USD", "EUR", "CLP", "MXN"])
+        dec = 0 if moneda in ("COP", "CLP") else 2
+        grupos = [[round(azar.uniform(1, 5000), dec) for _ in range(azar.randint(1, 3))] for _ in range(azar.randint(1, 4))]
+        casos.append((round(azar.uniform(10, 900000), dec), grupos, moneda))
+    arnes = ("const P=require(process.argv[1]); let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{"
+             "console.log(JSON.stringify(JSON.parse(d).map(c=>P.partesTope(c[0],c[1],c[2]))));});")
+    ruta = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "presupuesto_exp.js")
+    r = subprocess.run([shutil.which("node"), "-e", arnes, ruta], input=_json.dumps(casos), capture_output=True,
+                       text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    for (tope, grupos, moneda), js in zip(casos, _json.loads(r.stdout)):
+        esperado = [lz.monedas_meta.desde_unidad_meta(x, moneda)
+                    for x in lz._repartir_tope(tope, [[{"presupuesto_dia": d} for d in g] for g in grupos], moneda)]
+        assert js == pytest.approx(esperado, abs=1e-9), (tope, grupos, moneda)

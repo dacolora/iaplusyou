@@ -162,9 +162,15 @@ experimento viejo). Activar (`cambiar_estado`, `activar_pieza`) pasa por `_confi
 `comprobar_moneda` de la cuenta del país (o de todas) y el tope contra el gasto SUMADO de todas las campañas; activar un
 país enciende la campaña de SU cuenta (también con el experimento ya «corriendo» por otra cuenta,
 `_campana_sin_pais_activo`). `cambiar_presupuesto_pais`/escalar comprueban la cuenta del país; `lanzar_piezas_nuevas`
-crea cada anuncio en la cuenta de su país. Pausar, cerrar y repausar nunca se frenan y recorren todas las campañas (si
-una falla siguen con las demás y sale el primer error). `vigilar_gasto` suma el gasto de todas y, al llegar al tope,
-pausa todas; el ritmo se mira conjunto por conjunto en cada campaña; repausa si UNA campaña sigue activa. `refrescar`
+crea cada anuncio en la cuenta de su país. Pausar (`cambiar_estado` con PAUSED, `_pausar_todo_en_meta`,
+`_pausar_campana_ya`), cerrar y repausar nunca se frenan y recorren todas las campañas: si Meta rechaza una, siguen con
+las demás, sus conjuntos y anuncios, y el primer error sale al final (ronda de guardian-gasto: una cuenta sin permiso
+dejaba a la otra gastando con «Pausar»); activar sí se corta en el primer error. `vigilar_gasto` lee cada campaña en su
+propio try, suma el gasto de todas y, al llegar al tope, pausa todas; el ritmo se mira conjunto por conjunto en cada
+campaña; con una cuenta que no se pudo leer juzga con las demás y, si nada justifica pausar, sale el error de lectura
+(el aviso de siempre); repausa si UNA campaña sigue activa. La pantalla dice «Máximo que puede gastar» solo si cada
+parte del total llega al mínimo de un tope (`PresupuestoExp.partesTope` en `static/presupuesto_exp.js`, réplica de
+`_repartir_tope` con su prueba de paridad); si no, «Presupuesto planeado» y una línea que lo explica. `refrescar`
 lee por anuncio (no depende de la cuenta) y `meta_detalle` pide cada campaña en su cuenta (`campanas_por_cuenta`).
 Fuera de alcance: modo agencia, mezclar monedas, la tarea vieja `meta_publicar`. Trampa: el Pixel (OUTCOME_SALES) y la
 app anunciada tienen que estar compartidos con cada cuenta; si no, Meta rechaza el conjunto de esa cuenta al lanzar
