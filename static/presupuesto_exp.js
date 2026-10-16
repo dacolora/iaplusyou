@@ -61,8 +61,36 @@
     return pesos.map(function (w) { return Math.floor(t * w / s) / f; });
   }
 
+  // Los diarios de los países agrupados por cuenta, en el orden en que aparece cada cuenta: `filas` = [[cuenta, diario]].
+  function gruposPorCuenta(filas) {
+    var orden = [], grupos = {};
+    filas.forEach(function (f) {
+      if (!(f[0] in grupos)) { grupos[f[0]] = []; orden.push(f[0]); }
+      grupos[f[0]].push(Number(f[1]) || 0);
+    });
+    return orden.map(function (k) { return grupos[k]; });
+  }
+
+  // Por qué la pantalla NO puede decir «Máximo que puede gastar»: 'total' si el total queda bajo el mínimo de Meta para
+  // un tope de campaña, 'partes' si con varias cuentas alguna parte (partesTope) queda bajo ese mínimo, null si toda
+  // campaña lleva tope duro.
+  function faltaTope(total, grupos, moneda, minimo) {
+    if (total < minimo) return 'total';
+    if (grupos.length > 1 && partesTope(total, grupos, moneda).some(function (x) { return x < minimo; })) return 'partes';
+    return null;
+  }
+
+  // Las líneas de Revisar («🇸🇪 Suecia · se lanza en HappyFlops Sweden»): `filas` = [[país en palabras, cuenta]]. El
+  // reemplazo va por función: un nombre de cuenta de Meta con «$&» no se interpreta.
+  function lineasCuentas(plantilla, filas) {
+    return filas.map(function (f) {
+      return plantilla.replace('{pais}', function () { return f[0]; }).replace('{nombre}', function () { return f[1]; });
+    });
+  }
+
   var api = {EN_ENTEROS: EN_ENTEROS, ATAJOS: ATAJOS, factor: factor, repartir: repartir, atajos: atajos,
-             partesTope: partesTope};
+             partesTope: partesTope, gruposPorCuenta: gruposPorCuenta, faltaTope: faltaTope,
+             lineasCuentas: lineasCuentas};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.PresupuestoExp = api;
 })(typeof window !== 'undefined' ? window : this);

@@ -139,7 +139,9 @@ dice en qué cuenta se lanza: `experimento.paises[i]["ad_account_id"]` (sin migr
 la «cuenta por defecto»: un experimento viejo hace exactamente las mismas llamadas que antes). Qué cuentas se pueden
 elegir lo decide `cuentas_lanzamiento.py` (único lugar): la de defecto y las de `meta_cuenta` del proyecto con
 `extra.puede_lanzar` (la copia de Rendimiento lo escribe desde `user_tasks`: `ADVERTISE` o `MANAGE`) y la MISMA moneda
-que el experimento (un experimento tiene una sola moneda, la de `meta.json`); en modo agencia, solo la de defecto. El
+que el experimento (un experimento tiene una sola moneda, la de `meta.json`), nunca la cuenta de lanzamiento de OTRO
+proyecto (`meta_conexion.cuentas_de_lanzamiento`: R20 de Meta rendimiento solo la frenaba al elegir cuentas para leer, y
+el otro proyecto pudo conectarla después; revisión de 2026-10-16); en modo agencia, solo la de defecto. El
 paso «Dónde» de «Nuevo experimento» pinta, por país marcado, «🇸🇪 Suecia · se lanza en [cuenta]» con un selector
 (`cuenta_<PAÍS>`, la sugerida es la cuenta cuyo `pais` es ese país) SOLO si hay alguna cuenta además de la de defecto;
 Revisar lo repite (`#exp-cuentas-resumen`, nombres por `textContent`: vienen de Meta) y la gestión dice la cuenta de
@@ -163,14 +165,21 @@ experimento viejo). Activar (`cambiar_estado`, `activar_pieza`) pasa por `_confi
 país enciende la campaña de SU cuenta (también con el experimento ya «corriendo» por otra cuenta,
 `_campana_sin_pais_activo`). `cambiar_presupuesto_pais`/escalar comprueban la cuenta del país; `lanzar_piezas_nuevas`
 crea cada anuncio en la cuenta de su país. Pausar (`cambiar_estado` con PAUSED, `_pausar_todo_en_meta`,
-`_pausar_campana_ya`), cerrar y repausar nunca se frenan y recorren todas las campañas: si Meta rechaza una, siguen con
-las demás, sus conjuntos y anuncios, y el primer error sale al final (ronda de guardian-gasto: una cuenta sin permiso
-dejaba a la otra gastando con «Pausar»); activar sí se corta en el primer error. `vigilar_gasto` lee cada campaña en su
+`_pausar_campana_ya`), cerrar y repausar nunca se frenan y recorren todas las campañas: si Meta rechaza algo (una
+campaña, un conjunto o un anuncio), siguen con todo lo demás de todas las cuentas, el estado local cambia solo en lo que
+Meta pausó y el primer error sale al final (ronda de guardian-gasto: una cuenta sin permiso dejaba a la otra gastando
+con «Pausar»); activar sí se corta en el primer error. `vigilar_gasto` lee cada campaña en su
 propio try, suma el gasto de todas y, al llegar al tope, pausa todas; el ritmo se mira conjunto por conjunto en cada
 campaña; con una cuenta que no se pudo leer juzga con las demás y, si nada justifica pausar, sale el error de lectura
 (el aviso de siempre); repausa si UNA campaña sigue activa. La pantalla dice «Máximo que puede gastar» solo si cada
-parte del total llega al mínimo de un tope (`PresupuestoExp.partesTope` en `static/presupuesto_exp.js`, réplica de
-`_repartir_tope` con su prueba de paridad); si no, «Presupuesto planeado» y una línea que lo explica. `refrescar`
+parte del total llega al mínimo de un tope (`PresupuestoExp.faltaTope` con `partesTope`, réplica de `_repartir_tope` con
+su prueba de paridad, y `gruposPorCuenta`; el resumen de Revisar sale de `lineasCuentas`, todo en
+`static/presupuesto_exp.js` y probado con Node); si no, «Presupuesto planeado» y una línea que lo explica. Límites que
+esperan a Daniel: el tope de cada campaña queda fijo al lanzar, pero «Cambiar presupuesto» y escalar siguen usando el
+saldo de todo el experimento (`presupuesto_experimentos.limite_diario`): subir mucho el diario de un país hace que Meta
+corte su campaña al llegar a su parte aunque Creatv diga «corriendo» (sin gastar de más); y la cuenta por defecto de un
+país sin `ad_account_id` es la que tenga `meta.json` en cada momento (si se reconecta otra cuenta, sus objetos viejos
+quedan en la anterior; ya pasaba con una sola cuenta). `refrescar`
 lee por anuncio (no depende de la cuenta) y `meta_detalle` pide cada campaña en su cuenta (`campanas_por_cuenta`).
 Fuera de alcance: modo agencia, mezclar monedas, la tarea vieja `meta_publicar`. Trampa: el Pixel (OUTCOME_SALES) y la
 app anunciada tienen que estar compartidos con cada cuenta; si no, Meta rechaza el conjunto de esa cuenta al lanzar

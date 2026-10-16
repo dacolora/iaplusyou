@@ -298,17 +298,20 @@
       });
       if (!resumenCuentas) return;
       resumenCuentas.textContent = '';
+      var filas = [];
       ps.forEach(function (p) {
         var fila = filasCuenta.filter(function (f) { return f.dataset.actPais === p; })[0];
         if (!fila) return;
         var sel = fila.querySelector('select'), opcion = sel.options[sel.selectedIndex];
+        filas.push([etiquetaPais(p), opcion ? opcion.text : '']);
+      });
+      // textContent: el nombre de la cuenta viene de Meta.
+      P.lineasCuentas(PLANTILLA_PAIS_CUENTA, filas).forEach(function (texto) {
         var li = document.createElement('li');
-        // Funciones de reemplazo: un nombre de Meta con «$&» no se interpreta.
-        li.textContent = PLANTILLA_PAIS_CUENTA.replace('{pais}', function () { return etiquetaPais(p); })
-          .replace('{nombre}', function () { return opcion ? opcion.text : ''; });
+        li.textContent = texto;
         resumenCuentas.appendChild(li);
       });
-      resumenCuentas.hidden = !ps.length;
+      resumenCuentas.hidden = !filas.length;
     }
     filasCuenta.forEach(function (f) { f.querySelector('select').addEventListener('change', refrescarCuenta); });
     function irA(n) {
@@ -432,11 +435,10 @@
       var paisesTxt = (nPaises === 1 ? UN_PAIS : VARIOS_PAISES).replace('{n}', nPaises);
       // «Máximo que puede gastar» solo es verdad con un tope duro en Meta (el total llega al mínimo para un tope de campaña);
       // por debajo, el límite son los diarios y la fecha de cierre: se dice «planeado» y se explica en una línea.
-      // PND-148: con países en varias cuentas, el total se reparte entre sus campañas en proporción a los diarios y cada
-      // parte necesita llegar al mínimo de Meta para llevar tope duro (lanzador._repartir_tope): si alguna no llega,
-      // tampoco es verdad «Máximo que puede gastar».
-      var partesBajas = hayCifras && total >= topeCampana && partesPorCuenta(ps, total).some(function (x) { return x < topeCampana; });
-      var sinTope = hayCifras && (total < topeCampana || partesBajas);
+      // PND-148: con países en varias cuentas, el total se reparte entre sus campañas y cada parte necesita llegar al
+      // mínimo de Meta para llevar tope duro (P.faltaTope, con la regla de lanzador._repartir_tope).
+      var faltaTope = hayCifras ? P.faltaTope(total, gruposCuenta(ps), moneda, topeCampana) : null;
+      var partesBajas = faltaTope === 'partes', sinTope = !!faltaTope;
       var plantillaMaximo = sinTope ? (dias === 1 ? PLANEADO_UN_DIA : PLANEADO_VARIOS_DIAS) : (dias === 1 ? MAXIMO_UN_DIA : MAXIMO_VARIOS_DIAS);
       textoMaximo = hayCifras ? plantillaMaximo.replace('{total}', dinero(total)).replace('{n}', dias) : '';
       var textoSinTope = sinTope ? (partesBajas ? AVISO_SIN_TOPE_VARIAS : AVISO_SIN_TOPE).replace('{tope}', dinero(topeCampana)).replace('{total}', dinero(total)).replace('{dia}', dinero(diario)) : '';
@@ -464,16 +466,12 @@
       }
       refrescarCuentas();
     }
-    // Lo que le toca a cada cuenta del total (P.partesTope, réplica de lanzador._repartir_tope); una cuenta, el total.
-    function partesPorCuenta(ps, total) {
-      if (!filasCuenta.length) return [total];
-      var grupos = {};
-      ps.forEach(function (p) {
-        var sel = form.querySelector('[name=cuenta_' + p + ']'), clave = sel ? sel.value : '';
-        (grupos[clave] = grupos[clave] || []).push(Number(campoPais(p).value) || 0);
-      });
-      var lista = Object.keys(grupos).map(function (k) { return grupos[k]; });
-      return lista.length < 2 ? [total] : P.partesTope(total, lista, moneda);
+    // Los diarios de los países marcados agrupados por la cuenta elegida (P.gruposPorCuenta); sin selector, una cuenta.
+    function gruposCuenta(ps) {
+      return P.gruposPorCuenta(ps.map(function (p) {
+        var sel = form.querySelector('[name=cuenta_' + p + ']');
+        return [sel ? sel.value : '', Number(campoPais(p).value) || 0];
+      }));
     }
     function campoPaisesVisibles(ps) { form.querySelectorAll('[data-reparto]').forEach(function (l) { l.hidden = !ps.includes(l.dataset.reparto); }); }
     // El deslizador del total: del total mínimo que respeta a Meta hasta el doble de la sugerencia «Fuerte». El PASO y el tope

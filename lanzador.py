@@ -1194,26 +1194,30 @@ def _pausar_todo_en_meta(cliente, ex):
     de un experimento, sin mirar su estado local (cerrar o repausar uno en «error» o «lanzando» tiene que poder
     pausar lo que haya). Deja en pausa el estado local de países y piezas. Lanza la excepción de Meta si falla."""
     def _correr(_creds):
-        # PND-148: todas las campañas (una por cuenta). Si una falla se sigue con las demás y con conjuntos y
-        # anuncios: lo que se pueda apagar se apaga; el primer error sale al final.
-        error = None
-        for cid in campanas_de(ex):
+        # PND-148: todas las campañas (una por cuenta). Si Meta rechaza algo se sigue con lo demás (campañas, conjuntos
+        # y anuncios de todas las cuentas): lo que se pueda apagar se apaga, el estado local solo cambia en lo que Meta
+        # pausó y el primer error sale al final.
+        fallos = []
+
+        def pausar(fn, oid):
             try:
-                meta_campaign.actualizar_estado(cid, "PAUSED")
-            except Exception as e:  # noqa: BLE001
-                error = error or e
+                fn(oid, "PAUSED")
+                return True
+            except Exception as e:  # noqa: BLE001 — se relanza al final
+                fallos.append(e)
+                return False
+        for cid in campanas_de(ex):
+            pausar(meta_campaign.actualizar_estado, cid)
         for p in ex["paises"]:
             ids = _adsets_de_pais(p)
-            for adset_id in ids:
-                meta_adset.actualizar_estado(adset_id, "PAUSED")
-            if ids:
+            hechos = [pausar(meta_adset.actualizar_estado, adset_id) for adset_id in ids]
+            if ids and all(hechos):
                 experimentos.actualizar_pais(cliente, ex["id"], p["pais"], estado="pausado")
         for pz in ex["piezas"]:
-            if pz["meta_ad_id"]:
-                meta_ad.actualizar_estado(pz["meta_ad_id"], "PAUSED")
+            if pz["meta_ad_id"] and pausar(meta_ad.actualizar_estado, pz["meta_ad_id"]):
                 experimentos.actualizar_pieza(cliente, pz["id"], estado="pausado")
-        if error is not None:
-            raise error
+        if fallos:
+            raise fallos[0]
     _con_credenciales(cliente, _correr)
 
 

@@ -36,6 +36,8 @@ def _parchar(lanzador, meta, monkeypatch, moneda="SEK"):
     monkeypatch.setattr(lanzador.meta_conexion, "cargar",
                         lambda c: {"moneda": moneda, "ad_account_id": DEF, "ad_account_nombre": "HappyFlops Norway"})
     monkeypatch.setattr(lanzador, "_miniatura_para_ad", lambda cliente, ad_id, url: "https://r2/mini.jpg")
+    # Las cuentas de lanzamiento de todos los proyectos (meta.json): solo la de acme, sin leer clientes/ del disco.
+    monkeypatch.setattr(lanzador.meta_conexion, "cuentas_de_lanzamiento", lambda: {DEF: "acme"})
 
 
 @pytest.fixture()
@@ -361,6 +363,90 @@ def test_pausar_todo_sigue_con_la_otra_cuenta_si_meta_rechaza_la_primera(dos):
     assert all(pz["estado"] == "pausado" for pz in e["piezas"])
 
 
+def test_cerrar_sigue_con_todo_si_meta_rechaza_la_pausa_de_una_cuenta(dos):
+    """Revisión: `_pausar_todo_en_meta` (cerrar, repausar, dejar sin gastar) sigue con las demás campañas, conjuntos y
+    anuncios aunque Meta rechace algo de una cuenta; el error sale al final y el experimento no se cierra."""
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    paises = _lanzado(dos)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    meta.llamadas.clear()
+    original = meta._id
+    rechazados = {paises["NO"]["meta_campaign_id"], paises["NO"]["meta_adset_id"]}
+
+    def falla_noruega(tipo, **kw):
+        if tipo == "estado" and kw.get("oid") in rechazados:
+            raise RuntimeError("Meta: sin permiso en esta cuenta")
+        return original(tipo, **kw)
+    meta._id = falla_noruega
+    _parchar(lz, meta, dos["monkeypatch"])
+    with pytest.raises(RuntimeError):
+        lz.cerrar("acme", eid)
+    pausados = [kw["oid"] for t, kw in meta.llamadas if t == "estado" and kw["status"] == "PAUSED"]
+    assert paises["SE"]["meta_campaign_id"] in pausados and paises["SE"]["meta_adset_id"] in pausados
+    assert all(pz["meta_ad_id"] in pausados for pz in ex.obtener("acme", eid)["piezas"])
+    e = ex.obtener("acme", eid)
+    assert e["estado"] != "cerrado"
+    assert _por_pais(ex, eid)["NO"]["estado"] == "activo" and _por_pais(ex, eid)["SE"]["estado"] == "pausado"
+
+
+def test_cambiar_el_diario_en_una_cuenta_que_salio_del_proyecto_no_manda_nada(dos):
+    from meta_rendimiento import cuentas
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    _lanzado(dos)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    meta.llamadas.clear()
+    meta.leidas.clear()
+    cuentas.elegir("acme", [])
+    with pytest.raises(ValueError):
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 90.0)
+    assert not [t for t, _ in meta.llamadas if t == "presupuesto"] and meta.leidas == []
+    assert _por_pais(ex, eid)["SE"]["presupuesto_dia"] == 100.0
+
+
+def test_una_pieza_nueva_en_una_cuenta_que_salio_del_proyecto_no_se_crea(dos):
+    from meta_rendimiento import cuentas
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    _lanzado(dos)
+    otra = _pieza(dos["db"], tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2", url="https://r2/2.mp4")
+    ex.agregar_pieza("acme", eid, otra, "SE")
+    n = len(meta.subidas)
+    cuentas.elegir("acme", [])
+    with pytest.raises(ValueError):
+        lz.lanzar_piezas_nuevas("acme", eid)
+    assert not [t for t, _ in meta.llamadas if t in ("creative", "ad")] and len(meta.subidas) == n
+
+
+def test_activar_una_pieza_de_otro_pais_enciende_la_campana_de_su_cuenta(dos):
+    """Con el experimento «corriendo» por Noruega, una pieza de Suecia (p. ej. la de un rescate) enciende la campaña de
+    Suecia; si no, quedaría «activa» en Creatv dentro de una campaña en pausa y no entregaría."""
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    paises = _lanzado(dos)
+    lz.cambiar_estado("acme", eid, "ACTIVE", pais="NO")
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"
+    meta.llamadas.clear()
+    ep = next(pz for pz in ex.obtener("acme", eid)["piezas"] if pz["pais"] == "SE")
+    lz.activar_pieza("acme", ep["id"])
+    assert ("estado", {"oid": paises["SE"]["meta_campaign_id"], "status": "ACTIVE"}) in meta.llamadas
+    assert ("estado", {"oid": paises["NO"]["meta_campaign_id"], "status": "ACTIVE"}) not in meta.llamadas
+
+
+def test_la_cuenta_de_lanzamiento_de_otro_proyecto_nunca_se_ofrece_ni_se_lanza(dos, monkeypatch):
+    """Aislamiento (revisión): la cuenta de Suecia quedó en el Rendimiento de acme, pero después otro proyecto la
+    conectó como SU cuenta de lanzamiento (meta.json). No se ofrece, `validar` la rechaza y lanzar no llama a Meta."""
+    import cuentas_lanzamiento as cl
+    ex, lz, meta, eid = dos["ex"], dos["lz"], dos["meta"], dos["eid"]
+    monkeypatch.setattr(lz.meta_conexion, "cuentas_de_lanzamiento", lambda: {DEF: "acme", SUECIA: "otro"})
+    assert cl.disponibles("acme", "SEK") == []
+    with pytest.raises(ValueError):
+        cl.validar("acme", "SEK", {"SE": SUECIA})
+    with pytest.raises(ValueError):
+        lz.lanzar("acme", eid)
+    assert meta.llamadas == [] and meta.leidas == []
+    # la cuenta de lanzamiento del PROPIO proyecto no cuenta como ajena
+    monkeypatch.setattr(lz.meta_conexion, "cuentas_de_lanzamiento", lambda: {DEF: "acme", SUECIA: "acme"})
+    assert [c["id"] for c in cl.disponibles("acme", "SEK")] == [SUECIA]
+
+
 # ---------- la vigilancia sobre el total ----------
 
 def _corriendo(dos):
@@ -545,6 +631,7 @@ def test_cuentas_disponibles_solo_las_que_pueden_lanzar_en_la_moneda(base_tempor
     import cuentas_lanzamiento as cl
     import meta_conexion
     monkeypatch.setattr(meta_conexion, "cargar", lambda c: {"moneda": "SEK", "ad_account_id": DEF})
+    monkeypatch.setattr(meta_conexion, "cuentas_de_lanzamiento", lambda: {DEF: "acme"})
     _sembrar(((SUECIA, "HappyFlops Sweden", "SE", "SEK", True), (FINLANDIA, "HappyFlops Finland", "FI", "SEK", False),
               (DINAMARCA, "HappyFlops Denmark", "DK", "DKK", True), (DEF, "HappyFlops Norway", "NO", "SEK", True)))
     _sembrar(((("act_9"), "Otro cliente", "SE", "SEK", True),), cliente="otro")
@@ -566,6 +653,7 @@ def app_sek(base_temporal, monkeypatch):
                         lambda c: {"moneda": "SEK", "ad_account_id": DEF, "ad_account_nombre": "HappyFlops Norway"})
     monkeypatch.setattr(dashboard.meta_conexion, "estado",
                         lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
+    monkeypatch.setattr(dashboard.meta_conexion, "cuentas_de_lanzamiento", lambda: {DEF: "acme"})
     encolados = []
     monkeypatch.setattr(dashboard.trabajos, "encolar",
                         lambda job_id, tipo, payload, **kw: (encolados.append({"tipo": tipo, **kw}), True)[1])
@@ -639,6 +727,51 @@ def test_probar_rechaza_una_cuenta_que_no_puede_lanzar_y_no_crea_nada(app_sek, b
     app_sek["c"].post("/cliente/acme/experimentos/probar", data=_form(base_temporal, cuenta_SE=mala))
     assert ex.cargar("acme") == [] and app_sek["encolados"] == []
     assert any("cuenta" in m for m in _flashes(app_sek["c"]))
+
+
+def test_sin_token_otro_envio_que_solo_cambia_la_cuenta_no_es_repetido(app_sek, base_temporal):
+    """La huella del formulario (envío sin token) incluye la cuenta de cada país: pedir lo mismo en otra cuenta es
+    otro experimento, no un reenvío."""
+    import experimentos as ex
+    _sembrar()
+    datos = _form(base_temporal, cuenta_SE=SUECIA)
+    app_sek["c"].post("/cliente/acme/experimentos/probar", data=datos)
+    app_sek["c"].post("/cliente/acme/experimentos/probar", data=dict(datos, cuenta_SE=DEF))
+    assert sorted(str(p.get("ad_account_id")) for e in ex.cargar("acme") for p in e["paises"] if p["pais"] == "SE") \
+        == ["None", SUECIA]
+
+
+def test_la_pantalla_usa_las_cuentas_para_decidir_el_titular_y_el_resumen(app_sek, base_temporal):
+    _sembrar()
+    _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    html = _nuevo(app_sek)
+    assert "P.faltaTope(total, gruposCuenta(ps), moneda, topeCampana)" in html
+    assert "P.lineasCuentas(PLANTILLA_PAIS_CUENTA, filas)" in html
+    assert "partesBajas ? AVISO_SIN_TOPE_VARIAS : AVISO_SIN_TOPE" in html
+
+
+@pytest.mark.skipif(not __import__("shutil").which("node"), reason="sin Node no se corre el JS")
+def test_el_titular_y_el_resumen_en_js():
+    """«Máximo que puede gastar» solo si toda campaña lleva tope duro (con varias cuentas, cada parte); el resumen de
+    Revisar dice la cuenta de cada país sin interpretar «$&» de un nombre de Meta."""
+    import json as _json
+    import os
+    import shutil
+    import subprocess
+    ruta = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "presupuesto_exp.js")
+    arnes = """const P=require(process.argv[1]); const g=P.gruposPorCuenta([['a',200],['b',200],['a',50]]);
+    console.log(JSON.stringify({g:g,
+      una:P.faltaTope(2000,[[200,200]],'SEK',1300), dos:P.faltaTope(2000,[[200],[200]],'SEK',1300),
+      dosGrande:P.faltaTope(3000,[[200],[200]],'SEK',1300), chico:P.faltaTope(800,[[200],[200]],'SEK',1300),
+      desigual:P.faltaTope(2800,[[300],[100]],'SEK',1300),
+      lineas:P.lineasCuentas('{pais} · se lanza en {nombre}', [['🇸🇪 Suecia','HF $& Sweden'],['🇳🇴 Noruega','HF Norway']])}));"""
+    r = subprocess.run([shutil.which("node"), "-e", arnes, ruta], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    d = _json.loads(r.stdout)
+    assert d["g"] == [[200, 50], [200]]
+    assert d["una"] is None and d["dos"] == "partes" and d["dosGrande"] is None and d["chico"] == "total"
+    assert d["desigual"] == "partes"           # 2 100 + 700: la parte de Suecia no llega a 1 300
+    assert d["lineas"] == ["🇸🇪 Suecia · se lanza en HF $& Sweden", "🇳🇴 Noruega · se lanza en HF Norway"]
 
 
 def test_la_gestion_dice_la_cuenta_de_cada_pais(app_sek, base_temporal):

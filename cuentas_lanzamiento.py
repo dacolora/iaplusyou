@@ -65,6 +65,13 @@ def disponibles(cliente, moneda, defecto_id=None):
             continue
         salida.append({"id": c["ad_account_id"], "nombre": c.get("nombre") or c["ad_account_id"],
                        "pais": c.get("pais"), "moneda": c.get("moneda")})
+    if salida:
+        # Aislamiento (revisión de PND-148): la cuenta con la que LANZA otro proyecto (su meta.json) nunca se ofrece ni
+        # se acepta, aunque haya quedado en el `meta_cuenta` de este (R20 solo la frena al elegir cuentas para leer, y
+        # el otro proyecto pudo conectarla después). Leer las cuentas de lanzamiento cuesta un archivo por proyecto:
+        # solo si hay alguna candidata.
+        ajenas = {a for a, dueno in meta_conexion.cuentas_de_lanzamiento().items() if dueno != cliente}
+        salida = [c for c in salida if c["id"] not in ajenas]
     return salida
 
 
