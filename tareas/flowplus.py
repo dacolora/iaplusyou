@@ -503,7 +503,8 @@ def resolver_sin_cobro(cliente, cf_id, usuario):
 def asignar_prediccion(cliente, cf_id, pred_id, usuario):
     """«Asignar la predicción» (PND-345): un admin encontró en el panel de WaveSpeed la predicción de esta pieza. Solo
     se asigna si el id tiene forma de id, WaveSpeed la conoce, es de la MISMA ruta del modelo que se lanzó, no terminó
-    sin video y ninguna otra sesión (de ningún proyecto, también una descartada) la nombra
+    sin video, se creó dentro de la ventana del lanzamiento (`_ventana_busqueda`), su entrada (si WaveSpeed la trae)
+    tiene el mismo prompt y ninguna otra sesión (de ningún proyecto, también una descartada) la nombra
     (`creative_flow.reclamar_prediccion`, `BEGIN IMMEDIATE`). Asignada, la pieza ofrece «Recuperar el video (se cobra
     ≈ X)»: lo trae sin pagar de nuevo y ahí traslada el posible cobro a su entrega. Devuelve (ok, mensaje para el
     admin). Nunca lanza otro pedido."""
@@ -527,6 +528,18 @@ def asignar_prediccion(cliente, cf_id, pred_id, usuario):
     if str(data.get("status") or "").lower() in wavespeed_common.ESTADOS_SIN_VIDEO:
         return False, gettext("Esa predicción terminó sin video (%(estado)s): no hay nada que traer.",
                               estado=data.get("status"))
+    # Revisión de guardian-gasto (2026-10-15): la ruta no basta (las candidatas son justo las de otras piezas a esa
+    # hora). Tiene que haberse creado en la ventana del lanzamiento y, si WaveSpeed trae la entrada, con este prompt.
+    creada = wavespeed_common._leer_fecha(data.get("created_at"))
+    ventana = _ventana_busqueda(lanzamiento)
+    if creada is None or ventana is None or not (ventana[0] <= creada <= ventana[1]):
+        return False, gettext("Esa predicción no se creó cuando se lanzó esta pieza (entre %(desde)s y %(hasta)s UTC): "
+                              "no se asignó nada.", desde=str(lanzamiento.get("desde") or "")[:19].replace("T", " "),
+                              hasta=str(lanzamiento.get("hasta") or "")[:19].replace("T", " "))
+    entrada = data.get("input")
+    if (isinstance(entrada, dict) and entrada.get("prompt") and lanzamiento.get("prompt_sha")
+            and wavespeed_common.huella_prompt(entrada.get("prompt")) != lanzamiento["prompt_sha"]):
+        return False, gettext("Esa predicción se pidió con otro texto: no es la de esta pieza. No se asignó nada.")
     pred = {"id": pred_id, "modelo": lanzamiento.get("modelo") or entry.get("modelo"),
             "en": lanzamiento.get("en") or datetime.now().isoformat(timespec="seconds")}
     if lanzamiento.get("referencia_gasto"):

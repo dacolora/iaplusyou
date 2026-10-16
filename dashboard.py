@@ -7628,11 +7628,12 @@ def fe_descartar(cliente, cf_id, final_id):
     return _volver_final(cliente)
 
 
-def _lanzar_video_cf(cliente, cf_id, entry):
+def _lanzar_video_cf(cliente, cf_id, entry, confirmado=False):
     """Encola la generación de una sesión de FlowPlus (video o imagen). Lo usan
     cf_crear_video y cf_generar_video. El cuerpo vive en flowplus_lanzar.py
-    (compartido con los lotes de Sprints)."""
-    return flowplus_lanzar.lanzar(cliente, cf_id, entry)
+    (compartido con los lotes de Sprints). `confirmado`: la persona aceptó
+    volver a pagar un pedido anterior que pudo cobrarse (PND-346)."""
+    return flowplus_lanzar.lanzar(cliente, cf_id, entry, confirmado=confirmado)
 
 
 def _consumir_bandeja(cliente, usadas):
@@ -8830,7 +8831,7 @@ def cf_generar_video(cliente, cf_id):
         except Exception as e:
             flash(gettext("No se pudo crear la versión B: %(error)s. No se generó nada.", error=e), "error")
             return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    if not _lanzar_video_cf(cliente, cf_id, entry):
+    if not _lanzar_video_cf(cliente, cf_id, entry, confirmado=incierto_confirmar):
         flash(gettext("Ya se está generando %(que)s — espera a que termine.", que=que), "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if incierto_confirmar:

@@ -135,8 +135,8 @@ def recuperar_pendientes(cliente):
     pendientes = gastos.fichas_pendientes(cliente, "voz_propia")
     if not pendientes:
         return
-    from cobros import libro  # noqa: PLC0415 — perezoso: solo con fichas pendientes
-    por_cobrar = libro.cobra_activo(cliente)
+    from cobros import libro, vista  # noqa: PLC0415 — perezoso: solo con fichas pendientes
+    cobra = libro.cobra_activo(cliente)
     with db.conectar() as con:
         t = db.tarea
         activas = con.execute(sa.select(t.c.id).where(t.c.cliente == cliente,
@@ -147,7 +147,10 @@ def recuperar_pendientes(cliente):
         if not (cobro["extra"]["ficha"].get("extra") or {}).get("voice_id"):
             continue
         try:
-            _guardar_ficha(cliente, cobro, por_cobrar=por_cobrar)
+            # Solo si al cliente no se le cobró (revisión de guardian-gasto, 2026-10-15): una voz entregada y cobrada
+            # cuya tarea solo falló al marcar `ficha_guardada` no se bloquea ni se vuelve a pedir.
+            pagada = cobra and vista.cobrado_por_gasto(cliente, [cobro["id"]]).get(cobro["id"], 0) > 0
+            _guardar_ficha(cliente, cobro, por_cobrar=cobra and not pagada)
         except Exception:
             log.warning("no pude recuperar una ficha de voz propia", exc_info=True)
 

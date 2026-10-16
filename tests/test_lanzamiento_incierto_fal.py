@@ -163,3 +163,30 @@ def test_fal_client_cuenta_un_encolado_sin_respuesta_como_posible_cobro(base_tem
     with pytest.raises(Exception) as e:
         fal_client.llamar("fal-ai/x", {})
     assert not getattr(e.value, "cobrado", False)                          # no salió: nada que anotar
+
+
+def test_sprints_y_el_director_no_relanzan_sin_confirmar(base_temporal, monkeypatch):
+    """Revisión de guardian-gasto (2026-10-15): `flowplus_lanzar.lanzar` (Sprints «Reintentar», el director con
+    `auto_lanzar`) volvía a pagar un video de fal o una imagen inciertos sin el aviso que pide Crear."""
+    import creative_flow as cf
+    import flowplus_lanzar
+    import trabajos
+    encolados = []
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append(tipo) or True)
+    cid = _video_incierto_fal()
+    assert flowplus_lanzar.lanzar("acme", cid, cf.cargar("acme")[cid]) is False and encolados == []
+    assert cf.cargar("acme")[cid]["estado"] == "error"
+    assert flowplus_lanzar.lanzar("acme", cid, cf.cargar("acme")[cid], confirmado=True) is True
+    assert encolados == ["flowplus_video"]
+
+
+def test_reintentar_de_sprints_lo_manda_a_crear(base_temporal):
+    import creative_flow as cf
+    from sprints import datos, produccion
+    from tests.test_tareas_sprints import _referencia
+    _sid, cid_camp, _rid = _referencia(datos)
+    cp = datos.crear_idea("acme", cid_camp, "video", "Idea", "escena")
+    cf_id = _video_incierto_fal()
+    datos.actualizar_idea("acme", cp, cf_id=cf_id)
+    with pytest.raises(datos.ErrorDatos, match="reintenta desde Crear"):
+        produccion.reintentar("acme", cp)

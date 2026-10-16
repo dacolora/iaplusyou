@@ -429,6 +429,7 @@ def ejecutar_transcribir(tarea):
     carpeta = _carpeta(cliente, f"transcribir_{edicion_id}")
     avisar(ETAPAS_TRANSCRIBIR[0][0])
     fallos = entregados = 0
+    sin_devolver = False
     try:
         for mid in p.get("material_ids") or []:
             mat = materiales.obtener(cliente, mid)
@@ -439,14 +440,15 @@ def ejecutar_transcribir(tarea):
             try:
                 transcripcion.transcribir(cliente, mat, idioma, carpeta, ref)
                 entregados += 1
-            except Exception:  # noqa: BLE001 — sigue con los demás; el gasto de este ya quedó si alcanzó a pagar
+            except Exception as e:  # noqa: BLE001 — sigue con los demás; el gasto de este ya quedó si alcanzó a pagar
                 log.exception("material_transcribir (tarea %s): material %s falló", tarea.get("id"), mid)
                 fallos += 1
+                sin_devolver = sin_devolver or bool(getattr(e, "cobro_sin_devolver", False))
         avisar(ETAPAS_TRANSCRIBIR[2][0])
         if fallos:
             mensaje = ngettext("No se pudo transcribir %(num)s archivo.",
                                "No se pudieron transcribir %(num)s archivos.", fallos)
-            raise (EntregaParcial if entregados else RuntimeError)(mensaje)
+            raise (EntregaParcial if entregados and not sin_devolver else RuntimeError)(mensaje)
         # Babel 2.18 no extrae bien un gettext(dict[clave]) (confunde el `[`
         # con el paréntesis de la llamada y «ve» la clave como mensaje) — se
         # saca a una variable antes, como ya hace el resto del código con

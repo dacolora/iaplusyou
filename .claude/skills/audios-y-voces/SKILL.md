@@ -130,7 +130,8 @@ que pagó la voz falló después (el worker devolvió el cobro), Mis voces la re
 `gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`).
 
 **«Pagada y sin cobrar» (PND-339, decisión 2026-10-15, lote 2).** La que recupera el GET de Mis voces en un proyecto que
-cobra (`libro.cobra_activo`) se guarda igual (no se pierde) pero marcada `extra.por_cobrar` {referencia, usd} desde que
+cobra (`libro.cobra_activo`) y a la que no se le cobró nada (`cobros.vista.cobrado_por_gasto` en 0: una voz entregada y
+cobrada cuya tarea solo falló al marcar `ficha_guardada` no se bloquea; revisión de guardian-gasto) se guarda igual (no se pierde) pero marcada `extra.por_cobrar` {referencia, usd} desde que
 nace (`_guardar_ficha(..., por_cobrar=True)`): `resolver` no la devuelve (nadie la usa), `listar(cliente, usables=True)`
 la saca de los selectores (Final edition, anuncio hablado, el `voces` del JSON de Mis voces) y la tarjeta
 (`voz_propia_item(..., cobrar_url=)`, sin `data-voz` ni `role=radio`) dice «pagada y sin cobrar» con el botón «Usar esta

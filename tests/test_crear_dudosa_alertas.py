@@ -87,9 +87,16 @@ def test_no_se_cobro_deja_la_linea_en_0_y_vuelve_reintentar(base_temporal):
 
 # --- «Asignar la predicción» ---------------------------------------------------------------------
 
+def _creada(segundos_despues=10, hace_min=10):
+    """`created_at` de WaveSpeed dentro de la ventana de `_incierto()` (lanzada hace 10 min, 60 s de ventana)."""
+    from datetime import datetime, timedelta, timezone
+    f = datetime.now(timezone.utc) - timedelta(minutes=hace_min) + timedelta(seconds=segundos_despues)
+    return f.strftime("%Y-%m-%dT%H:%M:%S.") + "123456789Z"
+
+
 @pytest.fixture()
 def wavespeed(monkeypatch):
-    estado = {"data": {"id": ID, "model": RUTA, "status": "processing"}}
+    estado = {"data": {"id": ID, "model": RUTA, "status": "processing", "created_at": _creada()}}
 
     def consultar(pid):
         if isinstance(estado["data"], Exception):
@@ -128,25 +135,53 @@ def test_asignar_toma_la_prediccion_de_la_ruta_y_recuperar_la_cobra_una_vez(base
 
 @pytest.mark.parametrize("caso, esperado", [
     ("otra_ruta", "otro modelo"), ("sin_modelo", "no dijo de qué modelo"), ("fallida", "terminó sin video"),
-    ("desconocida", "no conoce esa predicción"), ("id_raro", "no parece un id")])
+    ("desconocida", "no conoce esa predicción"), ("id_raro", "no parece un id"),
+    # Revisión de guardian-gasto (2026-10-15): la ruta no basta; una de otra hora (o sin fecha) o con otro prompt no.
+    ("de_2020", "no se creó cuando se lanzó"), ("sin_fecha", "no se creó cuando se lanzó"),
+    ("otro_prompt", "otro texto")])
 def test_asignar_rechaza_lo_que_no_es_de_esta_pieza(base_temporal, wavespeed, caso, esperado):
     import creative_flow as cf
     import tareas.flowplus as fp
     cid = _dudosa()
     pid = ID
     if caso == "otra_ruta":
-        wavespeed["data"] = {"model": "kwaivgi/kling-video-o3-pro/reference-to-video", "status": "completed"}
+        wavespeed["data"] = {"model": "kwaivgi/kling-video-o3-pro/reference-to-video", "status": "completed",
+                             "created_at": _creada()}
     elif caso == "sin_modelo":
-        wavespeed["data"] = {"status": "completed"}
+        wavespeed["data"] = {"status": "completed", "created_at": _creada()}
     elif caso == "fallida":
-        wavespeed["data"] = {"model": RUTA, "status": "failed"}
+        wavespeed["data"] = {"model": RUTA, "status": "failed", "created_at": _creada()}
     elif caso == "desconocida":
         wavespeed["data"] = RuntimeError("404")
+    elif caso == "de_2020":
+        wavespeed["data"] = {"model": RUTA, "status": "completed", "created_at": "2020-01-01T10:00:00.1Z"}
+    elif caso == "sin_fecha":
+        wavespeed["data"] = {"model": RUTA, "status": "completed"}
+    elif caso == "otro_prompt":
+        lanz = cf.cargar("acme")[cid]["lanzamiento_incierto"]
+        cf.actualizar("acme", cid, lanzamiento_incierto=dict(lanz, prompt_sha=wc.huella_prompt("Una mujer camina")))
+        wavespeed["data"] = {"model": RUTA, "status": "completed", "created_at": _creada(),
+                             "input": {"prompt": "Un perro corre"}}
     else:
         pid = "id%20con%"
     ok, motivo = fp.asignar_prediccion("acme", cid, pid, "admin")
     assert not ok and esperado in motivo
     assert not (cf.cargar("acme")[cid].get("prediccion") or {}).get("id")
+
+
+def test_las_candidatas_de_una_pieza_no_le_bloquean_la_prediccion_a_otra(base_temporal, wavespeed):
+    """Revisión de guardian-gasto (2026-10-15): `_otras_con_prediccion` buscaba el id con un LIKE en todo el extra, y
+    las candidatas que guarda una dudosa para el admin contaban como «de esa pieza»: la que sí la pagó no podía
+    traerla nunca. Solo cuentan `prediccion.id` y `prediccion_entregada`."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    otra = _dudosa(cliente="otro")
+    lanz = cf.cargar("otro")[otra]["lanzamiento_incierto"]
+    cf.actualizar("otro", otra, lanzamiento_incierto=dict(lanz, candidatas=[ID]))
+    cid = _dudosa()
+    ok, motivo = fp.asignar_prediccion("acme", cid, ID, "admin")
+    assert ok, motivo
+    assert cf.prediccion_en_uso(ID, "otro", otra)                          # y ahora sí es de la que la asignó
 
 
 def test_asignar_no_toma_una_prediccion_que_otra_sesion_nombra(base_temporal, wavespeed):

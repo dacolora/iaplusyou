@@ -118,7 +118,7 @@ def app(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(dashboard, "_logos", lambda c: [{"url": "https://x/logo.png"}])
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Colores pastel")
     lanzadas = []
-    monkeypatch.setattr(dashboard, "_lanzar_video_cf", lambda c, cf_id, entry: lanzadas.append(cf_id) or True)
+    monkeypatch.setattr(dashboard, "_lanzar_video_cf", lambda c, cf_id, entry, confirmado=False: lanzadas.append(cf_id) or True)
     encolados = []
     monkeypatch.setattr(dashboard.trabajos, "encolar",
                         lambda job_id, tipo, payload, **kw: (encolados.append(tipo), True)[1])

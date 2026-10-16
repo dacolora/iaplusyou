@@ -115,3 +115,17 @@ def test_mis_voces_la_muestra_con_su_precio_y_la_ruta_la_cobra(app, fal, r2):
     assert r.status_code == 200 and r.get_json()["ok"] and _movimientos(f"{REF}:recuperada") == ["cobro"]
     assert "Usar esta voz" not in r.get_json()["html"] and r.get_json()["voces"][0]["id"] == voz_id
     assert libro.saldo("acme") < 10000
+
+
+def test_una_voz_entregada_y_cobrada_no_se_bloquea(base_temporal, fal, r2):
+    """Revisión de guardian-gasto (2026-10-15): si la tarea entregó y cobró la voz y solo falló al marcar
+    `ficha_guardada`, el GET no la bloquea ni vuelve a pedirla."""
+    from cobros import libro
+    _cobrar()
+    payload = vp.validar_disenar({"nombre": "Ana", "descripcion": "Mujer cálida, de 30", "idioma": "es"})
+    with libro.en_trabajo(12, "acme__voz_propia"):
+        voz, _ = vp.crear("acme", payload, ref_sufijo=":t12")
+    fila = gastos.por_referencia("acme", REF)
+    gastos.registrar_seguro("acme", "voz_propia", fila["usd"], REF, extra={**fila["extra"], "ficha_guardada": False})
+    lista = vp.listar("acme")
+    assert len(lista) == 1 and not lista[0]["por_cobrar"] and vp.resolver("acme", voz["valor"])

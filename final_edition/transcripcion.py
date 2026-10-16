@@ -109,11 +109,15 @@ def transcribir(cliente, mat, idioma, carpeta, referencia):
         try:
             return materiales.actualizar_extra(cliente, mat["id"], palabras=palabras,
                                                palabras_idioma=idioma, palabras_fuente="whisper")
-        except Exception:
+        except Exception as e:
             # PND-334: fal cobró, pero las palabras no quedaron guardadas: el archivo no llegó y no se cobra (si ya
-            # tenía su cobro, un reverso). El trabajo sigue con los demás y no devuelve lo que sí llegó.
-            gastos.registrar_seguro(cliente, "transcripcion", usd, referencia, entregado=False,
-                                    detalle=detalle + " · " + gettext("no se pudo guardar"), proveedor="fal/whisper")
+            # tenía su cobro, un reverso). El trabajo sigue con los demás y no devuelve lo que sí llegó. Si ni eso se
+            # pudo anotar (base bloqueada), la tarea lo dice (`cobro_sin_devolver`) y falla entera: el worker devuelve
+            # todo antes que dejar cobrado algo que no llegó (revisión de guardian-gasto, 2026-10-15).
+            if gastos.registrar_seguro(cliente, "transcripcion", usd, referencia, entregado=False,
+                                       detalle=detalle + " · " + gettext("no se pudo guardar"),
+                                       proveedor="fal/whisper") is None:
+                e.cobro_sin_devolver = True
             raise
     finally:
         if clave_temporal:

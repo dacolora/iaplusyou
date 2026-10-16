@@ -134,3 +134,29 @@ def test_el_worker_no_devuelve_la_cadena_de_una_entrega_parcial(base_temporal, m
     worker._correr(cola.reclamar())
     assert cola.consultar_por_id(tid)["estado"] == "error"
     assert len(_movimientos(base_temporal, "cobro")) == 1 and _movimientos(base_temporal, "reverso") == []
+
+
+def test_si_no_se_pudo_anotar_la_devolucion_el_trabajo_falla_entero(entorno, monkeypatch):
+    """Revisión de guardian-gasto (2026-10-15): si guardar las palabras falla y tampoco se puede anotar la
+    devolución (base bloqueada), una entrega parcial dejaba cobrado algo que no llegó. Entonces la tarea falla entera y
+    el worker devuelve todo."""
+    import gastos
+    import materiales
+    a, b = _audio("bien"), _audio("guardar")
+    _whisper(monkeypatch, falla_en=())
+    original_actualizar, original_registrar = materiales.actualizar_extra, gastos.registrar_seguro
+
+    def _actualizar(cliente, mid, **campos):
+        if mid == b["id"] and "palabras" in campos:
+            raise RuntimeError("disco lleno")
+        return original_actualizar(cliente, mid, **campos)
+
+    def _registrar(cliente, tipo, usd, referencia, **kw):
+        if kw.get("entregado") is False:
+            return None                                                  # la base no deja anotar la devolución
+        return original_registrar(cliente, tipo, usd, referencia, **kw)
+    monkeypatch.setattr(materiales, "actualizar_extra", _actualizar)
+    monkeypatch.setattr(gastos, "registrar_seguro", _registrar)
+    tarea, fila = _correr([a["id"], b["id"]])
+    assert fila["estado"] == "error" and "EntregaParcial" not in (fila["error"] or "")
+    assert len(_movimientos(entorno, "cobro")) == 2 and len(_movimientos(entorno, "reverso")) == 2

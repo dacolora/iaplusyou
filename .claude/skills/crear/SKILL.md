@@ -367,3 +367,13 @@ devuelve), que no haya terminado sin video y que ninguna otra sesión nombre (`c
 `estado = "asignado"` y la predicción con la `referencia_gasto` del lanzamiento, así «Recuperar el video (se cobra ≈ X)»
 la trae y cobra el posible cobro una sola vez (PND-331). Ninguna de las dos lanza ni cobra nada, y no tocan una pieza que
 no esté en error o que se esté buscando ahora mismo. Pruebas: `tests/test_crear_dudosa_alertas.py`.
+
+**Revisión de guardian-gasto de la rama l2-gasto (2026-10-15, «hay riesgo de plata», arreglado en la misma rama).**
+(1) «Asignar la predicción» además exige que WaveSpeed diga que se creó dentro de la ventana del lanzamiento
+(`created_at` en `_ventana_busqueda`; sin fecha, no) y, si trae la entrada, el mismo prompt (`prompt_sha`): las
+candidatas son justo las de otras piezas a esa hora. (2) `creative_flow._otras_con_prediccion` mira solo
+`$.prediccion.id` y `$.prediccion_entregada` (con un LIKE sobre todo el extra, las candidatas guardadas de una dudosa
+le bloqueaban la predicción a la pieza que sí la pagó). (3) Sin precio, el botón dice «Recuperar el video (se cobra;
+precio no disponible)», nunca «sin pagar de nuevo». (4) `flowplus_lanzar.lanzar` no relanza una pieza en
+`REINTENTO_CON_CONFIRMACION` sin `confirmado=True` (solo «Reintentar» de Crear lo pasa, tras confirmar con el precio);
+Sprints «Reintentar» lo manda a Crear con un aviso y el director con `auto_lanzar` no la relanza.

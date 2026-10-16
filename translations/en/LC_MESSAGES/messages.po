@@ -6788,6 +6788,9 @@ msgstr "The Business id is in <em>Business settings › Business info</em>."
 msgid "El informe de Meta tardó demasiado; la próxima copia lo reintenta."
 msgstr "Meta's report took too long; the next copy will retry it."
 
+msgid "El intento anterior de esta pieza pudo cobrarse aunque el proveedor no respondió: reintenta desde Crear, donde se confirma con el precio."
+msgstr "This piece's previous attempt may have been charged even though the provider didn't respond: retry it from Create, where you confirm it with the price."
+
 msgid "El link de pago venció sin pagarse."
 msgstr "The payment link expired without being paid."
 
@@ -8036,6 +8039,13 @@ msgstr "That piece is already being regenerated."
 #, python-format
 msgid "Esa predicción es de otro modelo (%(modelo)s), no de %(ruta)s: no se asignó nada."
 msgstr "That prediction is from another model (%(modelo)s), not %(ruta)s: nothing was assigned."
+
+#, python-format
+msgid "Esa predicción no se creó cuando se lanzó esta pieza (entre %(desde)s y %(hasta)s UTC): no se asignó nada."
+msgstr "That prediction wasn't created when this piece was launched (between %(desde)s and %(hasta)s UTC): nothing was assigned."
+
+msgid "Esa predicción se pidió con otro texto: no es la de esta pieza. No se asignó nada."
+msgstr "That prediction was requested with a different text: it isn't this piece's. Nothing was assigned."
 
 #, python-format
 msgid "Esa predicción terminó sin video (%(estado)s): no hay nada que traer."
@@ -16593,15 +16603,15 @@ msgstr "Recover the result (charged ≈ %(precio)s)"
 msgid "Recuperar el video (se cobra ≈ %(precio)s)"
 msgstr "Recover the video (charged ≈ %(precio)s)"
 
-msgid "Recuperar el video (sin pagar de nuevo)"
-msgstr "Recover the video (without paying again)"
-
-msgid "Recuperar la imagen"
-msgstr "Recover the image"
+msgid "Recuperar el video (se cobra; precio no disponible)"
+msgstr "Recover the video (charged; price not available)"
 
 #, python-format
 msgid "Recuperar la imagen (se cobra ≈ %(precio)s)"
 msgstr "Recover the image (charged ≈ %(precio)s)"
+
+msgid "Recuperar la imagen (se cobra; precio no disponible)"
+msgstr "Recover the image (charged; price not available)"
 
 #, python-format
 msgid "Recuperaste «%(nombre)s»: vuelve a salir en la galería y al elegir producto."

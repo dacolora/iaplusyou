@@ -175,3 +175,13 @@ def test_el_boton_dice_el_precio_y_la_ruta_pide_saldo(app):
         libro.acreditar(con, "acme", "ajuste", 10000, "ajuste", usuario="admin", detalle="prueba")
     assert app["c"].post(f"/cliente/acme/creative_flow/{cid}/recuperar").status_code == 302
     assert app["encolados"] == ["flowplus_recuperar"]
+
+
+def test_sin_precio_el_boton_dice_que_se_cobra(app, monkeypatch):
+    """Revisión de guardian-gasto (2026-10-15): sin estimado, el botón decía «(sin pagar de nuevo)» y recuperar sí
+    cobra en un proyecto que cobra."""
+    cid = _pieza_rendida()
+    monkeypatch.setattr(app["dashboard"].flowplus_modelos, "estimate_video",
+                        lambda *a, **k: {"credits": None, "usd": None})
+    html = app["c"].get(f"/cliente/acme/creative_flow/{cid}/detalle").get_data(as_text=True)
+    assert "Recuperar el video (se cobra; precio no disponible)" in html and "sin pagar de nuevo" not in html

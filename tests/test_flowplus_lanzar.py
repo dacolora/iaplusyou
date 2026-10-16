@@ -22,7 +22,8 @@ def test_dashboard_delega_en_flowplus_lanzar(base_temporal, monkeypatch):
     import dashboard
     import flowplus_lanzar
     llamadas = []
-    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: llamadas.append((c, cf, prioridad)) or True)
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5, confirmado=False:
+                        llamadas.append((c, cf, prioridad)) or True)
     assert dashboard._job_id_creative_flow("acme", "cf_1") == flowplus_lanzar.job_id("acme", "cf_1")
     assert dashboard._lanzar_video_cf("acme", "cf_1", {"tipo": "video"}) is True
     assert llamadas == [("acme", "cf_1", 5)]
