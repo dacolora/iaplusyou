@@ -12,6 +12,8 @@ from sqlalchemy import event
 
 from tests.test_planes import ACEPTACION, CENTAVOS_MES, TRM, WompiFalso
 
+from tests.conftest import PASSWORD_PRUEBA  # noqa: E402 — la clave otra vez (PND-347)
+
 MISMO = {"Sec-Fetch-Site": "same-origin"}
 
 
@@ -56,6 +58,11 @@ def http(entorno):
                 s["rol"] = USUARIOS_PRUEBA[usuario]["rol"]
                 s["cliente"] = USUARIOS_PRUEBA[usuario]["cliente"]
                 s["sv"] = 1
+                if USUARIOS_PRUEBA[usuario]["rol"] == "admin":
+                    # La clave de los controles de plata, recién escrita (2026-10-15); sin ella lo prueban
+                    # tests/test_cobros_controles_plata.py.
+                    import time
+                    s["clave_confirmada_en"] = time.time()
         return c
     c.como = como
     return c
@@ -63,7 +70,10 @@ def http(entorno):
 
 @pytest.fixture()
 def pro(entorno):
-    from cobros import planes
+    from cobros import planes, recargas
+    # Activar a mano cuenta en el tope de lo sumado a mano en 24 h (2026-10-15): estas pruebas activan anuales de
+    # 10 000; el tope lo prueba tests/test_cobros_controles_plata.py.
+    recargas.guardar_tope_manual("100000", "admin")
     return planes.crear_plan("Pro", 1000, 1.25, 25, precio_anual_usd=10000, usuario="admin")
 
 
@@ -249,7 +259,8 @@ def test_activar_a_mano_abre_el_periodo_y_acredita(http, pro):
     _cobrar()
     c = http.como("admin")
     r = c.post("/admin/cobros/acme/plan/activar", data={"plan_id": str(pro), "ciclo": "mensual",
-                                                       "nota": "transferencia 123"}, headers=MISMO)
+                                                       "nota": "transferencia 123", "clave": PASSWORD_PRUEBA},
+               headers=MISMO)
     assert r.status_code == 302 and "#suscripcion-acme" in r.headers["Location"]
     (sus,) = _filas("suscripcion")
     assert (sus.estado, sus.renovar, sus.plan_id) == ("activa", False, pro)
@@ -279,7 +290,8 @@ def test_activar_a_mano_en_un_proyecto_que_no_cobra_avisa_y_no_escribe(http, pro
 def test_activar_a_mano_invalido_avisa(http, pro, datos, frase):
     _cobrar()
     c = http.como("admin")
-    c.post("/admin/cobros/acme/plan/activar", data={k: v.format(pro=pro) for k, v in datos.items()}, headers=MISMO)
+    c.post("/admin/cobros/acme/plan/activar", data={**{k: v.format(pro=pro) for k, v in datos.items()},
+                                                   "clave": PASSWORD_PRUEBA}, headers=MISMO)
     assert _filas("suscripcion") == []
     assert any(frase in m for m in _flashes(c))
 
@@ -812,7 +824,7 @@ def test_el_admin_ve_la_tasa_rechazada_y_la_acepta(http):
     html = c.get("/admin/cobros").get_data(as_text=True)
     assert 'id="aviso-trm-rechazada"' in html and "Aceptar la tasa de hoy (4.400,00 COP/USD)" in html
     assert "4.000,50" in html
-    c.post("/admin/cobros/trm/aceptar", data={"valor": "4400.0"}, headers=MISMO)
+    c.post("/admin/cobros/trm/aceptar", data={"valor": "4400.0", "clave": PASSWORD_PRUEBA}, headers=MISMO)   # PND-347
     with db.conectar() as con:
         guardada = json.loads(con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:trm")).scalar())
         rech = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:trm_rechazada")).scalar()
@@ -833,5 +845,5 @@ def test_aceptar_la_tasa_es_solo_del_admin_del_mismo_sitio_y_del_valor_mostrado(
     assert http.como("admin").post("/admin/cobros/trm/aceptar", data={"valor": "4400.0"},
                                    headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
     c = http.como("admin")
-    c.post("/admin/cobros/trm/aceptar", data={"valor": "5000"}, headers=MISMO)
+    c.post("/admin/cobros/trm/aceptar", data={"valor": "5000", "clave": PASSWORD_PRUEBA}, headers=MISMO)
     assert guardada() is None and any("No hay una tasa rechazada" in m for m in _flashes(c))

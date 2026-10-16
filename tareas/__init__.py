@@ -63,6 +63,7 @@ TIPOS_EXENTOS_DE_COBRO = {
     "meta_publicar": "publica en Meta; no llama a un proveedor que cobra",
     "meta_refrescar": "lee métricas de Meta",
     "meta_revisar_acceso": "periódica: lee en Meta cuándo vence el acceso a los datos; no cobra",
+    "apify_revisar_uso": "periódica: lee gratis en Apify el uso del mes contra el tope de la cuenta (PND-010)",
     "meta_rend_sincronizar": "lee métricas de las cuentas de Meta y las tasas del BCE; no cobra",
     "meta_rend_sincronizar_todas": "periódica: solo encola meta_rend_sincronizar",
     "meta_rend_limpiar": "periódica de mantenimiento",
@@ -89,6 +90,27 @@ TIPOS_EXENTOS_DE_COBRO = {
     "errores_limpiar": "periódica de mantenimiento",
     "cobros_verificar_recargas": "consulta a Bold, no cobra",
     "planes_renovar": "cobra la renovación del plan en Wompi: es ingreso de Creatv, no gasto de un proveedor; no pasa por el saldo",
+}
+
+# PND-169 (decisión 2026-10-13): todo tipo que cobra tiene su gancho AL_INTERRUMPIR, para que el respaldo sin saldo,
+# un reinicio o una tarea colgada no dejen su entidad «corriendo». Los de esta lista no tienen entidad que marcar: la
+# pantalla decide «en curso» leyendo la fila de la tarea (trabajos.en_curso, cola.job_ids_vivos o el sondeo del
+# job_id), y esa fila ya queda en error con su mensaje y su reverso. tests/test_cobros_pnd169.py exige que cada tipo
+# de TIPOS_QUE_COBRAN esté en AL_INTERRUMPIR o aquí, nunca en los dos.
+SIN_ENTIDAD_AL_INTERRUMPIR = {
+    "audio_generar": "Audios lee trabajos.en_curso del job_id; no guarda nada antes de terminar",
+    "hablado_voz": "la página sondea el job_id y vuelve a pedir con solo_cache; no guarda nada antes",
+    "musica_generar": "Mi música solo mira el job_id vivo; no guarda nada antes de terminar",
+    "editor_voz": "el editor sondea el job_id de la voz; la edición no cambia hasta que llega",
+    "material_transcribir": "«pendiente» sale de que falten las palabras del material, no de una marca en curso",
+    "final_guion": "item.trabajo_guion sale de trabajos.en_curso; el guion base solo se guarda al terminar",
+    "producto_pedidos": "la ficha lee cola.job_ids_vivos; los pedidos solo se guardan al terminar",
+    "pieza_revisar": "trabajo_revision sale de trabajos.en_curso; la revisión solo se guarda al terminar",
+    "sprint_sugerir_personas": "la ruta solo avisa con un flash; las personas se guardan al terminar",
+    "sprint_reescribir_idea": "«reescribiendo» sale de trabajos.en_curso",
+    "sprint_proponer_ideas": "trabajo_ideas sale de trabajos.en_curso; la idea vieja sigue viva hasta reemplazarse",
+    "referentes_sugerir_ia": "trabajo_sugerir_ia sale de trabajos.en_curso; las sugerencias se guardan al terminar",
+    "producto_vincular": "la ficha lee cola.job_ids_vivos",
 }
 
 

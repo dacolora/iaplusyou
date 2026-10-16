@@ -92,6 +92,9 @@ def test_hook_de_tarea_interrumpida_en_el_idioma_del_proyecto(tmp_path, monkeypa
                         lambda minutos, excluir=(): (1, [{"id": 1, "tipo": "prueba_idioma", "cliente": "acme",
                                                           "payload": {}}]))
     worker.recuperar_interrumpidas(30)
+    assert vistos == ["It was treated as stuck: it had been running for too long. Try again."]   # PND-169
+    vistos.clear()
+    worker.recuperar_interrumpidas(0)                                       # el arranque: sí fue un reinicio
     assert vistos == ["Interrupted by a server restart. Try again."]
 
 
@@ -261,8 +264,8 @@ def test_interrumpidas_de_dos_proyectos_cada_una_en_su_idioma(base_temporal, mon
     with db.conectar() as con:
         con.execute(db.tarea.update().where(db.tarea.c.id.in_(list(ids.values()))).values(iniciada_en=vieja))
     worker.recuperar_interrumpidas(30)
-    assert vistos == {"acme": "Interrupted by a server restart. Try again.",
-                      "otro": "Se interrumpió por un reinicio del servidor. Vuelve a intentar."}
+    assert vistos == {"acme": "It was treated as stuck: it had been running for too long. Try again.",   # PND-169
+                      "otro": "Se dio por colgada: llevaba demasiado tiempo en curso. Vuelve a intentar."}
     assert cola.consultar_por_id(ids["acme"])["error"] == (
         "Interrupted (it had been running for more than 30 min). Check the result and try again.")
     assert cola.consultar_por_id(ids["otro"])["error"] == (

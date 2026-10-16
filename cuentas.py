@@ -382,3 +382,53 @@ def desbloquear_login(clave, pedido_por):
         bitacora.registrar('_creatv', 'login', 'desbloqueo_login', 'ok', detalle)
         con.execute(db.kv.delete().where(db.kv.c.clave == clave))
     return True
+
+
+# ------------------------------------------------- la clave otra vez (PND-347) ---
+# Pagos (auditoría de seguridad 2026-10-12, decisión 2026-10-15): la cuenta de admin no tiene segundo factor y con una
+# sesión robada se creaba saldo con recargas manuales o ajustes. Antes de mover saldo a mano se pide la clave otra
+# vez; vale REAUTH_S y queda en la sesión firmada (un login nuevo la borra; cambiar la clave cierra las DEMÁS sesiones,
+# y la que la cambió conserva la marca: acaba de escribir la clave). Un intento fallido cuenta contra el MISMO tope del
+# login (por usuario y por IP): este formulario no sirve para adivinar la clave.
+REAUTH_S = 10 * 60
+SESION_REAUTH = "clave_confirmada_en"
+
+
+def clave_reciente(sesion, ahora=None):
+    """¿Quien tiene esta sesión escribió su clave hace menos de REAUTH_S? Solo lee la sesión."""
+    try:
+        marca = float(sesion.get(SESION_REAUTH))
+    except (TypeError, ValueError):
+        return False
+    ahora = time.time() if ahora is None else ahora
+    return 0 <= ahora - marca <= REAUTH_S
+
+
+def verificar_con_tope(usuario, clave, ip=None):
+    """La clave de `usuario` con los MISMOS topes de intentos fallidos del login (por usuario y por IP): todo
+    formulario que pide la clave de quien ya tiene sesión (confirmar una acción de plata, cambiar el correo o la
+    clave) pasa por aquí, así ninguno sirve para adivinarla sin límite (auditoría de seguridad de la revisión de
+    PND-347, 2026-10-15). Devuelve "ok", "falta" (vacía: no cuenta), "mala" (anota el intento) o "bloqueado" (tope
+    lleno: ni siquiera se mira)."""
+    if not clave:
+        return "falta"
+    usuario = str(usuario or "")
+    claves = (f"login:u:{usuario.lower()[:200]}", f"login:ip:{ip or 'desconocida'}")
+    topes = (LOGIN_MAX_POR_USUARIO, LOGIN_MAX_POR_IP)
+    if not all(limite_disponible(c, maximo=m, ventana_s=LOGIN_VENTANA_S) for c, m in zip(claves, topes)):
+        return "bloqueado"
+    if not usuario or usuarios.verificar(usuario, str(clave)) is None:
+        for c, m in zip(claves, topes):
+            limite_ok(c, maximo=m, ventana_s=LOGIN_VENTANA_S)
+        log.warning("clave equivocada de %s con la sesión abierta", usuario[:80])
+        return "mala"
+    return "ok"
+
+
+def confirmar_clave(sesion, clave, ip=None):
+    """Comprueba la clave de quien tiene la sesión (`verificar_con_tope`); si es la buena, anota la hora en la
+    sesión (vale REAUTH_S). Devuelve lo mismo que `verificar_con_tope`."""
+    resultado = verificar_con_tope(sesion.get("usuario"), clave, ip=ip)
+    if resultado == "ok":
+        sesion[SESION_REAUTH] = time.time()
+    return resultado

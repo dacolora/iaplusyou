@@ -369,6 +369,18 @@ def test_encolar_final_no_reproduce_una_final_que_ya_existe(ent):
     assert len(ent["encolados"]) == 2 and cf.final_por_legado("acme", f"{cf_id}__es_MX__v7")["estado"] == "generando"
 
 
+def test_pnd110_la_final_de_una_variante_reserva_tambien_su_guion_variado(ent):
+    """La primera final de una re-edición escribe el guion variado (hasta dos llamadas a Claude): su reserva lo
+    incluye; una final sin variante reserva solo la final."""
+    import gastos
+    dv, cf_id = ent["dv"], ent["cf_id"]
+    dv._encolar_final("acme", cf_id, "es", "MX", {"variante": 8, "variante_tipo": "estructura"})
+    dv._encolar_final("acme", cf_id, "es", "PE", {"variante": None})
+    con_variante, sin_variante = [e["costo_estimado"] for e in ent["encolados"]]
+    assert con_variante == pytest.approx(gastos.TARIFAS["final"] + gastos.TARIFAS["variar_guion"])
+    assert sin_variante == pytest.approx(gastos.TARIFAS["final"])
+
+
 def test_actualizar_extra_no_pierde_escrituras_intercaladas(ent):
     """I-3: dos escritores con fotos viejas de `extra`: cada `fn` recibe el
     `extra` actual de la base (SELECT+UPDATE en la misma transacción), así

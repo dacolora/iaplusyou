@@ -105,6 +105,21 @@ def marcar_ejecutada(cliente, propuesta_id):
                 or _cambiar_estado(con, cliente, propuesta_id, "pendiente", "ejecutada"))
 
 
+def actualizar_precio(cliente, propuesta_id, precio):
+    """Guarda en la propuesta el precio de ahora (`payload["precio_estimado"]`): la pantalla lo muestra y la persona
+    vuelve a aprobar viéndolo (acciones._exigir_saldo, 2026-10-15). Solo si sigue pendiente o aprobada."""
+    p = db.propuesta
+    with db.conectar() as con:
+        f = con.execute(sa.select(p.c.payload).where(p.c.id == propuesta_id, p.c.cliente == cliente,
+                                                     p.c.estado.in_(("pendiente", "aprobada")))).first()
+        if f is None:
+            return False
+        payload = dict(f[0] or {})
+        payload["precio_estimado"] = dict(precio)
+        return con.execute(p.update().where(p.c.id == propuesta_id, p.c.cliente == cliente)
+                           .values(payload=payload, actualizado_en=db.ahora())).rowcount == 1
+
+
 def reabrir(cliente, propuesta_id):
     """Aprobada → pendiente: cuando la ruta aprobó pero acciones.ejecutar
     falló, la propuesta vuelve a la lista para reintentarla o rechazarla.

@@ -186,10 +186,12 @@ def test_estimar_tarifas_fijas_y_final_por_pais():
                                        "detalle": "hasta dos llamadas a Claude y la transcripción de la referencia"}
     assert gastos.estimar("regla_producto")["usd"] == 0.01
     assert gastos.estimar("caption_organico")["usd"] == 0.06   # el peor caso con el pensamiento (revisión 2026-10-15)
-    assert gastos.estimar("final")["usd"] == 0.20
-    assert gastos.estimar("final", paises=3)["usd"] == pytest.approx(0.60)
-    assert gastos.estimar("reedicion", paises=2)["usd"] == 0.40
-    assert gastos.TARIFAS["final"] == 0.20 and "final_pais_extra" not in gastos.TARIFAS
+    # PND-110: el peor caso con el tope de 8 000 tokens del guion (0,20) + la voz del borrador, la del destino,
+    # música y whisper (0,13).
+    assert gastos.estimar("final")["usd"] == 0.33
+    assert gastos.estimar("final", paises=3)["usd"] == pytest.approx(0.99)
+    assert gastos.estimar("reedicion", paises=2)["usd"] == pytest.approx(1.06)    # (final + guion variado) por país
+    assert gastos.TARIFAS["final"] == 0.33 and "final_pais_extra" not in gastos.TARIFAS
 
 
 def test_estimar_swap_por_proveedor():

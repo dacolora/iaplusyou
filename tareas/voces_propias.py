@@ -4,10 +4,11 @@ max_intentos=1 y voces_propias.crear registra el gasto en cuanto fal responde.
 Los mensajes son msgids fijos: /trabajo/<job_id>/estado no tiene auth, así que
 nunca llevan el nombre que escribió la persona — y un error tampoco lleva lo
 que respondió el proveedor (ver tareas/errores_voz.py)."""
+import gastos
 import idiomas
 import trabajos
 import voces_propias
-from tareas import errores_voz, ref_sufijo, registrar
+from tareas import al_interrumpir, errores_voz, ref_sufijo, registrar
 
 ETAPAS = ((idiomas.N_("Creando la voz"), 70), (idiomas.N_("Estrenando la voz"), 20), (idiomas.N_("Guardando"), 10))
 MENSAJES = {
@@ -44,3 +45,19 @@ def _crear(tarea):
     if not estrenada:
         return MENSAJES["sin_estrenar"]
     return MENSAJES["clonada"] if voz.get("forma") == "clonada" else MENSAJES["disenada"]
+
+
+@al_interrumpir("voz_propia_crear")
+def interrumpida(tarea, mensaje):
+    """Decisión de quien orquesta (2026-10-15): si la tarea no terminó (reinicio, colgada, el respaldo sin saldo), la
+    grabación de un clon no se queda en R2 sin una voz que la use (spec §3; la tarea y las rutas ya la borran cuando
+    fal falla). Salvo que fal sí haya devuelto la voz: su ficha (con `voice_id`) la recupera Mis voces sin volver a
+    cobrar, y esa voz necesita su grabación."""
+    p = tarea.get("payload") or {}
+    if p.get("forma") != "clonar" or not p.get("cliente") or not p.get("grabacion_id"):
+        return
+    cobro = gastos.por_referencia(p["cliente"], f"voz_propia:clonar{ref_sufijo(tarea)}")
+    if ((((cobro or {}).get("extra") or {}).get("ficha") or {}).get("extra") or {}).get("voice_id"):
+        return
+    voces_propias._borrar_grabacion_si_huerfana(p["cliente"], p["grabacion_id"])
+

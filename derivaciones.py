@@ -525,10 +525,15 @@ def _encolar_final(cliente, cf_id, idioma, pais, opciones):
     _exigir_pagina(cliente, guardado=True)   # antes de crear la fila de la final y de reservar
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=variante)
     try:
+        # Una variante escribe además su guion variado una vez por receta (y la receta lleva la voz de cada destino:
+        # en el peor caso, una vez por país): se reserva en cada final, lo mismo que suma el precio de derivar o
+        # rescatar (acciones._precio_estimado), así la reserva nunca pasa del precio aprobado (PND-110).
+        costo = gastos.estimar("final", paises=1)["usd"] + (gastos.TARIFAS["variar_guion"]
+                                                             if opciones.get("variante_tipo") else 0)
         trabajos.encolar(job_id, "final_producir",
                          {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
                          cliente=cliente, duracion_estimada=240, etapas=ETAPAS_FINAL, max_intentos=1,
-                         costo_estimado=gastos.estimar("final", paises=1)["usd"])
+                         costo_estimado=costo)
     except SaldoInsuficiente as e:
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=e.frase_proyecto())
         raise

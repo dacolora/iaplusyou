@@ -156,3 +156,9 @@ al admin, sin el proyecto: `fal_client` no lo conoce) y lanza `fal_video.SinSald
 siendo el RuntimeError de siempre. Un audio que sale bien no limpia el aviso (lo limpia la próxima generación de
 Seedance que sale bien o vence a las 12 h): limpiarlo en cada llamada de fal tocaría la base en cada voz. Pruebas:
 `tests/test_saldo_fal_audio.py`.
+
+**La grabación de un clon que no corrió (decisión de quien orquesta, 2026-10-15).** `voz_propia_crear` tiene gancho
+`AL_INTERRUMPIR` (`tareas/voces_propias.interrumpida`): si la tarea no terminó (reinicio, colgada, el respaldo sin
+saldo), borra la grabación con `voces_propias._borrar_grabacion_si_huerfana` (solo si es una grabación de ese proyecto
+que ninguna voz usa), salvo que fal ya haya devuelto la voz (`gasto` `voz_propia:clonar:t<tarea>` con `voice_id` en
+su ficha: Mis voces la recupera y esa voz usa su grabación). Pruebas: `tests/test_restos_tareas_interrumpidas.py`.

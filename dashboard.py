@@ -1602,6 +1602,12 @@ def admin_desbloquear_login():
     clave = request.form.get("clave") or ""
     if not cuentas._limite_login(clave):
         abort(400)
+    # Auditoría de seguridad de PND-347 (2026-10-15): un admin no se desbloquea a sí mismo (ni su usuario ni su IP);
+    # si no, con una sesión robada se adivinaba la clave sin fin: 10 intentos, desbloquear, otros 10…
+    if clave.lower() in (f"limite:login:u:{str(session.get('usuario') or '').lower()[:200]}",
+                         f"limite:login:ip:{_ip_cliente() or 'desconocida'}".lower()):
+        flash(gettext("Tu propio acceso lo desbloquea otro administrador, o espera unos minutos."), "error")
+        return redirect(url_for("admin_bloqueos_login"))
     ok = cuentas.desbloquear_login(clave, session["usuario"])
     flash(gettext("Acceso desbloqueado.") if ok else gettext("Ese acceso ya no está bloqueado."), "ok")
     return redirect(url_for("admin_bloqueos_login"))
@@ -1853,6 +1859,18 @@ def restablecer(token):
     return redirect(url_for("login"))
 
 
+def _clave_actual_ok(usuario, clave):
+    """La contraseña actual de quien tiene la sesión, con los topes de intentos del login (`cuentas.verificar_con_tope`;
+    auditoría de seguridad de PND-347, 2026-10-15: sin tope, una sesión robada adivinaba la clave aquí y con ella
+    pasaba la confirmación de las acciones de plata). Si no sirve, deja el aviso y devuelve False."""
+    resultado = cuentas.verificar_con_tope(usuario, clave, ip=_ip_cliente())
+    if resultado == "ok":
+        return True
+    flash(gettext("Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.") if resultado == "bloqueado"
+          else gettext("La contraseña actual no es correcta."), "error")
+    return False
+
+
 @app.route("/cuenta/correo", methods=["POST"])
 def cuenta_correo():
     """Pone o cambia el correo de la cuenta (pide la contraseña actual). El
@@ -1862,8 +1880,7 @@ def cuenta_correo():
         flash(gettext("Inicia sesión para cambiar tu correo."), "error")
         return redirect(url_for("login"))
     usuario = sesion["usuario"]
-    if not usuarios.verificar(usuario, request.form.get("password") or ""):
-        flash(gettext("La contraseña actual no es correcta."), "error")
+    if not _clave_actual_ok(usuario, request.form.get("password") or ""):
         return _volver_cuenta()
     correo = usuarios.validar_correo(request.form.get("correo") or "")
     if not correo:
@@ -1905,8 +1922,7 @@ def cuenta_password():
         flash(gettext("Inicia sesión para cambiar tu contraseña."), "error")
         return redirect(url_for("login"))
     usuario = sesion["usuario"]
-    if not usuarios.verificar(usuario, request.form.get("password_actual") or ""):
-        flash(gettext("La contraseña actual no es correcta."), "error")
+    if not _clave_actual_ok(usuario, request.form.get("password_actual") or ""):
         return _volver_cuenta()
     nueva = request.form.get("password") or ""
     error = usuarios.validar_password(nueva)
@@ -5132,7 +5148,8 @@ def _filtro_cobrado(ctx, costo, clave=None):
     cliente = g.get("cliente_precio")
     try:
         return vista_cobros.visto(cliente, clave, costo)
-    except Exception:  # noqa: BLE001 — falla cerrado: el costo solo a quien puede verlo
+    except Exception as e:  # noqa: BLE001 — falla cerrado: el costo solo a quien puede verlo
+        print(f"[aviso] cobros: no pude leer lo cobrado de {cliente}: {type(e).__name__}")   # PND-175
         return costo if vista_cobros.puede_ver_costo(cliente, session.get("rol") == "admin") else None
 
 
@@ -5142,7 +5159,8 @@ def _ver_cobrado():
     cliente = g.get("cliente_precio")
     try:
         return vista_cobros.ver_cobrado_aqui(cliente)
-    except Exception:  # noqa: BLE001 — falla cerrado
+    except Exception as e:  # noqa: BLE001 — falla cerrado
+        print(f"[aviso] cobros: no pude saber si {cliente} ve lo cobrado: {type(e).__name__}")   # PND-175
         return not vista_cobros.puede_ver_costo(cliente, session.get("rol") == "admin")
 
 
@@ -5404,11 +5422,21 @@ def gasto_csv(cliente):
     """CSV del gasto de generación del mes en curso (una fila por cobro,
     `;`, BOM) para abrir en Excel. Mismos headers que tab_descargar_csv."""
     ahora = db.ahora()
-    texto = vista_cobros.gasto_para(cliente, session.get("rol") == "admin")["csv_mes"](cliente, ahora)
+    fuente = _fuente_gasto(cliente)
+    if "csv_mes" not in fuente:
+        return _gasto_csv_no_disponible(cliente)
+    texto = fuente["csv_mes"](cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"gasto_{cliente}_{ahora[:7]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
+
+
+def _gasto_csv_no_disponible(cliente):
+    """PND-175: sin saber si el proyecto cobra, a quien no puede ver el costo no se le baja ninguna cifra (falla
+    cerrado, como la pantalla) y tampoco un 500: vuelve a Configuración › Gasto con el aviso."""
+    flash(gettext("No pudimos leer el gasto en este momento. Intenta de nuevo en unos minutos."), "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
 @app.route("/cliente/<cliente>/gasto/todo.csv")
@@ -5416,7 +5444,10 @@ def gasto_csv_todo(cliente):
     """CSV con TODOS los cobros de generación del proyecto desde el primero
     (misma forma que gasto_csv)."""
     ahora = db.ahora()
-    texto = vista_cobros.gasto_para(cliente, session.get("rol") == "admin")["csv_todo"](cliente, ahora)
+    fuente = _fuente_gasto(cliente)
+    if "csv_todo" not in fuente:
+        return _gasto_csv_no_disponible(cliente)
+    texto = fuente["csv_todo"](cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"gasto_{cliente}_todo_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'

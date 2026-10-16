@@ -29,6 +29,8 @@ TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "t
          # cobros (spec 2026-10-08): al proyecto y a los admins
          "pieza_no_cobrada", "recarga_acreditada", "saldo_bajo",
          "cobro_no_anotado", "recarga_admin", "anulacion_bold", "pago_sin_recarga",
+         # PND-347/348 (2026-10-15): a todos los admins, cada recarga manual o ajuste y cada cambio de un control
+         "saldo_manual", "control_plata",
          # Wompi (planes 4/8, spec 2026-10-09 §5.1 y §5.3): a los admins
          "anulacion_wompi", "wompi_no_cuadra",
          # planes (spec 2026-10-09 §4 y §7.6): al proyecto y a los admins

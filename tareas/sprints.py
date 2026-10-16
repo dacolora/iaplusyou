@@ -10,7 +10,7 @@ Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
   sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"             (max_intentos=1)
   sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"             (max_intentos=2)
   sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=1, pagada)
-  sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                         (max_intentos=3)
+  sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                         (max_intentos=1, pagada)
   referentes_sugerir_ia      -> f"{cliente}__campana{campana_id}__sugerir_biblioteca" (max_intentos=1)
   sprint_reescribir_idea     -> f"{cliente}__cp{cp_id}__reescribir"                   (max_intentos=1, pagada)
 
@@ -358,8 +358,10 @@ def job_id_qa(cliente, cp_id):
 def encolar_qa(cliente, cp_id):
     """El mismo trabajo que encola la periódica; lo usa «Repetir QA» desde la
     bandeja. Solo QA (centavos de visión), nunca generación."""
+    # max_intentos=1 (regla 1; decisión de quien orquesta, 2026-10-15): cobra (visión con Claude) y un reintento de la
+    # cola volvía a pagar la misma pieza. job_id determinista: un segundo encolado con la tarea viva no hace nada.
     return trabajos.encolar(job_id_qa(cliente, cp_id), "sprint_qa_pieza", {"cliente": cliente, "cp_id": cp_id},
-                            cliente=cliente, duracion_estimada=30, max_intentos=3,
+                            cliente=cliente, duracion_estimada=30, max_intentos=1,
                             costo_estimado=gastos.TARIFAS["revision_pieza"])
 
 
@@ -372,14 +374,15 @@ def _gasto_qa(cliente, referencia, ent, sal, detalle, entregado=True):
 
 @registrar("sprint_qa_pieza")
 def ejecutar_qa_pieza(tarea):
-    """QA de una pieza lista. Si falla, la tarea reintenta sola (max 3): el QA
-    no gasta en generación, solo centavos de visión. El resultado se guarda
+    """QA de una pieza lista, en un solo intento (2026-10-15: con tres, la cola
+    reintentaba y pagaba otra vez la misma pieza). El resultado se guarda
     con `datos.guardar_qa` contra la sesión (`cf_id`) que se evaluó: si la
     pieza se regeneró mientras tanto, el veredicto viejo se descarta y la
     periódica evaluará la sesión nueva. Un fallo (descarga, ffprobe, visión)
     deja el marcador terminal `veredicto="error"` antes de subir la
-    excepción: la cola agota sus intentos, pero la periódica ya no la vuelve
-    a encolar cada 5 min; «Repetir QA» (rutas.pieza_qa) limpia el marcador.
+    excepción: la periódica ya no la vuelve a encolar cada 5 min; «Repetir QA»
+    (rutas.pieza_qa) limpia el marcador. Si la tarea ni siquiera termina
+    (reinicio, colgada, sin saldo), `qa_interrumpida` deja el mismo marcador.
 
     Doctrina, bloque 3: registra el gasto real de la visión (tipo «revision»,
     una fila por intento, también si la respuesta no sirvió) y guarda en la
@@ -413,7 +416,14 @@ def ejecutar_qa_pieza(tarea):
               gettext("control de calidad del sprint y doctrina") if revision
               else gettext("control de calidad del sprint"))
     resultado["cf_id"] = cf_id
-    if not datos.guardar_qa(cliente, cp_id, cf_id, resultado):
+    try:
+        guardado = datos.guardar_qa(cliente, cp_id, cf_id, resultado)
+    except Exception as e:
+        # Ya se pagó la visión: sin marca, `qa` quedaba vacío y la periódica volvía a encolar (y pagar) la misma pieza
+        # (guardian-gasto, 2026-10-15). Se intenta dejar el marcador terminal de error antes de subir la excepción.
+        _marcar_error_qa(cliente, cp_id, cf_id, str(e))
+        raise
+    if not guardado:
         bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado",
                            gettext("QA descartado: la pieza fue regenerada"))
         return gettext("QA descartado: la pieza fue regenerada mientras se evaluaba.")
@@ -433,6 +443,39 @@ def ejecutar_qa_pieza(tarea):
                            {"cp_id": cp_id, "score": resultado["score"], "veredicto": resultado["veredicto"]},
                            campana_id=i["campana_id"])
     return gettext("QA: %(veredicto)s (%(score)s/100).", veredicto=resultado['veredicto'], score=resultado['score'])
+
+
+def _marcar_error_qa(cliente, cp_id, cf_id, nota):
+    """El marcador terminal `veredicto="error"` de un QA ya pagado que no se pudo guardar; hasta tres intentos (un
+    «database is locked» pasa). Nunca lanza: quien llama ya tiene su error."""
+    import time  # noqa: PLC0415
+    for intento in range(3):
+        try:
+            datos.guardar_qa(cliente, cp_id, cf_id, {"veredicto": "error", "score": None, "checks": {},
+                                                     "nota": str(nota or "")[:300], "cf_id": cf_id})
+            return True
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).warning("QA %s: no pude dejar la marca de error (intento %s)", cp_id,
+                                                intento + 1, exc_info=True)
+            time.sleep(1)
+    return False
+
+
+@al_interrumpir("sprint_qa_pieza")
+def qa_interrumpida(tarea, mensaje):
+    """PND-169 y decisión de quien orquesta (2026-10-15): un QA que no terminó (reinicio, colgado, el respaldo sin
+    saldo) pudo haber pagado la visión sin guardar nada; con `qa` vacío la periódica lo volvía a encolar y Creatv le
+    pagaba a Anthropic otra vez la misma pieza. Deja el marcador terminal de error con el mensaje (como un QA que
+    falla) solo si la pieza sigue sin QA; «Repetir QA» lo limpia."""
+    p = tarea.get("payload") or {}
+    cliente, cp_id = p.get("cliente"), p.get("cp_id")
+    if not cliente or cp_id is None:
+        return
+    i = datos.idea(cliente, int(cp_id))
+    if not i or not i.get("cf_id") or i.get("qa") is not None:
+        return
+    datos.guardar_qa(cliente, int(cp_id), i["cf_id"], {"veredicto": "error", "score": None, "checks": {},
+                                                       "nota": str(mensaje or "")[:300], "cf_id": i["cf_id"]})
 
 
 def _piezas_listas_sin_qa():

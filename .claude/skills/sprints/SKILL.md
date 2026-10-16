@@ -124,3 +124,11 @@ llama a `on_usage(ent, sal)` apenas Claude responde, antes de leer y de guardar 
 `sprint_reescribir_idea` anota ahí su gasto (antes, si guardar fallaba, lo pagado no quedaba). Si después la respuesta no
 sirve se vuelve a anotar con `entregado=False` (un reverso); si falla el guardado, el worker devuelve el cobro.
 Pruebas: `tests/test_claude_anota_antes_de_guardar.py`.
+
+**El QA de una pieza, un solo intento (decisión de quien orquesta, 2026-10-15; regla 1).** `sprint_qa_pieza` cobra
+(visión con Claude) y va con `max_intentos=1` (`tareas/sprints.encolar_qa`; con 3, la cola volvía a pagar la misma
+pieza). El `job_id` es determinista (`<cliente>__cp<id>__qa`): con la tarea viva, la periódica no la duplica. Si la
+tarea no termina (reinicio, colgada, el respaldo sin saldo), su gancho `qa_interrumpida` deja el mismo marcador
+terminal `veredicto="error"` que un QA que falla (solo si la pieza sigue sin QA): sin él, `qa` quedaba vacío y la
+periódica lo volvía a encolar y pagar. Lo mismo si guardar el resultado falla después de pagar la visión (`_marcar_error_qa`, hasta tres intentos). «Repetir QA» limpia el marcador. Pruebas: `tests/test_sprint_qa_un_intento.py`.
+

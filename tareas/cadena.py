@@ -37,7 +37,7 @@ from guiones import cadena, datos, escenas, medios
 from guiones.refinador import ErrorRefinador
 from providers import flowplus_modelos
 from storage import r2_uploader
-from tareas import registrar
+from tareas import al_interrumpir, registrar
 
 log = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -298,6 +298,26 @@ def ejecutar_elementos(tarea):
     datos.modificar_cadena(cliente, video_id, lambda e, _v: cadena.preparada(e, nuevos))
     vigilar_una(cliente, video_id)
     return gettext("Elementos listos; arrancó la primera escena.")
+
+
+@al_interrumpir("cadena_elementos")
+def elementos_interrumpida(tarea, mensaje):
+    """PND-169: la tarea de los elementos no corrió (sin saldo, un reinicio o colgada). Sin esto la cadena quedaba
+    «Preparando…» para siempre: con `preparando` el vigilante no la mueve y solo esta tarea la limpia. Solo si sigue
+    preparando se detiene en su primera escena con el mensaje (si ya se preparó por otro camino, no se pisa)."""
+    p = tarea.get("payload") or {}
+    cliente, video_id = p.get("cliente"), p.get("video_id")
+    if not cliente or video_id is None:
+        return
+
+    def detener(est, _v):
+        if est and est.get("estado") == "corriendo" and est.get("preparando"):
+            return cadena.fallo(est, est["desde"], mensaje)
+        return est
+    try:
+        datos.modificar_cadena(cliente, int(video_id), detener)
+    except ErrorRefinador:
+        log.exception("cadena: no se pudo detener la cadena del video %s tras interrumpirse", video_id)
 
 
 @registrar("cadena_vigilar")

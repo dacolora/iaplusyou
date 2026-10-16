@@ -234,9 +234,9 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
         r["checks"]["formato"] = {"ok": ok, "nota": nota}
     finally:
         # El archivo temporal (descargado solo para poder sacar fotogramas y
-        # correr ffprobe) se borra pase lo que pase: si la visión falla y la
-        # tarea reintenta (sprint_qa_pieza, max_intentos=3), cada intento
-        # descarga uno nuevo — sin este finally se acumulan en el temp dir.
+        # correr ffprobe) se borra pase lo que pase: si la visión falla, cada
+        # QA que se vuelva a pedir (sprint_qa_pieza va con un solo intento desde
+        # el 2026-10-15) descarga uno nuevo — sin este finally se acumulan.
         if es_temporal:
             try:
                 os.remove(ruta)

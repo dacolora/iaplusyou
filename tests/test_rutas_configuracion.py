@@ -745,8 +745,8 @@ def test_precios_en_botones_crear_y_catalogo(app, monkeypatch):
     assert "Preparar guion con IA ≈ US$ 0,13" in app["c"].get(ruta_detalle).data.decode()
     cf.guardar_guion_base("acme", cf_id, GUION_BASE)
     detalle = app["c"].get(ruta_detalle).data.decode()
-    assert 'data-plantilla="Producir {n} finales ≈ US$ 0,20 c/u"' in detalle
-    assert ">Producir finales ≈ US$ 0,20 c/u</button>" in detalle
+    assert 'data-plantilla="Producir {n} finales ≈ US$ 0,33 c/u"' in detalle   # PND-110
+    assert ">Producir finales ≈ US$ 0,33 c/u</button>" in detalle
     html = app["c"].get("/cliente/acme").data.decode()
     html = con_script_estatico(html, 'crear-compositor.js')
     # Costo real de la pieza, con el mismo formato (en la tarjeta).

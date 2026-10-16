@@ -407,8 +407,10 @@ def test_nequi_solo_con_un_token_que_pidio_esta_sesion(base, pagina, pro, falso,
     assert c.post("/cliente/acme/plan/nequi", data={"celular": "12345"}).status_code == 400
     d = c.post("/cliente/acme/plan/nequi", data={"celular": "300 123 4567"}).get_json()
     assert d["ok"] and d["token"] == "nequi_test_1"
+    assert "nequi_test" not in d["estado_url"]                            # PND-349: el token no va en la URL
     assert c.get(d["estado_url"]).get_json() == {"estado": "PENDING"}
     assert pagina().get(d["estado_url"]).status_code == 404               # otra sesión no lo sondea
+    assert c.get("/cliente/acme/plan/nequi/nequi_test_1/estado").status_code == 404   # la ruta vieja ya no existe
     pagina().post("/cliente/acme/plan/alta", data=_form_alta(pro, tipo="NEQUI", token="nequi_test_1"))
     assert falso.fuentes == []                                            # token de otra sesión: no
     falso.nequi["nequi_test_1"] = "APPROVED"
@@ -418,6 +420,42 @@ def test_nequi_solo_con_un_token_que_pidio_esta_sesion(base, pagina, pro, falso,
     c.post("/cliente/acme/plan/alta", data=_form_alta(pro, tipo="NEQUI", token="nequi_test_1"))
     assert [f[:2] for f in falso.fuentes] == [("NEQUI", "nequi_test_1")]
     assert planes.suscripcion("acme")["medio_fuente"] == "NEQUI"
+
+
+def test_pnd349_cada_pedido_de_nequi_sondea_su_token_sin_ponerlo_en_la_url(base, pagina, pro, falso, avisos):
+    """PND-349: el token no va en la URL; cada pedido (cada pestaña) sondea SU token con un id de pedido que sin la
+    sesión no sirve (2026-10-15: con «el último de la sesión», una pestaña veía el aprobado de otra)."""
+    from cobros import rutas
+    _cobra()
+    c = pagina()
+    uno = c.post("/cliente/acme/plan/nequi", data={"celular": "3001234567"}).get_json()
+    dos = c.post("/cliente/acme/plan/nequi", data={"celular": "3001234567"}).get_json()
+    assert uno["estado_url"] != dos["estado_url"] and "nequi_test" not in uno["estado_url"] + dos["estado_url"]
+    falso.nequi["nequi_test_1"] = "APPROVED"
+    rutas._ULTIMA_VERIFICACION.clear()
+    assert c.get(uno["estado_url"]).get_json() == {"estado": "APPROVED"}
+    assert c.get(dos["estado_url"]).get_json() == {"estado": "PENDING"}         # la otra pestaña no ve el aprobado
+    falso.nequi["nequi_test_2"] = "DECLINED"
+    rutas._ULTIMA_VERIFICACION.clear()
+    assert c.get(dos["estado_url"]).get_json() == {"estado": "DECLINED"}
+    assert c.get("/cliente/acme/plan/nequi/estado").status_code == 404           # sin pedido, nada
+    assert c.get("/cliente/acme/plan/nequi/estado?pedido=otro").status_code == 404
+
+
+def test_los_tokens_de_nequi_se_guardan_por_proyecto(base, pagina, pro, falso, avisos):
+    """Un token pedido en el plan de un proyecto no se sondea ni se acepta en el de otro (la sesión del admin ve
+    varios proyectos)."""
+    _cobra()
+    _cobra("otro")
+    c = pagina("admin", "admin", None)
+    d = c.post("/cliente/acme/plan/nequi", data={"celular": "3001234567"}).get_json()
+    pedido = d["estado_url"].split("pedido=", 1)[1]
+    assert c.get(f"/cliente/otro/plan/nequi/estado?pedido={pedido}").status_code == 404
+    falso.nequi["nequi_test_1"] = "APPROVED"
+    c.post("/cliente/otro/plan/alta", data=_form_alta(pro, tipo="NEQUI", token="nequi_test_1"))
+    assert falso.fuentes == []                                                  # en «otro» ese token no vale
+    c.post("/cliente/acme/plan/alta", data=_form_alta(pro, tipo="NEQUI", token="nequi_test_1"))
+    assert [f[:2] for f in falso.fuentes] == [("NEQUI", "nequi_test_1")]
 
 
 # --- cancelar, cambiar tarjeta y otro proyecto ---------------------------------------------

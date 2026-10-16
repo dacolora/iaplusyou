@@ -122,3 +122,72 @@ test("el panel del saldo se vuelve a pedir al reabrir el apartado o pasado un mi
   assert.equal(debePedirPanel("listo", true, false, 60000), true);     // pasó un minuto
   assert.equal(debePedirPanel("listo", false, true, 60000), false);
 });
+
+// ------------------------------------------------- PND-175: XMLHttpRequest y sin global ---
+
+// Un XMLHttpRequest mínimo: `send` responde con lo que se le diga y dispara «load».
+function xhrFalso(respuesta) {
+  return class {
+    constructor() { this.oyentes = {}; this.responseType = respuesta.responseType || ""; }
+    addEventListener(nombre, fn) { (this.oyentes[nombre] ||= []).push(fn); }
+    getResponseHeader(nombre) { return nombre.toLowerCase() === "content-type" ? respuesta.tipo : null; }
+    send() {
+      this.status = respuesta.status;
+      this.responseURL = respuesta.url;
+      this.responseText = respuesta.texto;
+      this.response = respuesta.responseType === "json" ? JSON.parse(respuesta.texto) : respuesta.texto;
+      for (const fn of this.oyentes.load || []) fn();
+      return "enviado";
+    }
+  };
+}
+
+test("PND-175: un 402 de saldo por XMLHttpRequest también avisa, y quien lo envió sigue leyendo su cuerpo", () => {
+  for (const responseType of ["", "text", "json"]) {
+    const avisos = [];
+    const w = cargar(async () => null);
+    const Xhr = xhrFalso({ status: 402, url: `${ORIGEN}/cliente/acme/audios/generar`, tipo: "application/json",
+                           texto: JSON.stringify(SALDO), responseType });
+    w.CobrosSaldo.envolverXhr(Xhr, (d) => avisos.push(d));
+    const x = new Xhr();
+    assert.equal(x.send("cuerpo"), "enviado");                  // el send original corre y devuelve lo suyo
+    assert.equal(avisos.length, 1, responseType);
+    assert.equal(avisos[0].recargar_url, "/cliente/acme#config-ap-saldo");
+    if (responseType !== "json") assert.equal(JSON.parse(x.responseText).error, SALDO.error);
+  }
+});
+
+test("PND-175: por XMLHttpRequest, otros errores, otro sitio o un cuerpo que no es json no avisan", () => {
+  for (const r of [
+    { status: 400, url: `${ORIGEN}/x`, tipo: "application/json", texto: JSON.stringify(SALDO) },
+    { status: 402, url: "https://otro.com/x", tipo: "application/json", texto: JSON.stringify(SALDO) },
+    { status: 402, url: `${ORIGEN}/x`, tipo: "text/html", texto: "<html>402</html>" },
+    { status: 402, url: `${ORIGEN}/x`, tipo: "application/json", texto: "{roto" },
+    { status: 402, url: `${ORIGEN}/x`, tipo: "application/json", texto: JSON.stringify({ ok: false }) },
+  ]) {
+    const w = cargar(async () => null);
+    const Xhr = xhrFalso(r);
+    w.CobrosSaldo.envolverXhr(Xhr, () => assert.fail("no debe avisar: " + JSON.stringify(r)));
+    new Xhr().send();
+  }
+});
+
+test("PND-175: XMLHttpRequest se envuelve una sola vez", () => {
+  const w = cargar(async () => null);
+  const Xhr = xhrFalso({ status: 402, url: `${ORIGEN}/x`, tipo: "application/json", texto: JSON.stringify(SALDO) });
+  w.CobrosSaldo.envolverXhr(Xhr, () => {});
+  const una = Xhr.prototype.send;
+  w.CobrosSaldo.envolverXhr(Xhr, () => {});
+  assert.equal(Xhr.prototype.send, una);
+  assert.equal(una.cobros, true);
+});
+
+test("PND-175: en una página (con document) no queda window.CobrosSaldo", () => {
+  const ctx = { Response, Promise, setTimeout, Date, console, URL, location: { origin: ORIGEN }, fetch: async () => null,
+                document: { currentScript: null, querySelector: () => null, getElementById: () => null } };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(FUENTE, ctx);
+  assert.equal(ctx.CobrosSaldo, undefined);
+  assert.equal(ctx.fetch.cobros, true);                          // el 402 del fetch sigue cubierto
+});

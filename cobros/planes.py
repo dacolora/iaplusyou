@@ -631,7 +631,7 @@ def _por_referencia(con, referencia):
     return _pago_dict(f) if f is not None else None
 
 
-def aplicar_transaccion(transaccion, ahora=None):
+def aplicar_transaccion(transaccion, ahora=None, sin_evento=False):
     """Lo que dice Wompi de un pago de plan (el evento con firma completa o la
     transacción releída; la respuesta de nuestro propio cobro). Idempotente: se
     puede aplicar dos veces (evento + periódica, o un 500 que Wompi reintenta)
@@ -639,7 +639,11 @@ def aplicar_transaccion(transaccion, ahora=None):
     comprueba centavos y moneda contra lo guardado y aplica con UPDATE
     condicionales sobre el estado, con el candado tomado antes de leer.
     Devuelve una palabra: aprobado, rechazado, error, anulado, pendiente,
-    ya_aplicada, desconocida, no_cuadra, aprobado_sin_suscripcion."""
+    ya_aplicada, desconocida, no_cuadra, aprobado_sin_suscripcion,
+    anulado_sin_acreditar (VOIDED de un pago todavía pendiente) o ya_anulada
+    (APPROVED de un pago que Wompi ya anuló), PND-340. `sin_evento` (PND-341):
+    la anulación la encontró la periódica releyendo los aprobados; el aviso al
+    admin dice que el evento no llegó."""
     tx = transaccion if isinstance(transaccion, dict) else {}
     ahora = ahora or db.ahora()
     referencia = str(tx.get("reference") or "")
@@ -663,6 +667,8 @@ def aplicar_transaccion(transaccion, ahora=None):
             resultado = "no_cuadra"
         else:
             resultado, aviso = _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora)
+            if aviso and sin_evento and aviso[0] == "anulado":
+                aviso = ("anulado_sin_evento",) + tuple(aviso[1:])
             if aviso:
                 avisos_.append(aviso)
     _mandar(avisos_)
@@ -675,6 +681,10 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
     if estado_wompi == "APPROVED":
         if pago["estado"] == "aprobado":
             return "ya_aplicada", None
+        if pago["estado"] == "anulado":
+            # PND-340 (el gemelo de PND-328): Wompi ya anuló esta transacción (aplicar_transaccion exige el mismo
+            # id). Su aprobación tardía, aunque venga firmada, no acredita; el aviso de la anulación ya salió.
+            return "ya_anulada", None
         if pago["estado"] != "pendiente":
             # Un pago ya rechazado, con error o anulado no vuelve a acreditar (otro intento de esa renovación pudo
             # cobrarse y abrir el periodo): sin crédito, y el admin mira el caso en el panel de Wompi.
@@ -706,6 +716,23 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
             aviso[2].update(usd=pago["usd"], motivo=motivo or "")
         return ESTADO_DE_WOMPI[estado_wompi], aviso
     if estado_wompi == "VOIDED":
+        if pago["estado"] == "pendiente":
+            # PND-340: los eventos de Wompi llegan en desorden. Anulada antes de aplicarse su aprobación: el pago queda
+            # `anulado` con esa transacción y sin crédito (no entró plata), y la aprobación que llegue después ve la
+            # anulación (`ya_anulada`). Antes se ignoraba y el APPROVED tardío acreditaba un pago anulado. Como con
+            # cualquier anulación, la tarjeta no se vuelve a cobrar sola: la suscripción queda cancelada (lo pagado
+            # por otros pagos sigue hasta su fin; un alta sin nada pagado termina en la periódica).
+            valores = {"estado": "anulado", "actualizado_en": ahora, "motivo": motivo}
+            if tx_id and not pago["transaccion_id"]:
+                valores["transaccion_id"] = tx_id
+            n = con.execute(pp.update().where(pp.c.id == pago["id"], pp.c.estado == "pendiente")
+                            .values(**valores)).rowcount
+            if not n:
+                return "ya_aplicada", None
+            if sus is not None and sus["estado"] != "terminada":
+                _actualizar_sus(con, sus["id"], ahora, estado="cancelada", renovar=False, proximo_cobro=None)
+            return "anulado_sin_acreditar", ("anulado_sin_acreditar", pago["cliente"],
+                                             {"referencia": pago["referencia"]})
         if pago["estado"] != "aprobado":
             return "ya_aplicada", None
         n = con.execute(pp.update().where(pp.c.id == pago["id"], pp.c.estado == "aprobado")
@@ -1262,6 +1289,13 @@ def activar_manual(cliente, plan_id, ciclo, usuario, nota="", ahora=None):
         usd = _precio_ciclo(plan_, ciclo)
         if not usd:
             raise ErrorPlan(gettext("Ese plan no tiene opción anual"))
+        # Lo que se paga por fuera cuenta en el tope de lo sumado a mano en 24 h (decisión de quien orquesta,
+        # 2026-10-15), con el candado ya tomado: dos activaciones a la vez no pasan juntas el tope.
+        from cobros import recargas  # noqa: PLC0415 — recargas importa libro, que importa este módulo
+        try:
+            recargas.dentro_del_tope(con, int(usd) * 1000)
+        except ValueError as e:
+            raise ErrorPlan(str(e)) from None
         sus = _sus_viva(con, cliente)
         apagada = bool(sus and sus["renovar"] and sus["fuente_pago_id"])
         if sus is None:

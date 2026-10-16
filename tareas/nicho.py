@@ -434,3 +434,16 @@ def ejecutar_completar(tarea):
 def interrumpida_completar(tarea, mensaje):
     p = tarea["payload"]
     _anotar_error(p["cliente"], int(p["estudio_id"]), mensaje)
+
+
+@registrar("apify_revisar_uso")
+def revisar_uso_apify(tarea):
+    """PND-010: periódica (cada 6 h) — lee gratis en Apify cuánto va el mes contra el tope de la cuenta; Alertas avisa
+    solo al admin desde el 80 % (`providers.apify_uso`). Sin APIFY_TOKEN no pide nada."""
+    from providers import apify_uso  # noqa: PLC0415
+    uso = apify_uso.revisar()
+    if uso is None:
+        return gettext("Uso de Apify: sin lectura")
+    return gettext("Uso de Apify: %(usado)s de %(tope)s", usado=gastos.formatear(uso["usado_usd"]),
+                   tope=gastos.formatear(uso["tope_usd"]))
+

@@ -111,6 +111,7 @@ def ver_cobrado_aqui(cliente):
         if not has_request_context():
             return False
     except RuntimeError:
+        log.warning("cobros: ver_cobrado_aqui de %s sin contexto de Flask legible", cliente)
         return False
     return ver_cobrado(cliente, _es_admin_aqui())
 
@@ -381,7 +382,9 @@ def puede_ver_costo(cliente, es_admin):
         return True
     try:
         return not cobra(cliente)
-    except Exception:  # noqa: BLE001 — sin cuenta, cerrado
+    except Exception as e:  # noqa: BLE001 — sin cuenta, cerrado
+        # PND-175: la rama que oculta la cifra deja su línea (solo la clase: el texto podría traer una ruta o un token).
+        log.warning("cobros: no se pudo leer si %s cobra; se oculta el costo (%s)", cliente, type(e).__name__)
         return False
 
 
@@ -999,7 +1002,8 @@ def plan_para_cliente(cliente):
     sus, plan_ = e["suscripcion"], e["plan"]
     try:
         cobra_ = cobra(cliente)
-    except Exception:  # noqa: BLE001 — ante la duda, no se ofrece suscribirse
+    except Exception as e:  # noqa: BLE001 — ante la duda, no se ofrece suscribirse
+        log.warning("cobros: no se pudo leer si %s cobra; no se ofrece el plan (%s)", cliente, type(e).__name__)
         cobra_ = False
     vista_ = {"situacion": situacion, "wompi_listo": wompi.configurado(), "cobra": cobra_, "planes": [], "plan": None,
               "bolsa": None, "incluido_pct": None, "ahorro": None, "pagos": [], "pago_pendiente_id": None}
@@ -1063,6 +1067,9 @@ NOMBRES_AVISO_PLATA = {
     "trm_sin_tasa": N_("Sin tasa de cambio"),
     "deuda_pospago": N_("Deuda de pospago"),
     "csp_tarjeta": N_("Política de la página de la tarjeta"),
+    # PND-347/348: cada recarga manual o ajuste, y cada cambio del tope diario o de la tasa de referencia.
+    "saldo_manual": N_("Saldo movido a mano"),
+    "control_plata": N_("Cambio de un control de plata"),
 }
 
 

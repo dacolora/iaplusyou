@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import threading
 import time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -371,7 +372,8 @@ TOPE_ALTAS_HORA = 10        # altas y cambios de tarjeta por proyecto y hora (ca
 TOPE_NEQUI_HORA = 6         # pedidos a Nequi por proyecto y hora (cada uno manda una notificación al celular)
 MAX_CAMPOS_FORMULARIO = 40
 _TOKEN_TARJETA = re.compile(r"tok_(?:test|prod)_[A-Za-z0-9_-]{1,190}")
-_SESION_NEQUI = "plan_nequi"   # los tokens de Nequi que pidió ESTA sesión (solo esos se sondean y se aceptan)
+_SESION_NEQUI = "plan_nequi"   # los tokens de Nequi que pidió ESTA sesión, por proyecto y por pedido (los únicos
+                                # que se sondean y se aceptan): {cliente: [[pedido, token], …]}, los 5 últimos
 
 
 @bp.app_template_filter("fecha_larga")
@@ -561,21 +563,39 @@ def _token_tarjeta(form):
     return None
 
 
-def _medio(form):
+def _pedidos_nequi(cliente):
+    """[[pedido, token], …] de Nequi que pidió ESTA sesión para ESTE proyecto (decisión de quien orquesta,
+    2026-10-15: con la lista de toda la sesión, una pestaña de otro proyecto podía ver el «aprobado» de otra). Una
+    sesión vieja con la lista suelta de antes no trae ninguno."""
+    guardados = session.get(_SESION_NEQUI)
+    lista = guardados.get(cliente) if isinstance(guardados, dict) else None
+    return [list(p) for p in (lista or []) if isinstance(p, (list, tuple)) and len(p) == 2]
+
+
+def _guardar_pedidos_nequi(cliente, pedidos):
+    guardados = session.get(_SESION_NEQUI)
+    guardados = dict(guardados) if isinstance(guardados, dict) else {}
+    if pedidos:
+        guardados[cliente] = pedidos[-5:]
+    else:
+        guardados.pop(cliente, None)
+    session[_SESION_NEQUI] = guardados
+
+
+def _medio(form, cliente):
     """(tipo, token): tarjeta con el token del widget, o Nequi con un token que
-    pidió ESTA sesión (`plan_nequi`). Sin token válido, (tipo, None)."""
+    pidió ESTA sesión para ESTE proyecto (`plan_nequi`). Sin token válido, (tipo, None)."""
     tipo = (form.get("tipo") or "CARD").strip().upper()
     if tipo == "NEQUI":
         token = (form.get("token") or "").strip()
-        return "NEQUI", token if token and token in (session.get(_SESION_NEQUI) or []) else None
+        return "NEQUI", token if token and token in [t for _p, t in _pedidos_nequi(cliente)] else None
     if tipo != "CARD":
         return tipo, None
     return "CARD", _token_tarjeta(form)
 
 
-def _olvidar_nequi(token):
-    lista = [t for t in (session.get(_SESION_NEQUI) or []) if t != token]
-    session[_SESION_NEQUI] = lista
+def _olvidar_nequi(cliente, token):
+    _guardar_pedidos_nequi(cliente, [p for p in _pedidos_nequi(cliente) if p[1] != token])
 
 
 def _entero_exacto(texto):
@@ -593,7 +613,7 @@ def _pedido_de_medio(cliente, volver):
         flash(gettext("Para suscribirte tienes que aceptar los términos de Wompi, el tratamiento de datos "
                       "y el cobro automático"), "error")
         return volver
-    tipo, token = _medio(f)
+    tipo, token = _medio(f, cliente)
     if token is None:
         flash(gettext("No recibimos los datos de tu medio de pago. Vuelve a ingresar la tarjeta o a aprobar en "
                       "Nequi."), "error")
@@ -652,7 +672,7 @@ def plan_suscribir(cliente):
         flash(cola.sin_token(str(e)), "error")
         return volver
     if tipo == "NEQUI":
-        _olvidar_nequi(token)
+        _olvidar_nequi(cliente, token)
     return _tras_cobro(cliente, r["estado"], r.get("motivo"), volver)
 
 
@@ -672,7 +692,7 @@ def plan_cambiar_tarjeta(cliente):
         flash(cola.sin_token(str(e)), "error")
         return volver
     if tipo == "NEQUI":
-        _olvidar_nequi(token)
+        _olvidar_nequi(cliente, token)
     if r.get("cobro") is None:
         flash(gettext("Listo: guardamos tu nuevo medio de pago para los próximos cobros del plan."), "ok")
         return _volver_plan(cliente)
@@ -736,17 +756,25 @@ def plan_nequi(cliente):
         token = wompi.token_nequi(celular, tiempo=wompi.TIEMPO_INTERACTIVO)
     except wompi.ErrorWompi as e:
         return jsonify({"ok": False, "error": cola.sin_token(str(e))}), 502
-    session[_SESION_NEQUI] = ([t for t in (session.get(_SESION_NEQUI) or []) if t != token] + [token])[-5:]
+    # Cada pedido tiene su id (no es secreto: sin esta sesión no sirve), así cada pestaña sondea SU token (2026-10-15).
+    pedido = secrets.token_hex(8)
+    _guardar_pedidos_nequi(cliente, [p for p in _pedidos_nequi(cliente) if p[1] != token] + [[pedido, token]])
+    # El token va en el cuerpo (el formulario lo manda de vuelta al aprobar), nunca en una URL (PND-349).
     return jsonify({"ok": True, "token": token,
-                    "estado_url": url_for("cobros.plan_nequi_estado", cliente=cliente, token=token)})
+                    "estado_url": url_for("cobros.plan_nequi_estado", cliente=cliente, pedido=pedido)})
 
 
-@bp.get("/cliente/<cliente>/plan/nequi/<token>/estado")
-def plan_nequi_estado(cliente, token):
-    """PENDING, APPROVED o DECLINED de un token de Nequi que pidió esta sesión
-    (como mucho una consulta cada 3 s por token y con cupo; si no, PENDING)."""
+@bp.get("/cliente/<cliente>/plan/nequi/estado")
+def plan_nequi_estado(cliente):
+    """PENDING, APPROVED o DECLINED del token de Nequi del pedido `?pedido=` que
+    hizo esta sesión para este proyecto (como mucho una consulta cada 3 s por
+    token y con cupo; si no, PENDING). PND-349 (2026-10-15): el token ya no va
+    en la ruta, que queda en los registros de acceso de nginx y gunicorn; sale
+    de la sesión, por proyecto y por pedido (cada pestaña ve el suyo)."""
     _exigir_plan(cliente)
-    if token not in (session.get(_SESION_NEQUI) or []):
+    pedido = (request.args.get("pedido") or "").strip()
+    token = next((t for p, t in _pedidos_nequi(cliente) if p == pedido), None) if pedido else None
+    if not token:
         abort(404)
     estado = "PENDING"
     if _toca_verificar(f"nequi:{token}") and _SEMAFORO.acquire(blocking=False):
@@ -911,7 +939,64 @@ def admin_cobros():
                            bienvenida_campo=_campo(libro.bienvenida_usd()),
                            bienvenida_max_texto=gastos.formatear(libro.BIENVENIDA_MAX),
                            margen_min_texto=idiomas.numero(libro.MARGEN_MIN, 2),
-                           margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2))
+                           margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2),
+                           **_controles_de_plata())
+
+
+def _controles_de_plata():
+    """PND-347 y PND-348: el tope diario de lo sumado a mano (con lo de hoy), la tasa de referencia de la TRM y si
+    la clave de quien mira sigue vigente (entonces los formularios no la vuelven a pedir)."""
+    hoy, tope = recargas.tope_manual()
+    a = trm.ancla()
+    return {"tope_manual_hoy_texto": gastos.formatear(hoy / 1000), "tope_manual_texto": gastos.formatear(tope / 1000),
+            "tope_manual_campo": _campo(tope / 1000),
+            "trm_ancla": None if a is None else {
+                "valor_texto": idiomas.numero(a["valor"], 2), "campo": _campo(a["valor"]),
+                "usuario": a["usuario"], "fijada_en": a["fijada_en"][:16].replace("T", " ")},
+            "clave_reciente": cuentas.clave_reciente(session)}
+
+
+# ----------------------------------------- la clave otra vez y el aviso (PND-347) ---
+
+def _clave_para_mover_plata():
+    """Antes de mover saldo a mano o un control de plata (el tope diario, la tasa de referencia): la clave de quien
+    tiene la sesión, otra vez, salvo que la haya escrito hace menos de 10 minutos (`cuentas.REAUTH_S`). Sin ella,
+    el aviso y False: quien llama no escribe nada."""
+    if cuentas.clave_reciente(session):
+        return True
+    resultado = cuentas.confirmar_clave(session, request.form.get("clave") or "", ip=request.remote_addr)
+    if resultado == "ok":
+        return True
+    flash({"falta": gettext("Para mover plata a mano escribe tu clave otra vez (vale 10 minutos)."),
+           "mala": gettext("Esa no es tu clave: no se cambió nada."),
+           "bloqueado": gettext("Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.")}
+          .get(resultado, gettext("Esa no es tu clave: no se cambió nada.")), "error")
+    return False
+
+
+@bp.post("/admin/cobros/clave")
+@_solo_admin
+def admin_clave():
+    """La caja «Tu clave» de arriba de /admin/cobros: confirma la clave por 10 minutos para los interruptores de cada
+    proyecto («Cobrar», pospago, margen propio), que no tienen campo propio (decisión de quien orquesta, 2026-10-15)."""
+    if _clave_para_mover_plata():
+        flash(gettext("Listo: durante 10 minutos no te volvemos a pedir la clave."), "ok")
+    return _volver_admin()
+
+
+def _avisar_control(cliente, cuerpo):
+    """Un control de plata cambió (`control_plata`): a todos los admins, con quién lo hizo. `cuerpo(usuario)` arma el
+    texto dentro de cada aviso (en el idioma de cada admin)."""
+    usuario = str(session.get("usuario") or "")
+    _avisar_a_los_admins("control_plata", cliente or "", lambda: gettext("Cambió un control de plata"),
+                         lambda: cuerpo(usuario) + " " + gettext("Si no fuiste tú ni otro admin, cambia la clave."))
+
+
+def _avisar_a_los_admins(tipo, cliente, asunto, cuerpo):
+    """A TODOS los admins (correo a cada uno con correo verificado y la bitácora, que /admin/cobros muestra en
+    «Avisos de plata»), por la vía de siempre de cobros. Nunca lanza."""
+    from cobros import avisos  # noqa: PLC0415
+    avisos.admin(tipo, asunto, cuerpo, cliente=cliente or "")
 
 
 def _trm_rechazada():
@@ -926,27 +1011,83 @@ def _trm_rechazada():
 @bp.post("/admin/cobros/trm/aceptar")
 @_solo_admin
 def admin_trm_aceptar():
-    """«Aceptar la tasa de hoy»: la TRM que se movió más de 8 % pasa a ser la aceptada y se vuelve a cobrar en
-    pesos. Solo el admin, del mismo sitio (la barrera CSRF de la app), y solo el valor exacto que se mostró."""
+    """«Aceptar la tasa de hoy»: la TRM que se movió más de 8 % pasa a ser la aceptada (y la referencia de la banda,
+    PND-348) y se vuelve a cobrar en pesos. Solo el admin, del mismo sitio (la barrera CSRF de la app), con su clave
+    y solo el valor exacto que se mostró."""
+    if not _clave_para_mover_plata():
+        return _volver_admin()
     try:
         valor = trm.aceptar(request.form.get("valor"), session.get("usuario"))
     except ValueError as e:
         flash(str(e), "error")
         return _volver_admin()
+    usuario = str(session.get("usuario") or "")
+    # Las cifras se formatean dentro de cada aviso: sale una vez por admin, en el idioma de cada uno.
+    _avisar_a_los_admins("control_plata", "", lambda: gettext("Cambió la tasa de referencia de la TRM"),
+                         lambda: gettext("%(usuario)s aceptó la TRM de hoy (%(valor)s COP por dólar): es la referencia "
+                                         "nueva de la banda. Si no fuiste tú ni otro admin, cambia la clave.",
+                                         usuario=usuario, valor=idiomas.numero(valor, 2)))
     flash(gettext("Tasa de cambio aceptada: %(valor)s COP por dólar. Los cobros en pesos siguen.",
                   valor=idiomas.numero(valor, 2)), "ok")
+    return _volver_admin()
+
+
+@bp.post("/admin/cobros/trm/ancla")
+@_solo_admin
+def admin_trm_ancla():
+    """PND-348: la tasa de referencia de la banda de la TRM (pesos por dólar), con la clave del admin y aviso a
+    todos los admins. Una lectura de datos.gov.co que se aleje más de 8 % de ella no se usa."""
+    if not _clave_para_mover_plata():
+        return _volver_admin()
+    try:
+        valor = trm.fijar_ancla(request.form.get("ancla"), session.get("usuario"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin()
+    usuario = str(session.get("usuario") or "")
+    _avisar_a_los_admins("control_plata", "", lambda: gettext("Cambió la tasa de referencia de la TRM"),
+                         lambda: gettext("%(usuario)s fijó la tasa de referencia de la TRM en %(valor)s COP por dólar. "
+                                         "Si no fuiste tú ni otro admin, cambia la clave.", usuario=usuario,
+                                         valor=idiomas.numero(valor, 2)))
+    flash(gettext("Tasa de referencia guardada: %(valor)s COP por dólar.", valor=idiomas.numero(valor, 2)), "ok")
+    return _volver_admin()
+
+
+@bp.post("/admin/cobros/tope-manual")
+@_solo_admin
+def admin_tope_manual():
+    """PND-347: el tope diario de lo que se suma a mano (recargas manuales y ajustes positivos de todos los
+    proyectos), con la clave del admin y aviso a todos los admins."""
+    if not _clave_para_mover_plata():
+        return _volver_admin()
+    try:
+        milesimas = recargas.guardar_tope_manual(request.form.get("tope"), session.get("usuario"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin()
+    usuario = str(session.get("usuario") or "")
+    _avisar_a_los_admins("control_plata", "", lambda: gettext("Cambió el tope diario de recargas manuales"),
+                         lambda: gettext("%(usuario)s puso el tope diario de lo que se suma a mano en %(tope)s. Si no "
+                                         "fuiste tú ni otro admin, cambia la clave.", usuario=usuario,
+                                         tope=gastos.formatear(milesimas / 1000)))
+    flash(gettext("Tope diario de recargas manuales guardado: %(tope)s.", tope=gastos.formatear(milesimas / 1000)),
+          "ok")
     return _volver_admin()
 
 
 @bp.post("/admin/cobros/margen")
 @_solo_admin
 def admin_margen():
+    if not _clave_para_mover_plata():   # decisión de quien orquesta (2026-10-15): los controles de plata, con clave
+        return _volver_admin()
     try:
         valor = _margen(request.form.get("margen"))
         libro.guardar_margen_global(valor, session.get("usuario"))
     except ValueError as e:
         flash(str(e), "error")
         return _volver_admin()
+    _avisar_control("", lambda u: gettext("%(usuario)s puso el margen global en %(margen)s.", usuario=u,
+                                          margen=idiomas.numero(valor, 2)))
     flash(gettext("Margen global guardado: %(margen)s.", margen=idiomas.numero(valor, 2)), "ok")
     return _volver_admin()
 
@@ -955,7 +1096,9 @@ def admin_margen():
 @_solo_admin
 def admin_bienvenida():
     """El saldo de bienvenida de los proyectos nuevos (PND-299), junto al margen global: dólares con hasta 2
-    decimales, de 0 (apagado) al tope del libro."""
+    decimales, de 0 (apagado) al tope del libro. Con la clave y aviso a todos los admins (2026-10-15)."""
+    if not _clave_para_mover_plata():
+        return _volver_admin()
     valor = _decimal(request.form.get("bienvenida"))
     try:
         if valor is None or abs(valor) > Decimal(str(libro.BIENVENIDA_MAX * 2)) \
@@ -966,9 +1109,28 @@ def admin_bienvenida():
     except ValueError as e:
         flash(str(e), "error")
         return _volver_admin()
+    _avisar_control("", lambda u: gettext("%(usuario)s puso el saldo de bienvenida en %(monto)s.", usuario=u,
+                                          monto=gastos.formatear(guardado)))
     flash(gettext("Saldo de bienvenida guardado: %(monto)s para cada proyecto nuevo, al confirmar su correo.",
                   monto=gastos.formatear(guardado)), "ok")
     return _volver_admin()
+
+
+def _avisar_cuenta(cliente, sensibles):
+    nombre = proyectos.nombre_visible(cliente)
+
+    def cuerpo(usuario):
+        partes = []
+        if "cobrar" in sensibles:
+            partes.append(gettext("prendió «Cobrar»") if sensibles["cobrar"] else gettext("apagó «Cobrar»"))
+        if "pospago" in sensibles:
+            partes.append(gettext("lo pasó a pospago") if sensibles["pospago"] else gettext("lo volvió a prepago"))
+        if "margen" in sensibles:
+            partes.append(gettext("puso su margen propio en %(margen)s", margen=idiomas.numero(sensibles["margen"], 2))
+                          if sensibles["margen"] is not None else gettext("le quitó el margen propio (usa el global)"))
+        return gettext("%(usuario)s cambió %(proyecto)s: %(cambios)s.", usuario=usuario, proyecto=nombre,
+                       cambios="; ".join(partes))
+    _avisar_control(cliente, cuerpo)
 
 
 @bp.post("/admin/cobros/<cliente>/cuenta")
@@ -990,11 +1152,20 @@ def admin_cuenta(cliente):
             cambios["margen"] = _margen(texto) if texto else None
         if "umbral" in request.form:
             cambios["umbral"] = _umbral(request.form.get("umbral"))
+        # Decisión de quien orquesta (2026-10-15): «Cobrar», el pospago y el margen propio son controles de plata:
+        # cambiarlos pide la clave (el umbral del aviso, no). Solo lo que de verdad cambia.
+        antes = libro.cuenta(cliente)
+        sensibles = {k: v for k, v in cambios.items() if k in ("cobrar", "pospago", "margen")
+                     and v != (antes.get("margen_propio") if k == "margen" else antes.get(k))}
+        if sensibles and not _clave_para_mover_plata():
+            return _volver_admin(cliente)
         if cambios:
             libro.configurar(cliente, usuario=session.get("usuario"), **cambios)
     except ValueError as e:
         flash(str(e), "error")
         return _volver_admin(cliente)
+    if sensibles:
+        _avisar_cuenta(cliente, sensibles)
     nombre = proyectos.nombre_visible(cliente)
     if "cobrar" in cambios:
         if cambios["cobrar"]:
@@ -1053,6 +1224,8 @@ def admin_recarga(cliente):
     con nota). A un proyecto que no cobra se le puede dejar saldo, y se avisa."""
     if not _existe(cliente):
         abort(404)
+    if not _clave_para_mover_plata():   # PND-347: la clave otra vez (vale 10 minutos)
+        return _volver_admin(cliente)
     tipo = request.form.get("tipo") or "recarga"
     try:
         recargas.manual(cliente, request.form.get("monto", ""), session.get("usuario"), request.form.get("nota", ""),
@@ -1061,7 +1234,9 @@ def admin_recarga(cliente):
         flash(str(e), "error")
         return _volver_admin(cliente)
     nombre = proyectos.nombre_visible(cliente)
-    monto = gastos.formatear(float(_decimal(request.form.get("monto")) or 0))
+    usd = float(_decimal(request.form.get("monto")) or 0)
+    monto = gastos.formatear(usd)
+    _avisar_saldo_manual(cliente, nombre, tipo, usd, request.form.get("nota", ""))
     if tipo == "ajuste":
         flash(gettext("Ajuste de %(monto)s anotado en %(proyecto)s.", monto=monto, proyecto=nombre), "ok")
     else:
@@ -1070,6 +1245,30 @@ def admin_recarga(cliente):
         flash(gettext("%(proyecto)s todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar».",
                       proyecto=nombre), "warn")
     return _volver_admin(cliente)
+
+
+def _avisar_saldo_manual(cliente, nombre, tipo, usd, nota):
+    """PND-347: cada recarga manual o ajuste se avisa a TODOS los admins, con quién la hizo, la nota y cuánto va del
+    tope del día: una sesión de admin robada no crea saldo en silencio. Las cifras se formatean dentro del aviso, que
+    sale una vez por admin en el idioma de cada uno."""
+    usuario, nota = str(session.get("usuario") or ""), " ".join(str(nota or "").split())[:300] or "—"
+    hoy, tope = recargas.tope_manual()
+
+    def cifras():
+        return {"monto": gastos.formatear(usd), "hoy": gastos.formatear(hoy / 1000),
+                "tope": gastos.formatear(tope / 1000)}
+    if tipo == "ajuste":
+        def cuerpo():
+            return gettext("%(usuario)s anotó un ajuste de %(monto)s en %(proyecto)s. Nota: %(nota)s. En las últimas "
+                           "24 horas van %(hoy)s sumados a mano, con un tope de %(tope)s. Si no fuiste tú ni otro "
+                           "admin, cambia la clave.", usuario=usuario, proyecto=nombre, nota=nota, **cifras())
+    else:
+        def cuerpo():
+            return gettext("%(usuario)s anotó una recarga manual de %(monto)s en %(proyecto)s. Nota: %(nota)s. En "
+                           "las últimas 24 horas van %(hoy)s sumados a mano, con un tope de %(tope)s. Si no fuiste tú "
+                           "ni otro admin, cambia la clave.", usuario=usuario, proyecto=nombre, nota=nota, **cifras())
+    _avisar_a_los_admins("saldo_manual", cliente,
+                         lambda: gettext("Saldo movido a mano en %(proyecto)s", proyecto=nombre), cuerpo)
 
 
 # ------------------------------------------- /admin/cobros: planes (planes 7/8) ---
@@ -1098,12 +1297,17 @@ def _campos_plan():
 @bp.post("/admin/cobros/planes")
 @_solo_admin
 def admin_plan_crear():
-    """Un plan nuevo. Nace archivado si no se marca «Ofrecerlo»: así se revisa antes de que lo vean los clientes."""
+    """Un plan nuevo. Nace archivado si no se marca «Ofrecerlo»: así se revisa antes de que lo vean los clientes.
+    Con la clave y aviso a todos los admins (2026-10-15): su precio es lo que acredita «Activar a mano»."""
+    if not _clave_para_mover_plata():
+        return _volver_planes()
     try:
-        planes.crear_plan(**_campos_plan(), activo=request.form.get("activo") == "1", usuario=session.get("usuario"))
+        plan_id = planes.crear_plan(**_campos_plan(), activo=request.form.get("activo") == "1",
+                                    usuario=session.get("usuario"))
     except planes.ErrorPlan as e:
         flash(str(e), "error")
         return _volver_planes()
+    _avisar_plan(plan_id, creado=True)
     flash(gettext("Plan creado: %(plan)s.", plan=(request.form.get("nombre") or "").strip()), "ok")
     return _volver_planes()
 
@@ -1112,15 +1316,35 @@ def admin_plan_crear():
 @_solo_admin
 def admin_plan_editar(plan_id):
     """Cambia nombre, precios, margen, tope y orden. El precio nuevo solo vale para suscripciones nuevas (cada
-    suscripción renueva al precio que aceptó); margen y tope, desde el próximo periodo."""
+    suscripción renueva al precio que aceptó); margen y tope, desde el próximo periodo. Con la clave y aviso a
+    todos los admins (2026-10-15)."""
+    if not _clave_para_mover_plata():
+        return _volver_planes(f"plan-{plan_id}")
     try:
         planes.editar_plan(plan_id, usuario=session.get("usuario"), **_campos_plan())
     except planes.ErrorPlan as e:
         flash(str(e), "error")
         return _volver_planes(f"plan-{plan_id}")
+    _avisar_plan(plan_id, creado=False)
     flash(gettext("Plan guardado. Quien ya está suscrito sigue con el precio que aceptó; el margen y el tope "
                   "valen desde su próximo periodo (en un plan anual, desde su próximo pago)."), "ok")
     return _volver_planes(f"plan-{plan_id}")
+
+
+def _avisar_plan(plan_id, creado):
+    p = planes.leer_plan(plan_id) or {}
+    nombre, precio, margen = p.get("nombre") or "—", int(p.get("precio_usd") or 0), float(p.get("margen") or 0)
+    tope = float(p.get("tope_incluido_usd") or 0)
+
+    def cuerpo(usuario):
+        datos = {"usuario": usuario, "plan": nombre, "precio": vista.usd_entero(precio),
+                 "margen": idiomas.numero(margen, 2), "tope": gastos.formatear(tope)}
+        if creado:
+            return gettext("%(usuario)s creó el plan «%(plan)s»: %(precio)s al mes, margen %(margen)s, tope de lo "
+                           "incluido %(tope)s.", **datos)
+        return gettext("%(usuario)s editó el plan «%(plan)s»: ahora %(precio)s al mes, margen %(margen)s, tope de lo "
+                       "incluido %(tope)s.", **datos)
+    _avisar_control("", cuerpo)
 
 
 @bp.post("/admin/cobros/planes/<int(max=9223372036854775807):plan_id>/activo")
@@ -1155,13 +1379,18 @@ def admin_plan_activar(cliente):
     if not libro.cobra(cliente):
         flash(gettext("%(proyecto)s no cobra: prende «Cobrar» antes de activarle un plan.", proyecto=nombre), "error")
         return _volver_suscripcion(cliente)
+    # Revisión de PND-347 (guardian-gasto y auditor-seguridad, 2026-10-15): activar a mano acredita la bolsa del
+    # plan sin que Wompi cobre nada, como una recarga manual: la misma clave otra vez y el aviso a todos los admins.
+    if not _clave_para_mover_plata():
+        return _volver_suscripcion(cliente)
     ciclo = request.form.get("ciclo") or ""
+    nota = " ".join((request.form.get("nota") or "").split())[:300]
     try:
-        r = planes.activar_manual(cliente, request.form.get("plan_id"), ciclo, session.get("usuario"),
-                                  nota=" ".join((request.form.get("nota") or "").split())[:300])
+        r = planes.activar_manual(cliente, request.form.get("plan_id"), ciclo, session.get("usuario"), nota=nota)
     except planes.ErrorPlan as e:
         flash(str(e), "error")
         return _volver_suscripcion(cliente)
+    _avisar_plan_a_mano(cliente, nombre, r.get("pago_id"), nota)
     if r.get("periodo_id"):
         flash(gettext("Plan de %(proyecto)s activado a mano: el periodo quedó abierto y su saldo acreditado.",
                       proyecto=nombre), "ok")
@@ -1169,6 +1398,19 @@ def admin_plan_activar(cliente):
         flash(gettext("Pago a mano anotado en %(proyecto)s: extiende lo pagado y su periodo se abre cuando "
                       "termine el actual.", proyecto=nombre), "ok")
     return _volver_suscripcion(cliente)
+
+
+def _avisar_plan_a_mano(cliente, nombre, pago_id, nota):
+    """El aviso a todos los admins de un plan activado a mano (lo que pagó ese pago, quién y la nota)."""
+    usuario, nota = str(session.get("usuario") or ""), nota or "—"
+    with db.conectar() as con:
+        usd = con.execute(sa.select(db.pago_plan.c.usd).where(db.pago_plan.c.id == int(pago_id or 0))).scalar()
+    _avisar_a_los_admins("saldo_manual", cliente,
+                         lambda: gettext("Saldo movido a mano en %(proyecto)s", proyecto=nombre),
+                         lambda: gettext("%(usuario)s activó a mano un plan de %(monto)s en %(proyecto)s (sin cobro de "
+                                         "Wompi). Nota: %(nota)s. Si no fuiste tú ni otro admin, cambia la clave.",
+                                         usuario=usuario, monto=vista.usd_entero(usd or 0), proyecto=nombre,
+                                         nota=nota))
 
 
 @bp.post("/admin/cobros/<cliente>/plan/cancelar")
@@ -1228,6 +1470,12 @@ _RESUELTO = {
     "aprobado_tras_final": idiomas.N_("Wompi dice que ese cobro se aprobó, pero el pago ya estaba cerrado (rechazado, "
                                       "con error o anulado): no se acreditó nada. Míralo en el panel de Wompi y "
                                       "devuélvelo si se cobró de más."),
+    # PND-340
+    "anulado_sin_acreditar": idiomas.N_("Wompi anuló esa transacción antes de que la aplicáramos: el pago quedó anulado, "
+                                        "no se acreditó nada y la renovación automática quedó detenida."),
+    "ya_anulada": idiomas.N_("Wompi ya había anulado ese pago: no se acreditó nada."),
+    "anulado": idiomas.N_("Wompi anuló ese pago: lo que quedaba de su bolsa venció y la renovación automática quedó "
+                          "detenida."),
 }
 
 

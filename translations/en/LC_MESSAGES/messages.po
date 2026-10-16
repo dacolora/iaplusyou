@@ -189,6 +189,14 @@ msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde
 msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s). From now on those items are charged at the member price."
 
 #, python-format
+msgid "%(cliente)s: Wompi anuló un pago de plan (%(referencia)s) antes de que lo aplicáramos. No se acreditó nada y una aprobación que llegue después no lo suma. La renovación automática quedó detenida: no se volverá a cobrar la tarjeta."
+msgstr "%(cliente)s: Wompi voided a plan payment (%(referencia)s) before we applied it. Nothing was credited and an approval that arrives later will not add it. Automatic renewal is stopped: the card will not be charged again."
+
+#, python-format
+msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s) y su evento no llegó: lo encontramos revisando los pagos aprobados. La renovación automática quedó detenida y lo que quedaba de la bolsa de ese pago venció. Revisa en el panel de Wompi la URL de eventos."
+msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s) and its event never arrived: we found it while checking approved payments. Automatic renewal is stopped and what was left of that payment's plan balance expired. Check the events URL in the Wompi dashboard."
+
+#, python-format
 msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). La renovación automática quedó detenida hasta que actúes: no se volverá a cobrar la tarjeta. Lo que quedaba de la bolsa de ese pago venció y, si era anual, los meses que faltan ya no se abren. Si fue un contracargo, revisa lo que el proyecto ya había gastado de esa bolsa."
 msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). Automatic renewal is stopped until you act: the card will not be charged again. What was left of that payment's plan balance expired and, if it was yearly, the remaining months will not open. If it was a chargeback, check what the project had already spent from that balance."
 
@@ -1989,6 +1997,50 @@ msgid "%(traidos)s de %(tope)s"
 msgstr "%(traidos)s of %(tope)s"
 
 #, python-format
+msgid "%(usuario)s aceptó la TRM de hoy (%(valor)s COP por dólar): es la referencia nueva de la banda. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s accepted today's TRM (%(valor)s COP per dollar): it is the new reference for the band. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s activó a mano un plan de %(monto)s en %(proyecto)s (sin cobro de Wompi). Nota: %(nota)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s activated a %(monto)s plan by hand in %(proyecto)s (no Wompi charge). Note: %(nota)s. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s anotó un ajuste de %(monto)s en %(proyecto)s. Nota: %(nota)s. En las últimas 24 horas van %(hoy)s sumados a mano, con un tope de %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s recorded an adjustment of %(monto)s in %(proyecto)s. Note: %(nota)s. In the last 24 hours %(hoy)s has been added by hand, with a cap of %(tope)s. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s anotó una recarga manual de %(monto)s en %(proyecto)s. Nota: %(nota)s. En las últimas 24 horas van %(hoy)s sumados a mano, con un tope de %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s recorded a manual top-up of %(monto)s in %(proyecto)s. Note: %(nota)s. In the last 24 hours %(hoy)s has been added by hand, with a cap of %(tope)s. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s cambió %(proyecto)s: %(cambios)s."
+msgstr "%(usuario)s changed %(proyecto)s: %(cambios)s."
+
+#, python-format
+msgid "%(usuario)s creó el plan «%(plan)s»: %(precio)s al mes, margen %(margen)s, tope de lo incluido %(tope)s."
+msgstr "%(usuario)s created the plan “%(plan)s”: %(precio)s per month, markup %(margen)s, included cap %(tope)s."
+
+#, python-format
+msgid "%(usuario)s editó el plan «%(plan)s»: ahora %(precio)s al mes, margen %(margen)s, tope de lo incluido %(tope)s."
+msgstr "%(usuario)s edited the plan “%(plan)s”: now %(precio)s per month, markup %(margen)s, included cap %(tope)s."
+
+#, python-format
+msgid "%(usuario)s fijó la tasa de referencia de la TRM en %(valor)s COP por dólar. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s set the TRM reference rate to %(valor)s COP per dollar. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s puso el margen global en %(margen)s."
+msgstr "%(usuario)s set the global markup to %(margen)s."
+
+#, python-format
+msgid "%(usuario)s puso el saldo de bienvenida en %(monto)s."
+msgstr "%(usuario)s set the welcome balance to %(monto)s."
+
+#, python-format
+msgid "%(usuario)s puso el tope diario de lo que se suma a mano en %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s set the daily cap for what is added by hand to %(tope)s. If it wasn't you or another admin, change the password."
+
+#, python-format
 msgid "%(valor)s %(moneda)s por resultado"
 msgstr "%(valor)s %(moneda)s per result"
 
@@ -2305,8 +2357,8 @@ msgid "<strong>Faltan llaves de Bold.</strong> Sin BOLD_LLAVE_IDENTIDAD y BOLD_L
 msgstr "<strong>Bold keys are missing.</strong> Without BOLD_LLAVE_IDENTIDAD and BOLD_LLAVE_SECRETA in the server’s <code>.env</code> there are no online top-ups: projects can only be topped up manually from here."
 
 #, python-format
-msgid "<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la última aceptada (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes)."
-msgstr "<strong>Today's exchange rate was not used.</strong> The official rate (TRM) from datos.gov.co (%(hoy)s COP per dollar) moved more than 8 %% from the last accepted one (%(antes)s COP per dollar). Until you accept it, nothing is charged in pesos (neither Wompi top-ups nor plans)."
+msgid "<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la tasa de referencia (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes). Aceptarla la vuelve la referencia nueva."
+msgstr "<strong>Today's exchange rate was not used.</strong> The datos.gov.co TRM (%(hoy)s COP per dollar) moved more than 8 %% from the reference rate (%(antes)s COP per dollar). Until you accept it, nothing is charged in pesos (Wompi top-ups or plans). Accepting it makes it the new reference."
 
 msgid "<strong>Llaves de pruebas de Wompi en un servidor que no es local.</strong> Aquí no valen: no se cobran planes ni recargas con Wompi y sus eventos no se aceptan. Pon en el <code>.env</code> del servidor las llaves de producción de Wompi."
 msgstr "<strong>Wompi test keys on a server that is not local.</strong> They do not work here: no plans or top-ups are charged with Wompi and its events are not accepted. Put the Wompi production keys in the server <code>.env</code>."
@@ -3163,6 +3215,9 @@ msgstr "Apify (Niche: reviews/comments · Swipe file: Ad Library)"
 msgid "Apify aceptó el token."
 msgstr "Apify accepted the token."
 
+msgid "Apify devolvió el uso del mes sin sus cifras."
+msgstr "Apify returned the month's usage without its figures."
+
 #, python-format
 msgid "Apify no aceptó el token (%(codigo)s)."
 msgstr "Apify didn't accept the token (%(codigo)s)."
@@ -3177,6 +3232,10 @@ msgstr "Apify didn't start the run (%(codigo)s)."
 #, python-format
 msgid "Apify no arrancó la corrida: %(motivo)s"
 msgstr "Apify did not start the run: %(motivo)s"
+
+#, python-format
+msgid "Apify no devolvió el uso del mes (%(codigo)s)."
+msgstr "Apify did not return the month's usage (%(codigo)s)."
 
 #, python-format
 msgid "Apify no devolvió los ids de la corrida (corrida %(corrida)s, dataset %(dataset)s); revísala en console.apify.com."
@@ -3208,6 +3267,10 @@ msgstr "Apify answered without readable data when starting the run (%(codigo)s);
 #, python-format
 msgid "Apify terminó %(estado)s; los resultados son parciales (corrida %(corrida)s)."
 msgstr "Apify finished %(estado)s; results are partial (run %(corrida)s)."
+
+#, python-format
+msgid "Apify va en el %(pct)s %% de su tope del mes"
+msgstr "Apify is at %(pct)s %% of its monthly cap"
 
 #, python-format
 msgid "Apify: %(estado)s · corrida %(corrida)s"
@@ -4052,6 +4115,9 @@ msgstr "Changing it creates a new version with the same clips, without calling C
 msgid "Cambio de tarjeta"
 msgstr "Card change"
 
+msgid "Cambio de un control de plata"
+msgstr "A money control changed"
+
 msgid "Cambio del NVP en puntos porcentuales: días completos contra el mismo número de días anteriores"
 msgstr "Change in NVP in percentage points: full days against the same number of previous days"
 
@@ -4063,6 +4129,15 @@ msgstr "Unsaved changes…"
 
 msgid "Cambios sin producir →"
 msgstr "Unproduced changes →"
+
+msgid "Cambió el tope diario de recargas manuales"
+msgstr "The daily cap for manual top-ups changed"
+
+msgid "Cambió la tasa de referencia de la TRM"
+msgstr "The TRM reference rate changed"
+
+msgid "Cambió un control de plata"
+msgstr "A money control changed"
 
 msgid "Camisa manga corta"
 msgstr "Short-sleeve shirt"
@@ -4856,6 +4931,10 @@ msgstr "With this split, Meta's daily minimum (%(minimo)s a day) is not reached 
 msgid "Con esto se publican los anuncios (cuenta publicitaria) y el contenido orgánico (Página y su Instagram). Se puede cambiar después con \"Desconectar\"."
 msgstr "This is what publishes the ads (ad account) and the organic content (Page and its Instagram). You can change it later with “Disconnect”."
 
+#, python-format
+msgid "Con esto, lo sumado a mano en las últimas 24 horas llegaría a %(total)s y el tope es %(tope)s. Súbelo en /admin/cobros (te pedimos la clave) o espera unas horas."
+msgstr "With this, what was added by hand in the last 24 hours would reach %(total)s and the cap is %(tope)s. Raise it in /admin/cobros (we ask for your password) or wait a few hours."
+
 msgid "Con imagen"
 msgstr "With an image"
 
@@ -5080,6 +5159,9 @@ msgstr "Confirmed"
 
 msgid "Confirmar guion"
 msgstr "Confirm script"
+
+msgid "Confirmar mi clave"
+msgstr "Confirm my password"
 
 msgid "Confirmar mi correo"
 msgstr "Confirm my email"
@@ -6259,6 +6341,9 @@ msgstr "Days of its daily budget it must have spent"
 msgid "Dólares (hasta %(max)s)"
 msgstr "Dollars (up to %(max)s)"
 
+msgid "Dólares cada 24 horas"
+msgstr "Dollars per 24 hours"
+
 msgid "Dónde"
 msgstr "Where"
 
@@ -6950,6 +7035,10 @@ msgid "El precio cambió desde que lo viste: revisa el nuevo y vuelve a confirma
 msgstr "The price changed since you saw it: check the new one and confirm again."
 
 #, python-format
+msgid "El precio cambió desde que se propuso: ahora cuesta %(precio)s. Revísalo y vuelve a aprobar."
+msgstr "The price changed since it was proposed: it now costs %(precio)s. Review it and approve again."
+
+#, python-format
 msgid "El precio cambió: ahora es %(precio)s. Revisa y vuelve a pedirlo."
 msgstr "The price changed: it's now %(precio)s. Check it and ask again."
 
@@ -7209,6 +7298,10 @@ msgstr "The token can't see the Business %(business)s (%(error)s). Check that th
 
 msgid "El tope de lo incluido debe ser 0 o más dólares"
 msgstr "The included cap must be 0 or more dollars"
+
+#, python-format
+msgid "El tope diario va de %(min)s a %(max)s, con hasta 2 decimales."
+msgstr "The daily cap goes from %(min)s to %(max)s, with up to 2 decimals."
 
 msgid "El umbral no puede ser negativo."
 msgstr "The threshold cannot be negative."
@@ -7997,6 +8090,9 @@ msgstr "That image isn't in this version."
 
 msgid "Esa marca no existe en Atria."
 msgstr "That brand doesn't exist in Atria."
+
+msgid "Esa no es tu clave: no se cambió nada."
+msgstr "That is not your password: nothing changed."
 
 msgid "Esa opción todavía no está disponible: Creatv está terminando de activarla."
 msgstr "That option isn't available yet: Creatv is still finishing activating it."
@@ -10329,6 +10425,12 @@ msgstr "Save welcome balance"
 msgid "Guardar sonido al crear"
 msgstr "Save sound when creating"
 
+msgid "Guardar tasa de referencia"
+msgstr "Save reference rate"
+
+msgid "Guardar tope diario"
+msgstr "Save daily cap"
+
 msgid "Guion"
 msgstr "Script"
 
@@ -11609,6 +11711,10 @@ msgstr "The task failed"
 msgid "La tarea se interrumpió antes de llegar a esta plataforma; reintenta desde el panel."
 msgstr "The task was interrupted before reaching this platform; retry from the panel."
 
+#, python-format
+msgid "La tasa de referencia va de %(min)s a %(max)s pesos por dólar."
+msgstr "The reference rate goes from %(min)s to %(max)s pesos per dollar."
+
 msgid "La temporada necesita un nombre."
 msgstr "The season needs a name."
 
@@ -11983,6 +12089,9 @@ msgstr "Done: Creatv received your request and will email you once it's connecte
 #, python-format
 msgid "Listo: Creatv ya gestiona tu Meta con %(cuenta)s · %(pagina)s."
 msgstr "Done: Creatv now manages your Meta with %(cuenta)s · %(pagina)s."
+
+msgid "Listo: durante 10 minutos no te volvemos a pedir la clave."
+msgstr "Done: we won't ask for your password again for 10 minutes."
 
 msgid "Listo: edítalo a tu gusto antes de generar."
 msgstr "Done: edit it to your liking before generating."
@@ -13873,6 +13982,9 @@ msgstr "We couldn't create the project. Please try again in a moment."
 msgid "No pudimos hablar con Nequi. Intenta de nuevo en un rato."
 msgstr "We could not reach Nequi. Try again in a while."
 
+msgid "No pudimos leer el gasto en este momento. Intenta de nuevo en unos minutos."
+msgstr "We couldn't read the spend right now. Try again in a few minutes."
+
 msgid "No pudimos leer la tasa de cambio; intenta en unos minutos"
 msgstr "We couldn't read the exchange rate; try again in a few minutes"
 
@@ -14899,6 +15011,12 @@ msgstr "For app installs use “New experiment”."
 msgid "Para lanzar y probar piezas nuevas: Probar anuncios →"
 msgstr "To launch and test new pieces: Test ads →"
 
+msgid "Para mover plata a mano escribe tu clave otra vez (vale 10 minutos)."
+msgstr "To move money by hand, type your password again (it lasts 10 minutes)."
+
+msgid "Para prender o apagar «Cobrar», cambiar el pospago, un margen, el saldo de bienvenida o un plan, o mover saldo a mano, escribe tu clave: vale 10 minutos."
+msgstr "To turn “Charge usage” on or off, change postpaid, a markup, the welcome balance or a plan, or move balance by hand, type your password: it lasts 10 minutes."
+
 msgid "Para probar ángulos nuevos cada semana y encontrar a tus ganadores."
 msgstr "To test new angles every week and find your winners."
 
@@ -15241,6 +15359,9 @@ msgstr "Development period"
 
 msgid "Perú"
 msgstr "Peru"
+
+msgid "Pesos por dólar"
+msgstr "Pesos per dollar"
 
 msgid "Peticiones"
 msgstr "Requests"
@@ -17284,6 +17405,13 @@ msgstr "Insufficient balance: this costs ≈ %(precio)s and you have %(disponibl
 msgid "Saldo insuficiente: tienes %(disponible)s disponibles. Recarga para seguir."
 msgstr "Insufficient balance: you have %(disponible)s available. Top up to continue."
 
+msgid "Saldo movido a mano"
+msgstr "Balance moved by hand"
+
+#, python-format
+msgid "Saldo movido a mano en %(proyecto)s"
+msgstr "Balance moved by hand in %(proyecto)s"
+
 msgid "Saldo propio"
 msgstr "Own balance"
 
@@ -17409,6 +17537,9 @@ msgstr "Stopped getting more ads: Atria's monthly quota ran out."
 #, python-format
 msgid "Se detuvo la investigación de «%(estudio)s»"
 msgstr "The research of “%(estudio)s” was stopped"
+
+msgid "Se dio por colgada: llevaba demasiado tiempo en curso. Vuelve a intentar."
+msgstr "It was treated as stuck: it had been running for too long. Try again."
 
 #, python-format
 msgid "Se ejecutan las %(n)s propuestas en orden. Las que escalan, derivan, rescatan o activan gastan; las de publicar orgánico publican en tus redes con el texto tal como está. ¿Seguimos?"
@@ -17710,6 +17841,9 @@ msgstr "If the person paid and it was not credited, use «Search in Wompi»: it 
 
 msgid "Si lo eliges, Claude escribe con ese nivel en ideas, guiones y adaptaciones de este producto."
 msgstr "If you choose it, Claude writes at that level in this product's ideas, scripts and adaptations."
+
+msgid "Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "If it wasn't you or another admin, change the password."
 
 msgid "Si no quieres cerrarla, revísala en Meta; si sí, quítala de las cuentas del proyecto."
 msgstr "If you don’t want to close it, check it in Meta; if you do, remove it from the project’s accounts."
@@ -18648,6 +18782,13 @@ msgstr "Exchange rate accepted: %(valor)s COP per dollar. Charges in pesos resum
 msgid "Tasa de conversión"
 msgstr "Conversion rate"
 
+msgid "Tasa de referencia de la TRM"
+msgstr "TRM reference rate"
+
+#, python-format
+msgid "Tasa de referencia guardada: %(valor)s COP por dólar."
+msgstr "Reference rate saved: %(valor)s COP per dollar."
+
 #, python-format
 msgid "Te avisamos cuando baje de %(umbral)s."
 msgstr "We will let you know when it drops below %(umbral)s."
@@ -19276,6 +19417,13 @@ msgstr "Included cap in US$ of cost per month"
 msgid "Tope del presupuesto diario al escalar (en la moneda de la cuenta)"
 msgstr "Daily budget cap when scaling (in the account currency)"
 
+msgid "Tope diario de recargas manuales"
+msgstr "Daily cap for manual top-ups"
+
+#, python-format
+msgid "Tope diario de recargas manuales guardado: %(tope)s."
+msgstr "Daily cap for manual top-ups saved: %(tope)s."
+
 #, python-format
 msgid "Tope usado: %(pct)s %%"
 msgstr "Cap used: %(pct)s %%"
@@ -19593,6 +19741,12 @@ msgstr "Your access expires after 60 days: when it does, this card will say “M
 msgid "Tu bandeja de referencias cambió (alguien más del proyecto la usó o la vació). Revisa las referencias y vuelve a generar — no se cobró nada."
 msgstr "Your reference tray changed (someone else on the project used or emptied it). Check the references and generate again — nothing was charged."
 
+msgid "Tu clave"
+msgstr "Your password"
+
+msgid "Tu clave (la pedimos otra vez para mover saldo a mano; vale 10 minutos)"
+msgstr "Your password (we ask for it again to move balance by hand; it lasts 10 minutes)"
+
 msgid "Tu conexión anterior se restauró."
 msgstr "Your previous connection was restored."
 
@@ -19666,6 +19820,9 @@ msgstr "Your plan ended"
 
 msgid "Tu plan terminó. Tu saldo propio sigue disponible y tus generaciones se cobran a la carta. Puedes volver a suscribirte en Configuración › Plan."
 msgstr "Your plan ended. Your own balance is still available and your generations are charged pay-as-you-go. You can subscribe again in Settings › Plan."
+
+msgid "Tu propio acceso lo desbloquea otro administrador, o espera unos minutos."
+msgstr "Another administrator has to unlock your own access, or wait a few minutes."
 
 #, python-format
 msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar tus piezas como anuncios en «Probar anuncios» y publicar contenido."
@@ -20030,6 +20187,10 @@ msgid "Una recarga de %(cliente)s se acreditó sin su evento de Wompi"
 msgstr "A top-up of %(cliente)s was credited without its Wompi event"
 
 #, python-format
+msgid "Una recarga de %(monto)s con %(pasarela)s lleva más de una hora pendiente. Si ya pagaste, la seguimos revisando y la sumamos apenas %(pasarela)s lo confirme; si no, genera un link nuevo en Configuración › Saldo y recargas."
+msgstr "A %(monto)s top-up with %(pasarela)s has been pending for more than an hour. If you already paid, we keep checking and add it as soon as %(pasarela)s confirms it; if not, create a new link in Settings › Balance and top-ups."
+
+#, python-format
 msgid "Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."
 msgstr "A %(monto)s top-up with %(pasarela)s is still pending. If you already paid, it is credited on its own in a few minutes; if not, create a new link in Settings › Balance and top-ups."
 
@@ -20116,6 +20277,13 @@ msgstr "Use “%(titular)s” in a sprint"
 #, python-format
 msgid "Usaste %(gastado)s de %(credito)s (%(pct)s %%)."
 msgstr "You used %(gastado)s of %(credito)s (%(pct)s %%)."
+
+#, python-format
+msgid "Uso de Apify: %(usado)s de %(tope)s"
+msgstr "Apify usage: %(usado)s of %(tope)s"
+
+msgid "Uso de Apify: sin lectura"
+msgstr "Apify usage: no reading"
 
 msgid "Usuario"
 msgstr "Username"
@@ -20205,6 +20373,10 @@ msgstr "Purchase value per Meta divided by spend"
 
 msgid "Valor de compras según Meta; debajo, el gasto del anuncio ese día y su retorno."
 msgstr "Purchase value per Meta; below, the ad's spend that day and its return."
+
+#, python-format
+msgid "Van %(usado)s de %(tope)s y el ciclo termina el %(hasta)s. Al llegar al tope, Nicho y los barridos de referentes con Apify paran sin cobrar. Si no alcanza, o si 10 reseñas por producto se quedan cortas, sube la cuenta a Starter en console.apify.com."
+msgstr "%(usado)s of %(tope)s used, and the cycle ends on %(hasta)s. At the cap, Niche and the reference sweeps that use Apify stop without charging. If it is not enough, or 10 reviews per product fall short, upgrade the account to Starter at console.apify.com."
 
 msgid "Variable"
 msgstr "Variable"
@@ -20796,6 +20968,12 @@ msgstr "Wompi opens its own window for the card details: the number never goes t
 msgid "Wompi anuló el pago de la recarga %(ref)s de %(cliente)s (%(monto)s) antes de que lo acreditáramos: su saldo no cambió. Revisa en el panel de Wompi si hay otra transacción aprobada con esa referencia (otra pestaña); la periódica la busca durante 26 horas y te avisa si la encuentra."
 msgstr "Wompi voided the payment for top-up %(ref)s for %(cliente)s (%(monto)s) before we credited it: its balance did not change. Check in the Wompi dashboard whether there is another approved transaction with that reference (another tab); the periodic check looks for it for 26 hours and lets you know if it finds one."
 
+msgid "Wompi anuló esa transacción antes de que la aplicáramos: el pago quedó anulado, no se acreditó nada y la renovación automática quedó detenida."
+msgstr "Wompi voided that transaction before we applied it: the payment is voided, nothing was credited and automatic renewal is stopped."
+
+msgid "Wompi anuló ese pago: lo que quedaba de su bolsa venció y la renovación automática quedó detenida."
+msgstr "Wompi voided that payment: what was left of its plan balance expired and automatic renewal is stopped."
+
 msgid "Wompi anuló este pago antes de que lo sumáramos: tu saldo no cambió."
 msgstr "Wompi voided this payment before we added it: your balance did not change."
 
@@ -20931,6 +21109,9 @@ msgstr "Wompi has not confirmed the payment yet; we will let you know when it ar
 
 msgid "Wompi todavía no resuelve esa transacción: guardamos su id y se aplica cuando responda."
 msgstr "Wompi has not resolved that transaction yet: we saved its id and it is applied when Wompi answers."
+
+msgid "Wompi ya había anulado ese pago: no se acreditó nada."
+msgstr "Wompi had already voided that payment: nothing was credited."
 
 msgid "WooCommerce"
 msgstr "WooCommerce"
@@ -21379,6 +21560,9 @@ msgstr "ad by ad, winners and AI evaluation"
 
 msgid "anuncios"
 msgstr "ads"
+
+msgid "apagó «Cobrar»"
+msgstr "turned “Charge usage” off"
 
 msgid "aprobada"
 msgstr "approved"
@@ -22863,6 +23047,9 @@ msgstr "format families"
 msgid "le faltan %(n)s impresiones para que el motor decida"
 msgstr "%(n)s impressions to go before the engine decides"
 
+msgid "le quitó el margen propio (usa el global)"
+msgstr "removed its own markup (it uses the global one)"
+
 #, python-format
 msgid "lectura · %(familia)s"
 msgstr "reading · %(familia)s"
@@ -22886,6 +23073,13 @@ msgstr "ready to generate"
 msgid "lo grave primero"
 msgstr "most serious first"
 
+msgid "lo pasó a pospago"
+msgstr "moved it to postpaid"
+
+#, python-format
+msgid "lo que se puede sumar a mano en 24 horas, entre recargas manuales y ajustes positivos de todos los proyectos. En las últimas 24 horas van %(hoy)s de %(tope)s."
+msgstr "what can be added by hand in 24 hours, counting manual top-ups and positive adjustments across all projects. In the last 24 hours: %(hoy)s of %(tope)s."
+
 #, python-format
 msgid "lo que se vende cada mes; el margen de miembro reemplaza al margen a la carta (%(margen)s) mientras el plan está pagado"
 msgstr "what is sold each month; the member markup replaces the pay-as-you-go markup (%(margen)s) while the plan is paid"
@@ -22901,6 +23095,9 @@ msgstr "the next version uses it"
 
 msgid "lo visual no da creencia"
 msgstr "the visuals don't build belief"
+
+msgid "lo volvió a prepago"
+msgstr "moved it back to prepaid"
 
 #, python-format
 msgid "los avatares costarían %(costo)s y quedan %(tope)s aprobados: genera con el botón cuando quieras"
@@ -23387,6 +23584,9 @@ msgstr "post %(n)s of %(total)s"
 msgid "precio no disponible"
 msgstr "price not available"
 
+msgid "prendió «Cobrar»"
+msgstr "turned “Charge usage” on"
+
 msgid "presencia marca"
 msgstr "brand presence"
 
@@ -23522,6 +23722,10 @@ msgstr "dotted = experiment average"
 
 msgid "punteadas: días en que el motor actuó (pasa el mouse para ver qué hizo)"
 msgstr "dotted: days the engine acted (hover to see what it did)"
+
+#, python-format
+msgid "puso su margen propio en %(margen)s"
+msgstr "set its own markup to %(margen)s"
 
 msgid "pícnic"
 msgstr "picnic"
@@ -24175,6 +24379,14 @@ msgstr "a beat in clip %(i)s doesn't describe what's shown"
 
 msgid "un solo token de usuario del sistema, cifrado en el servidor; nunca vuelve a pantalla"
 msgstr "a single system-user token, encrypted on the server; it never comes back to the screen"
+
+#, python-format
+msgid "una TRM de datos.gov.co que se aleje más de 8 %% de esta no se usa hasta que la aceptes. Hoy: %(valor)s COP por dólar, fijada por %(usuario)s el %(fecha)s."
+msgstr "a datos.gov.co TRM more than 8 %% away from this one is not used until you accept it. Now: %(valor)s COP per dollar, set by %(usuario)s on %(fecha)s."
+
+#, python-format
+msgid "una TRM de datos.gov.co que se aleje más de 8 %% de esta no se usa hasta que la aceptes. Todavía no hay: la primera TRM aceptada queda como referencia."
+msgstr "a datos.gov.co TRM more than 8 %% away from this one is not used until you accept it. There is none yet: the first accepted TRM becomes the reference."
 
 msgid "una por línea; con el link de su Ad Library si lo tienes"
 msgstr "one per line; with its Ad Library link if you have it"
