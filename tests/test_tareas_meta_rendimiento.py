@@ -539,7 +539,9 @@ def _jpeg():
 @pytest.fixture()
 def evaluacion(hf, monkeypatch):
     """Una evaluación «en_cola» de hf con dos anuncios de la cuenta 1 (uno con miniatura de Meta) y una
-    recomendación; R2 y la descarga de la miniatura son falsas."""
+    recomendación; R2 y la descarga de la miniatura son falsas. La cuenta 1 está elegida: una evaluación de una cuenta
+    quitada no va a Claude (quien orquesta, 2026-10-15)."""
+    cuentas.elegir("hf", [{"id": "act_1", "name": "N"}])
     datos.guardar_objetos("hf", "act_1", [{"nivel": "anuncio", "objeto_id": "1001", "nombre": "Video gana",
                                            "estado": "ACTIVE", "miniatura_url": "https://scontent.xx.fbcdn.net/g.jpg"}])
     m = {k: 1.0 for k in tw_analisis.CAMPOS_M}
@@ -614,6 +616,32 @@ def test_evaluar_guarda_el_resultado_las_miniaturas_en_r2_y_el_gasto_real(evalua
     assert evaluacion["borradas"] == []                  # con la fila en su lugar, las miniaturas se quedan
     assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(usd), "referencia": f"meta_eval:{eid}:t7",
                                "proveedor": "anthropic"}]
+
+
+@pytest.mark.parametrize("cuando", ["antes", "copiando_miniaturas"])
+def test_evaluar_de_una_cuenta_quitada_no_va_a_claude_ni_cobra(evaluacion, monkeypatch, cuando):
+    """Quien orquesta, 2026-10-15: la evaluación de una cuenta quitada no se muestra ni se manda a Claude. Si se quita
+    antes de que la tarea empiece o mientras copia las miniaturas, queda en error en palabras, sin llamada, sin gasto
+    y sin las miniaturas que alcanzó a copiar. No se borra: si la cuenta vuelve, reaparece (en error)."""
+    eid = evaluacion["eid"]
+    monkeypatch.setattr(analisis, "_llamar", lambda *a, **k: pytest.fail("no debía llamar a Claude"))
+    if cuando == "antes":
+        cuentas.elegir("hf", [])
+    else:
+        copiar = tw_analisis.copiar_miniaturas
+
+        def _y_se_quita(*a, **k):
+            r = copiar(*a, **k)
+            cuentas.elegir("hf", [])
+            return r
+        monkeypatch.setattr(tw_analisis, "copiar_miniaturas", _y_se_quita)
+    texto = t.meta_rend_evaluar(_tarea_eval(eid))
+    assert "ya no está en el proyecto" in texto and _gastos_eval() == []
+    fila = datos.evaluacion("hf", eid, solo_visibles=False)
+    assert fila["estado"] == "error" and "ya no está en el proyecto" in fila["error"]
+    assert datos.evaluacion("hf", eid) is None
+    if cuando == "copiando_miniaturas":
+        assert evaluacion["subidas"] and set(evaluacion["subidas"]) <= set(evaluacion["borradas"])
 
 
 def test_evaluar_con_respuesta_invalida_dos_veces_queda_en_error_y_anota_lo_pagado(evaluacion, monkeypatch):

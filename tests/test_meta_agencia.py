@@ -165,7 +165,7 @@ def test_desconectar_borra_kv_y_desasigna_los_proyectos(entorno, base_temporal):
     ma.asignar("acme", "act_1", "p1")
     assert mc.estado("acme")["estado"] == "conectado"
     r = ma.desconectar()
-    assert r == {"habia": True, "desasignados": 1}
+    assert r == {"habia": True, "desasignados": 1, "fallos": {}}
     assert _kv_crudo(base_temporal) is None
     assert not ma.conectada() and ma.publica() is None
     # el proyecto vuelve a modo propia (sin respaldo previo: sin meta.json)
@@ -176,7 +176,7 @@ def test_desconectar_borra_kv_y_desasigna_los_proyectos(entorno, base_temporal):
         mc.credenciales_ads("acme")
     assert ma.proyectos_asignados() == {}
     # segunda vez: no había nada que borrar ni nadie que desasignar
-    assert ma.desconectar() == {"habia": False, "desasignados": 0}
+    assert ma.desconectar() == {"habia": False, "desasignados": 0, "fallos": {}}
 
 
 def test_desconectar_restaura_el_respaldo_propio_de_cada_proyecto(entorno):
@@ -186,7 +186,7 @@ def test_desconectar_restaura_el_respaldo_propio_de_cada_proyecto(entorno):
     ma.conectar(TOKEN, BID)
     ma.asignar("acme", "act_1", "p1")
     ma.asignar("otro", "act_2")
-    assert ma.desconectar() == {"habia": True, "desasignados": 2}
+    assert ma.desconectar() == {"habia": True, "desasignados": 2, "fallos": {}}
     assert mc.modo("acme") == "propia" and mc.cargar("acme") == propia
     assert mc.modo("otro") == "propia" and mc.cargar("otro") is None
 
@@ -477,11 +477,11 @@ def test_asignar_guarda_respaldo_propio_y_desasignar_lo_restaura(entorno):
     datos = _meta_json(entorno, "acme")
     assert datos["propia_respaldo"] == propia and datos["ad_account_id"] == "act_2"
     # desasignar restaura lo propio tal cual
-    assert ma.desasignar("acme") is True
+    assert ma.desasignar("acme")
     assert mc.modo("acme") == "propia"
     assert _meta_json(entorno, "acme") == propia
     assert mc.cargar("acme")["token"] == "TOKEN-PROPIO"
-    assert ma.desasignar("acme") is False
+    assert not ma.desasignar("acme")
     assert ma.conectada()   # la agencia sigue conectada
 
 
@@ -491,7 +491,7 @@ def test_desasignar_sin_respaldo_borra_meta_json(entorno):
     ma.asignar("acme", "act_1", "p1")
     mc.estado("acme")
     assert "acme" in mc._cache_estado
-    assert ma.desasignar("acme") is True
+    assert ma.desasignar("acme")
     assert _meta_json(entorno, "acme") is None
     assert "acme" not in mc._cache_estado
     assert mc.estado("acme")["estado"] == "sin_conectar" and mc.modo("acme") == "propia"
@@ -518,7 +518,7 @@ def test_borrar_en_agencia_rechaza_hay_que_desasignar(entorno):
         mc.borrar("acme")
     assert mc.modo("acme") == "agencia" and mc.cargar("acme")["token"] == TOKEN
     # el camino correcto (Task 2 lo expone en una ruta admin) sigue andando
-    assert ma.desasignar("acme") is True
+    assert ma.desasignar("acme")
     assert mc.modo("acme") == "propia"
     assert ma.proyectos_asignados().keys() == {"otro"}
     assert mc.cargar("otro")["token"] == TOKEN
@@ -659,7 +659,7 @@ def test_modo_propia_no_cambia_nada(entorno):
     assert mc.cargar("acme") == propia
     assert mc.credenciales_ads("acme")["token"] == "TOKEN-PROPIO"
     assert mc.estado("acme")["detalle"]["modo"] == "propia"
-    assert mc.borrar("acme") is True and _meta_json(entorno, "acme") is None
+    assert mc.borrar("acme") and _meta_json(entorno, "acme") is None
 
 
 # ---------- solicitudes de clientes (spec §2.4) ----------
@@ -806,4 +806,4 @@ def test_asignar_y_desasignar_cierran_la_solicitud(entorno):
     ma.asignar("acme", "act_9", None, asignado_por="admin")
     assert ma.solicitud("acme") is None
     ma.solicitar("acme", "777")
-    assert ma.desasignar("acme") is True and ma.solicitud("acme") is None
+    assert ma.desasignar("acme") and ma.solicitud("acme") is None

@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 import cuentas_lanzamiento
 import db
 import idiomas
-from meta_rendimiento import cuentas, datos, desgloses, graph, tasas
+from meta_rendimiento import cuentas, datos, desgloses, graph, miniaturas, tasas
 from monedas_meta import SIN_DECIMALES as MONEDAS_SIN_DECIMALES
 
 log = logging.getLogger("creatv.meta_rendimiento.sync")
@@ -58,8 +58,13 @@ MAX_PAGINAS_LISTADO = 1000
 CAMPOS_INFO = "name,currency,timezone_name,account_status,disable_reason,amount_spent,spend_cap,user_tasks"
 CAMPOS_CAMPANA = "id,name,objective,effective_status,daily_budget,lifetime_budget,bid_strategy,created_time"
 CAMPOS_CONJUNTO = ("id,name,campaign_id,effective_status,daily_budget,lifetime_budget,optimization_goal,"
-                   "bid_strategy,learning_stage_info,created_time")
-CAMPOS_ANUNCIO = "id,name,adset_id,campaign_id,effective_status,created_time,creative{id,thumbnail_url,video_id}"
+                   "bid_strategy,learning_stage_info,created_time,issues_info")
+CAMPOS_ANUNCIO = ("id,name,adset_id,campaign_id,effective_status,created_time,issues_info,"
+                  "creative{id,thumbnail_url,video_id}")
+# El motivo de un anuncio WITH_ISSUES o DISAPPROVED (`issues_info`, PND-258): lo que Meta dice de cada problema, acotado
+# (es texto de Meta que se muestra; nunca va a Claude) y guardado en `meta_objeto.extra.problemas`.
+MAX_PROBLEMAS = 3
+LARGO_RESUMEN, LARGO_MENSAJE = 120, 300
 CAMPOS_ANUNCIO_LIGERO = "id,name,adset_id,campaign_id,effective_status"
 # Miniaturas de los anuncios con gasto reciente (ruling R25 de la revisión final, 2026-10-08): `?ids=` de 50 en 50
 # (el tope de Meta para pedir varios objetos por id), solo en la corrida del listado completo.
@@ -141,7 +146,9 @@ def _conjunto(f, moneda):
             "optimizacion": f.get("optimization_goal"), "presupuesto_diario": _presupuesto(f.get("daily_budget"), moneda),
             "presupuesto_total": _presupuesto(f.get("lifetime_budget"), moneda),
             "estrategia_puja": f.get("bid_strategy"),
-            "aprendizaje": (f.get("learning_stage_info") or {}).get("status"), "creado_en_meta": _creado(f)}
+            "aprendizaje": (f.get("learning_stage_info") or {}).get("status"), "creado_en_meta": _creado(f),
+            # Lo que Meta dice de un conjunto rechazado o con problemas (PND-287), como en los anuncios (PND-258).
+            "extra": {"problemas": problemas_de(f.get("issues_info"))}}
 
 
 def _con_miniatura_en(o):
@@ -152,13 +159,38 @@ def _con_miniatura_en(o):
     return o
 
 
+def _linea(texto, largo):
+    return " ".join(str(texto or "").split())[:largo] or None
+
+
+def problemas_de(issues):
+    """`issues_info` de Meta (lista de {error_summary, error_message, level, …}) -> como mucho MAX_PROBLEMAS
+    {"resumen", "mensaje"} en una línea y acotados; lo que no trae texto se salta. PND-258: el Diagnóstico decía
+    «anuncios con problemas» sin decir cuál era el problema de cada uno."""
+    salida = []
+    for i in issues if isinstance(issues, list) else []:
+        if not isinstance(i, dict):
+            continue
+        p = {"resumen": _linea(i.get("error_summary"), LARGO_RESUMEN),
+             "mensaje": _linea(i.get("error_message"), LARGO_MENSAJE)}
+        if p["resumen"] or p["mensaje"]:
+            salida.append(p)
+        if len(salida) == MAX_PROBLEMAS:
+            break
+    return salida
+
+
 def _anuncio(f):
     creative = f.get("creative") or {}
-    return _con_miniatura_en({
+    o = _con_miniatura_en({
         "nivel": "anuncio", "objeto_id": str(f["id"]), "padre_id": f.get("adset_id"),
         "campaign_id": f.get("campaign_id"), "nombre": f.get("name"), "estado": f.get("effective_status"),
         "creative_id": creative.get("id"), "miniatura_url": creative.get("thumbnail_url"),
         "video_id": creative.get("video_id"), "creado_en_meta": _creado(f)})
+    # Siempre la clave (vacía si no tiene problemas): `guardar_objetos` mezcla `extra`, y así un problema resuelto
+    # deja de mostrarse en la copia siguiente.
+    o["extra"] = {**(o.get("extra") or {}), "problemas": problemas_de(f.get("issues_info"))}
+    return o
 
 
 def _anuncio_ligero(f):
@@ -310,7 +342,9 @@ def _miniaturas(cliente, act, token, hoy):
                 objetos.append(_con_miniatura_en({
                     "nivel": "anuncio", "objeto_id": ad_id, "creative_id": creative.get("id"),
                     "miniatura_url": creative["thumbnail_url"], "video_id": creative.get("video_id")}))
-            n += datos.guardar_objetos(cliente, act, objetos)
+            n += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
+        except datos.CuentaSoltada:
+            raise   # la cuenta se soltó en medio: la copia termina sin escribir más (PND-206)
         except Exception as e:  # noqa: BLE001 — las miniaturas nunca tumban la copia
             log.warning("meta miniaturas %s: lote de %s saltado (%s)", act, len(lote), type(e).__name__)
             if isinstance(e, graph.ErrorGraph) and e.limite:
@@ -339,7 +373,8 @@ def _alcance_de_ventana(act, token, w):
         return {"nivel": nivel, "objeto_id": objeto_id, "ventana": w, "alcance": int(_n(f.get("reach"))),
                 "frecuencia": None if frec in (None, "") else _n(frec)}
 
-    # Sin entrega en la ventana Meta no devuelve fila: es alcance 0, y se escribe para no dejar el de antes.
+    # Sin entrega en la ventana Meta no devuelve fila: en la cuenta es alcance 0, y se escribe para no dejar el de
+    # antes; una campaña que no vino se borra al guardar (`guardar_alcance(completa=True)`, PND-199).
     filas = [fila("cuenta", act, (cuenta.get("data") or [{}])[0])]
     filas += [fila("campana", str(f["campaign_id"]), f) for f in campanas if f.get("campaign_id")]
     return filas
@@ -347,17 +382,30 @@ def _alcance_de_ventana(act, token, w):
 
 # --------------------------------------------------------------- sincronizar ---
 
+_OMITIDA = {"omitida": True, "dias_cuenta": 0, "filas_anuncio": 0, "objetos": 0, "desde": None, "hasta": None}
+
+
 def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     """Copia la cuenta `ad_account_id` del proyecto `cliente`. Devuelve
     {"omitida", "dias_cuenta", "filas_anuncio", "objetos", "desde", "hasta"}. `on_etapa(nombre, progreso 0-100)`
     se llama al empezar cada paso. Una ErrorGraph sube sin tocar el estado de la cuenta (queda «copiando»).
 
     Si la cuenta ya no está en el proyecto (la quitaron mientras esperaba su turno) no se llama a Meta ni se
-    escribe nada: devuelve `omitida=True`."""
+    escribe nada: devuelve `omitida=True`. PND-206: cada escritura comprueba, en su misma transacción, que la cuenta
+    siga elegida (`exigir_cuenta=True`); si la quitaron A MEDIA copia, lo ya escrito se fue con ella
+    (`cuentas.elegir` borra las copias), nada más se escribe y también devuelve `omitida=True`."""
     act = cuentas.normalizar_id(ad_account_id)
     guardada = cuentas.cuenta(cliente, act)
     if guardada is None:
-        return {"omitida": True, "dias_cuenta": 0, "filas_anuncio": 0, "objetos": 0, "desde": None, "hasta": None}
+        return dict(_OMITIDA)
+    try:
+        return _sincronizar(cliente, act, token, guardada, hoy, on_etapa)
+    except datos.CuentaSoltada:
+        log.info("meta copia %s: la cuenta se soltó a media copia; no se escribe más", act)
+        return dict(_OMITIDA)
+
+
+def _sincronizar(cliente, act, token, guardada, hoy, on_etapa):
 
     def etapa(nombre, progreso):
         if on_etapa:
@@ -385,11 +433,11 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     n_objetos = 0
     campanas = _listar(act, token, "campaigns", CAMPOS_CAMPANA, ESTADOS)
     objetos = objetos_de(campanas, [], [], moneda)
-    n_objetos += datos.guardar_objetos(cliente, act, objetos)
+    n_objetos += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
     datos.marcar_sin_estado(cliente, act, "campana", [o["objeto_id"] for o in objetos])
     conjuntos = _listar(act, token, "adsets", CAMPOS_CONJUNTO, ESTADOS)
     objetos = objetos_de([], conjuntos, [], moneda)
-    n_objetos += datos.guardar_objetos(cliente, act, objetos)
+    n_objetos += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
     datos.marcar_sin_estado(cliente, act, "conjunto", [o["objeto_id"] for o in objetos])
     # Anuncios: siempre los que entregan o esperan (con creativo). Los pausados (campos ligeros) y la limpieza de
     # los archivados solo cuando el último listado completo tiene más de 20 horas: son miles de filas y cada página
@@ -398,13 +446,13 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     completo = _listado_vencido(extra.get("listado_completo_en"))
     anuncios = _listar(act, token, "ads", CAMPOS_ANUNCIO, ESTADOS_ANUNCIO, LIMITE_ANUNCIOS)
     objetos = objetos_de([], [], anuncios, moneda)
-    n_objetos += datos.guardar_objetos(cliente, act, objetos)
+    n_objetos += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
     vistos = {o["objeto_id"] for o in objetos}
     anuncios = objetos = None
     if completo:
         pausados = _listar(act, token, "ads", CAMPOS_ANUNCIO_LIGERO, ESTADOS_ANUNCIO_PAUSADOS)
         objetos = objetos_de([], [], [], moneda, anuncios_ligeros=pausados)
-        n_objetos += datos.guardar_objetos(cliente, act, objetos)
+        n_objetos += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
         vistos.update(o["objeto_id"] for o in objetos)
         pausados = objetos = None
         datos.marcar_sin_estado(cliente, act, "anuncio", vistos)
@@ -425,7 +473,8 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
         filas = graph.paginar(f"{act}/insights", token, {
             "level": "account", "time_increment": 1, "time_range": _rango(a, b), "fields": CAMPOS_CUENTA_DIA,
             "limit": LIMITE_PAGINA})
-        dias_cuenta += datos.reemplazar_cuenta_dias(cliente, act, a, b, [fila_cuenta(f) for f in filas])
+        dias_cuenta += datos.reemplazar_cuenta_dias(cliente, act, a, b, [fila_cuenta(f) for f in filas],
+                                                    exigir_cuenta=True)
         filas = None
         if relleno:   # hasta dónde llegó la primera copia: si Meta pide esperar, la siguiente sigue desde aquí
             cuentas.actualizar_extra(cliente, act, {"cuenta_desde": a})
@@ -439,8 +488,8 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
         graph.informe(act, token, {
             "level": "ad", "time_increment": 1, "time_range": _rango(a, b), "fields": CAMPOS_ANUNCIO_DIA,
             "limit": LIMITE_PAGINA}, por_pagina=_por_pagina(filas, nombres))
-        filas_anuncio += datos.reemplazar_anuncio_dias(cliente, act, a, b, filas)
-        datos.guardar_objetos(cliente, act, list(nombres.values()))
+        filas_anuncio += datos.reemplazar_anuncio_dias(cliente, act, a, b, filas, exigir_cuenta=True)
+        datos.guardar_objetos(cliente, act, list(nombres.values()), exigir_cuenta=True)
         filas = nombres = None
         if relleno:
             cuentas.actualizar_extra(cliente, act, {"anuncios_desde": a})
@@ -451,13 +500,15 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     # después de los días de anuncio: en la primera copia esos días recién se escribieron.
     if completo:
         n_objetos += _miniaturas(cliente, act, token, hoy)
+        # PND-194: y su copia en R2 (la URL de Meta caduca), una vez por anuncio y creativo, las de más gasto primero.
+        miniaturas.copiar(cliente, act, (hoy - timedelta(days=DIAS_MINIATURA - 1)).isoformat())
 
     # 5. Alcance (gente única: se pide por ventana, no se suma de los días).
     etapa(ETAPA_ALCANCE, 90)
     for w in VENTANAS_ALCANCE:
         filas = _alcance_de_ventana(act, token, w)
         if filas:
-            datos.guardar_alcance(cliente, act, filas)
+            datos.guardar_alcance(cliente, act, filas, completa=True, exigir_cuenta=True)
 
     # 6. Tasas de cambio a USD (nunca lanza). Desde el día más viejo YA guardado de la cuenta, no solo desde esta
     # corrida: si el relleno se hizo en varias corridas, los días de las primeras también necesitan su tasa.
@@ -471,7 +522,7 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     # igual, porque reintentarlo en cada corrida de 3 horas serían 64 consultas al día en vez de 8.
     if _listado_vencido(extra.get("desglose_en")):   # la misma regla de las 20 horas del listado completo
         etapa(ETAPA_ALCANCE, 95)
-        desgloses.copiar(cliente, act, token)
+        desgloses.copiar(cliente, act, token, exigir_cuenta=True)
         cuentas.actualizar_extra(cliente, act, {"desglose_en": db.ahora()})
 
     cuentas.actualizar(cliente, act, estado="ok", error=None, ultima_copia=db.ahora())

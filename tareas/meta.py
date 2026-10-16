@@ -246,16 +246,23 @@ def refrescar(tarea):
 def revisar_acceso(tarea):
     """Periódica diaria (PND-058): lee en Meta (`debug_token`) cuándo vence el acceso a los datos de cada proyecto con
     su app propia conectada y lo guarda en su meta.json, para que Alertas avise 14 días antes. Rellena también las
-    conexiones hechas antes de que se leyera al conectar (colorado_forja: 2026-12-18). Gratis: no cobra ni escribe en
-    Meta. Un proyecto que falla no frena a los demás; el registro lleva solo el tipo del error (nunca su texto)."""
+    conexiones hechas antes de que se leyera al conectar (colorado_forja: 2026-12-18). Desde PND-057 (2026-10-15) lee
+    también si el negocio de la cuenta está verificado (`meta_conexion.revisar_negocio`; Alertas avisa al cliente si
+    no). Gratis: no cobra ni escribe en Meta. Un proyecto que falla no frena a los demás, y la verificación del negocio
+    se revisa aunque el vencimiento haya fallado (y al revés); el registro lleva solo el tipo del error (nunca su
+    texto)."""
     revisados = fallidos = 0
     for cliente in meta_conexion.clientes():
-        try:
-            if meta_conexion.revisar_vencimientos(cliente) is not None:
-                revisados += 1
-        except Exception as e:  # noqa: BLE001 — uno que falla no frena a los demás
-            fallidos += 1
-            log.warning("meta_revisar_acceso %s: %s", cliente, type(e).__name__)
+        fallo = False
+        hubo = False
+        for revisar in (meta_conexion.revisar_vencimientos, meta_conexion.revisar_negocio):
+            try:
+                hubo = revisar(cliente) is not None or hubo
+            except Exception as e:  # noqa: BLE001 — uno que falla no frena a los demás
+                fallo = True
+                log.warning("meta_revisar_acceso %s (%s): %s", cliente, revisar.__name__, type(e).__name__)
+        revisados += hubo and not fallo
+        fallidos += fallo
     texto = ngettext("Acceso a los datos de Meta revisado en %(num)s proyecto.",
                      "Acceso a los datos de Meta revisado en %(num)s proyectos.", revisados)
     if fallidos:

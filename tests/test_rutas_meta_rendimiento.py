@@ -323,15 +323,15 @@ def test_guardar_cuentas_si_falla_al_quitar_avisa_y_la_cuenta_sigue(conectado, m
     monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
                         lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
 
-    def falla(cliente, act):
+    def falla(con, act):
         raise RuntimeError("disco lleno")
-    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    monkeypatch.setattr(cuentas, "_dueno", falla)        # falla dentro de la transacción de la lista
     r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A]})
     assert r.status_code == 302
-    assert B in cuentas.ids("acme")
-    assert any("inténtalo de nuevo" in m for m in _flashes(conectado["c"]))
-    # La que sí entró antes del fallo queda con su copia en cola.
-    assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
+    # PND-206: `elegir` es una sola transacción; si quitar falla, la nueva tampoco entra y nada se encola.
+    assert cuentas.ids("acme") == [B]
+    assert any("todo sigue como estaba, inténtalo de nuevo" in m for m in _flashes(conectado["c"]))
+    assert _tareas() == [] and _tareas("meta_rend_limpiar") == []
 
 
 def test_error_de_meta_al_listar_sin_token(conectado, monkeypatch):
@@ -695,12 +695,47 @@ def test_desconectar_meta_borra_las_copias_y_deja_libres_las_cuentas(conectado, 
     mc = conectado["dashboard"].meta_conexion
     llamadas = []
     monkeypatch.setattr(mc, "revocar", lambda c: False)
-    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or True)
+    borrar = mc.borrar     # la de verdad (PND-207: ella misma borra lo copiado), sobre la carpeta temporal
+    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or borrar(c))
     r = conectado["c"].post("/cliente/acme/meta/desconectar")
     assert r.status_code == 302 and llamadas == ["acme"]
-    assert cuentas.ids("acme") == [] and _filas_copiadas() == 0
+    # Ronda 2 de PND-206/207: las cuentas se sueltan al instante y las métricas las borra la limpieza encolada.
+    assert cuentas.ids("acme") == [] and _filas_copiadas() > 0
+    _limpiar("acme")
+    assert _filas_copiadas() == 0
     # Las cuentas quedaron libres: otro proyecto ya puede leerlas.
     assert cuentas.elegir("otro", [{"id": A, "name": "HappyFlops Norway"}])["agregadas"] == [A]
+
+
+def _limpiar(cliente):
+    """Lo que corre el worker con la limpieza que encoló soltar las cuentas (ronda 2 de PND-206/207)."""
+    from tareas import meta_rendimiento as tareas_mr
+    tarea, = _tareas("meta_rend_limpiar")
+    assert tarea["job_id"] == tareas_mr.job_id_limpieza(cliente) and tarea["cliente"] == cliente
+    tareas_mr.meta_rend_limpiar({"payload": tarea["payload"]})
+
+
+def test_quitar_una_cuenta_la_deja_de_mostrar_al_instante_aunque_sus_copias_sigan(conectado, monkeypatch):
+    """Ronda 2 de PND-206/207 (quien orquesta, 2026-10-15): `elegir` ya no borra copias dentro de su transacción; lo
+    que la persona ve tiene que dejar de mostrar la cuenta quitada en el mismo momento, aunque sus filas sigan en la
+    base hasta que corre la limpieza."""
+    _sembrar()
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
+                        lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
+    antes = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    assert "Video gana" in antes and "Campaña Otoño" in antes
+    conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [B]})
+    assert cuentas.ids("acme") == [B] and _filas_copiadas() > 0           # las copias de A siguen, por ahora
+    despues = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    for de_a in ("Video gana", "Campaña Otoño", "Conjunto Mujeres", "HappyFlops Norway"):
+        assert de_a not in despues, de_a
+    assert datos.medios_anuncios("acme", ["gana"]) == {}                   # ni la evaluación con IA las usa
+    _limpiar("acme")
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.meta_anuncio_dia).where(
+            db.meta_anuncio_dia.c.ad_account_id == A)).scalar() == 0
+        assert con.execute(sa.select(sa.func.count()).select_from(db.meta_anuncio_dia).where(
+            db.meta_anuncio_dia.c.ad_account_id == B)).scalar() > 0
 
 
 def _evaluar(cliente):
@@ -714,9 +749,10 @@ def _filas_gasto(cliente):
 
 
 def _desconectar(conectado, monkeypatch):
+    """«Desconectar» con la `meta_conexion.borrar` de verdad sobre la carpeta temporal: desde PND-207 es ella la que
+    borra lo copiado de Meta (no la ruta)."""
     mc = conectado["dashboard"].meta_conexion
     monkeypatch.setattr(mc, "revocar", lambda c: False)
-    monkeypatch.setattr(mc, "borrar", lambda c: True)
     return conectado["c"].post("/cliente/acme/meta/desconectar")
 
 
@@ -731,27 +767,33 @@ def test_desconectar_meta_borra_las_evaluaciones_de_ese_proyecto_y_no_las_de_otr
     r = _desconectar(conectado, monkeypatch)
     assert r.status_code == 302
     assert datos.evaluaciones("acme") == [] and all(datos.evaluacion("acme", i) is None for i in mias)
-    assert datos.evaluacion("otro", ajena) is not None                     # el otro proyecto sigue igual
+    assert datos.evaluacion("otro", ajena, solo_visibles=False) is not None   # el otro proyecto sigue igual
     assert _filas_gasto("acme") == 1                                       # lo que se pagó queda en el gasto
     assert not any("no se pudieron borrar" in m for m in _flashes(conectado["c"]))
 
 
 def test_cambiar_las_cuentas_elegidas_no_borra_las_evaluaciones(conectado):
-    # `cuentas.elegir` también corre al cambiar la selección: lo pagado no se pierde por eso.
+    # `cuentas.elegir` también corre al cambiar la selección: lo pagado no se pierde por eso. Desde 2026-10-15 (quien
+    # orquesta) no se ve mientras su cuenta no esté elegida, ni en la pantalla ni para «Llevar a Crear».
     _sembrar()
     e = _evaluar("acme")
+    datos.actualizar_evaluacion(e, estado="lista", resultado={"resumen": "Norway vende", "ideas": [{"titulo": "X"}]})
     cuentas.elegir("acme", [])
-    datos.borrar_cuenta("acme", A)
-    assert datos.evaluacion("acme", e) is not None
+    _limpiar("acme")
+    assert datos.evaluacion("acme", e) is None and datos.evaluacion("acme", e, solo_visibles=False) is not None
+    assert conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{e}").status_code == 404
+    assert conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{e}/idea/0/crear").status_code == 404
+    _dos_cuentas()                                         # vuelve a elegirse: reaparece
+    assert conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{e}").status_code == 200
 
 
 def test_si_falla_borrar_las_copias_las_evaluaciones_se_borran_igual(conectado, monkeypatch):
     _sembrar()
     e = _evaluar("acme")
 
-    def falla(cliente, act):
+    def falla(cliente, elegidas, usuario=None):
         raise RuntimeError(f"disco lleno con {TOKEN}")
-    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    monkeypatch.setattr(cuentas, "elegir", falla)
     _desconectar(conectado, monkeypatch)
     assert datos.evaluacion("acme", e) is None
     mensajes = _flashes(conectado["c"])
@@ -768,8 +810,9 @@ def test_si_falla_borrar_las_evaluaciones_las_copias_se_borran_igual_y_se_avisa_
         raise ValueError(f"base bloqueada con {TOKEN}")
     monkeypatch.setattr(datos, "borrar_evaluaciones", falla)
     _desconectar(conectado, monkeypatch)
+    _limpiar("acme")
     assert cuentas.ids("acme") == [] and _filas_copiadas() == 0           # lo de las cuentas no se saltó
-    assert datos.evaluacion("acme", e) is not None                         # y la evaluación se reintenta después
+    assert datos.evaluacion("acme", e, solo_visibles=False) is not None    # y la evaluación se reintenta después
     mensajes = _flashes(conectado["c"])
     assert sum("no se pudieron borrar sus métricas copiadas (ValueError)" in m for m in mensajes) == 1
     assert all("base bloqueada" not in m for m in mensajes)
@@ -780,11 +823,12 @@ def test_si_borrar_las_copias_falla_la_desconexion_se_queda_y_se_avisa(conectado
     mc = conectado["dashboard"].meta_conexion
     llamadas = []
     monkeypatch.setattr(mc, "revocar", lambda c: False)
-    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or True)
+    borrar = mc.borrar     # la de verdad (PND-207: ella misma borra lo copiado), sobre la carpeta temporal
+    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or borrar(c))
 
-    def falla(cliente, act):
+    def falla(cliente, elegidas, usuario=None):
         raise RuntimeError(f"disco lleno con {TOKEN}")
-    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    monkeypatch.setattr(cuentas, "elegir", falla)
     r = conectado["c"].post("/cliente/acme/meta/desconectar")
     assert r.status_code == 302 and llamadas == ["acme"]
     mensajes = _flashes(conectado["c"])
@@ -1041,6 +1085,32 @@ def test_evaluar_si_el_margen_cambio_desde_que_vio_el_precio_no_cobra(conectado)
     assert len(_evaluaciones()) == 1
 
 
+@pytest.mark.parametrize("como", ["sin_token", "sin_cuentas"])
+def test_pnd297_si_meta_se_desconecta_mientras_se_prepara_la_fila_no_queda(conectado, monkeypatch, como):
+    """PND-297 (decisión 2026-10-13): la muestra se arma antes de crear la fila; si Meta se desconecta en ese rato (el
+    borrado de evaluaciones ya pasó), la fila nueva con nombres y cifras de Meta no se queda, no se encola y no se
+    reserva nada. `sin_cuentas`: la desconexión soltó las cuentas pero hay token (volver de agencia a la app propia
+    restaura su conexión)."""
+    from meta_rendimiento import soltar
+    _sembrar()
+    _cobra(milesimas=50_000)
+    crear = datos.crear_evaluacion
+
+    def _se_desconecto_antes(*a, **k):
+        # Meta se desconecta entre la muestra y la fila: se va el token (o no) y `soltar` borra cuentas y evaluaciones.
+        if como == "sin_token":
+            monkeypatch.setattr(conectado["dashboard"].meta_conexion, "cargar", lambda c: {})
+        soltar.soltar("acme")
+        return crear(*a, **k)
+    monkeypatch.setattr(datos, "crear_evaluacion", _se_desconecto_antes)
+    r = conectado["c"].post(EVALUAR, data=_visto())
+    assert r.status_code == 302
+    assert _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.reserva_saldo)).scalar() == 0
+    assert any("Meta se desconectó mientras se preparaba la evaluación" in m for m in _flashes(conectado["c"]))
+
+
 def test_evaluar_si_encolar_falla_por_saldo_borra_la_fila(conectado, monkeypatch):
     from cobros import SaldoInsuficiente
     from tareas import meta_rendimiento as tmr
@@ -1053,7 +1123,15 @@ def test_evaluar_si_encolar_falla_por_saldo_borra_la_fila(conectado, monkeypatch
     assert r.status_code == 402 and _evaluaciones() == []
 
 
+def _con_a(cliente):
+    """La cuenta A elegida en el proyecto (si no es de otro): una evaluación solo se ve con sus cuentas elegidas
+    (quien orquesta, 2026-10-15)."""
+    actuales = [{"id": c["ad_account_id"], "name": c["nombre"]} for c in cuentas.listar(cliente)]
+    cuentas.elegir(cliente, actuales + [{"id": A, "name": "HappyFlops Norway"}])
+
+
 def _evaluacion_lista(cliente="acme", ideas=None):
+    _con_a(cliente)
     eid = datos.crear_evaluacion(cliente, [A], _hace(29), _hace(0), "SEK",
                                  [{"ref": "A1", "ad_id": "gana", "nombre": "Video <b>gana</b>"}], [])
     datos.actualizar_evaluacion(eid, estado="lista", usd=0.2, resultado={
@@ -1081,6 +1159,7 @@ def test_ver_una_evaluacion_y_la_de_otro_proyecto_es_404(conectado):
 
 
 def test_una_evaluacion_en_curso_o_fallida_se_dice_en_palabras(conectado):
+    _con_a("acme")
     eid = datos.crear_evaluacion("acme", [A], _hace(29), _hace(0), "SEK", [], [])
     assert "Evaluando con IA" in conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}").get_data(as_text=True)
     datos.actualizar_evaluacion(eid, estado="error", error="Claude no devolvió un análisis que se pueda usar.")
@@ -1166,6 +1245,7 @@ def test_una_idea_llevada_a_crear_en_un_proyecto_no_se_usa_en_otro(conectado):
 
 
 def _evaluacion_con_miniaturas(cliente, estado, muestra):
+    _con_a(cliente)
     eid = datos.crear_evaluacion(cliente, [A], "2026-09-10", "2026-10-09", "SEK", muestra, [], "ana")
     datos.actualizar_evaluacion(eid, estado=estado)
     return eid
@@ -1195,7 +1275,7 @@ def test_desconectar_meta_borra_de_r2_las_miniaturas_de_sus_evaluaciones(conecta
     base = "clientes/acme/meta_rendimiento"
     assert sorted(borradas) == sorted([f"{base}/eval{lista}_A1.jpg", f"{base}/eval{fallida}_A1.jpg",
                                        f"{base}/eval{fallida}_A2.jpg"])
-    assert datos.evaluaciones("acme") == [] and datos.evaluacion("otro", ajena) is not None
+    assert datos.evaluaciones("acme") == [] and datos.evaluacion("otro", ajena, solo_visibles=False) is not None
     assert momentos == [[]]                                                # una sola llamada, con las filas ya borradas
     assert not any("no se pudieron borrar" in m for m in _flashes(conectado["c"]))
 
@@ -1250,7 +1330,8 @@ def test_si_borrar_las_filas_falla_las_miniaturas_se_borran_igual_y_se_reintenta
     monkeypatch.setattr(datos, "borrar_evaluaciones", _falla)
     eid = _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}])
     _desconectar(conectado, monkeypatch)
-    assert borradas == [f"clientes/acme/meta_rendimiento/eval{eid}_A1.jpg"] and datos.evaluacion("acme", eid)
+    assert borradas == [f"clientes/acme/meta_rendimiento/eval{eid}_A1.jpg"] and datos.evaluacion("acme", eid,
+                                                                                               solo_visibles=False)
     assert sum("(ValueError)" in m for m in _flashes(conectado["c"])) == 1
 
 
@@ -1435,6 +1516,7 @@ def test_el_panel_muestra_la_ultima_lista_entera_y_las_anteriores_por_fetch(cone
 
 
 def test_el_plan_nombra_sus_objetos_marca_las_cifras_sin_dato_y_solo_enlaza_al_administrador(conectado):
+    _con_a("acme")
     eid = datos.crear_evaluacion(
         "acme", [A], _hace(29), _hace(0), "SEK",
         [{"ref": "A1", "ad_id": "9", "nombre": "Video <b>gana</b>", "veredicto": "ganador",

@@ -48,7 +48,8 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 | 11 | `cobros` | `cobros:sin_saldo`, `cobros:saldo_bajo`, `cobros:no_cobrado:<mov_id>`, `cobros:recarga_pendiente:<id>` (Bold o Wompi); y del plan mensual `cobros:plan_morosa`, `cobros:plan_renueva`, `cobros:plan_cancelada`, `cobros:plan_bolsa_80` y `cobros:plan_sin_renovar` (**solo_admin**) | puesta_a_punto `bloquea` / puesta_a_punto `atencion` / fallos `info` / decision `info`; las del saldo a Configuración › Saldo y recargas (`config-ap-saldo`), las del plan a Configuración › Plan (`config-ap-plan`) | `sin_saldo` constante; `saldo_bajo` el saldo en dólares redondeados; las otras, tipo y monto o el id; las del plan, cifras y fechas (ver la skill `cobros`, «Alertas del plan») |
 | 12 | `meta` | `meta:metodo_pago` | puesta_a_punto · `info`, solo con la app propia de Meta conectada (no en modo agencia) | vacía |
 | 13 | `meta_acceso` | `meta_acceso:datos` | puesta_a_punto · `atencion` desde `DIAS_AVISO_ACCESO_META` (14) días antes de que venza el acceso de Creatv a los datos de Meta; `bloquea` ya vencido. Solo conexión propia con token (en modo agencia el token es de Creatv). Para el admin y el cliente; a Configuración › Conexiones (`config-meta`) | la fecha de vencimiento (día) + `por_vencer`/`vencido` |
-| 14 | `meta_rendimiento` | `meta_rendimiento:<tipo>:<act_…>` | decision · `atencion`, a la pestaña Rendimiento (`tab="rendimiento"` desde la integración con main del 2026-10-10: la pestaña Meta se jubiló el 2026-10-09 y su «Diagnóstico» vive en Rendimiento; sin ancla: llega por fetch) | la de la recomendación (`recomendaciones.huella_recomendacion`), guardada por la copia |
+| 14 | `meta_negocio` | `meta_negocio:verificacion` | puesta_a_punto · `atencion`, para el admin y el cliente (es quien verifica su negocio), a Configuración › Conexiones (`config-meta`). Solo conexión propia con token, y solo si la revisión guardada es de la cuenta actual | el id del negocio + su `verification_status` |
+| 15 | `meta_rendimiento` | `meta_rendimiento:<tipo>:<act_…>` | decision · `atencion`, a la pestaña Rendimiento (`tab="rendimiento"` desde la integración con main del 2026-10-10: la pestaña Meta se jubiló el 2026-10-09 y su «Diagnóstico» vive en Rendimiento; sin ancla: llega por fetch) | la de la recomendación (`recomendaciones.huella_recomendacion`), guardada por la copia |
 
 Detalles que ya costaron una duda:
 
@@ -70,13 +71,23 @@ Detalles que ya costaron una duda:
   `resolver_sin_cobro`, skill `crear`). Prefijo `crear_dudosa:` en `PREFIJOS_SOLO_ADMIN`.
 - **Orgánico**: reintentar es una acción de la persona sobre la pieza; aquí solo se avisa.
 - **Acceso a los datos de Meta** (PND-058, 2026-10-15; motivo: el `meta.json` de colorado_forja decía que el token vencía el 2026-11-18 por `expires_in`, cuando el token no caduca y lo que vence es el acceso a los datos, el 2026-12-18, y nada avisaba). La fecha la lee `meta_conexion` con `debug_token` al conectar y la periódica diaria `meta_revisar_acceso` (que también rellenó las conexiones viejas), y la guarda en `meta.json` (`acceso_datos_vence_en`, ISO local). La fuente solo lee `meta.json` con `meta_conexion.acceso_datos_vence_en` (cero consultas, nunca llama a Meta). Una sola clave; el detalle dice cuántos días faltan («Vence hoy.» el mismo día) y manda a «Renovar el acceso» de la tarjeta de Meta, que vuelve a conectar SIN «Desconectar» (desconectar borra las métricas copiadas). La huella es la fecha y el estado: descartar «por vencer» no esconde el «vencido», y reconectar con otra fecha la vuelve a mostrar; si la fecha nueva queda a más de 14 días, desaparece sola. No es `solo_admin` ni de descarte solo admin: el cliente es quien reconecta con su app.
+- **Negocio de Meta sin verificar** (PND-057, 2026-10-15; Daniel: «dale la alerta al cliente»; motivo: la primera app de
+  Creatv quedó restringida el 2026-09-14 con su verificación en revisión, y Forja Habit seguía sin verificar). La
+  periódica diaria `meta_revisar_acceso` también llama a `meta_conexion.revisar_negocio`: `GET act_…?fields=business{id,name,verification_status}`
+  con el token del proyecto, guardado en `meta.json` como `negocio` = {id, nombre, verificacion, ad_account_id,
+  revisado_en} bajo el candado y solo si sigue siendo la misma conexión. La fuente solo lee `meta.json`
+  (`meta_conexion.negocio_sin_verificar`, cero consultas, nunca llama a Meta): sin dato, verificado, un estado que no
+  está en `ESTADOS_VERIFICACION`, modo agencia (la app es de Creatv) o una revisión de otra cuenta (el proyecto cambió
+  de cuenta) no avisan. `pending` dice que Meta está revisando; los demás estados, que lo verifique en el Centro de
+  seguridad. La huella es negocio + estado: descartar «en revisión» no esconde un rechazo.
 - **Meta rendimiento** (E2, 2026-10-10, spec `2026-10-10-meta-rendimiento-e2-design.md` §10; skill `meta-rendimiento`): la fuente
   NO calcula reglas (cargar 30 días de anuncios en cada página sería caro) y hace UNA consulta (`cuentas.listar`, una
   fila por cuenta del proyecto). Al terminar bien cada copia, `tareas.meta_rendimiento._guardar_alertas` guarda en
   `meta_cuenta.extra.alertas` las recomendaciones de nivel «alta» de ESA cuenta como `[{tipo, huella}]` (calculadas con
   `panel.recomendaciones_de_cuenta`, guardadas con `cuentas.actualizar_extra`; un fallo se anota con su tipo y no tumba
   la copia). Lo que puede ser «alta» es `meta_rendimiento.recomendaciones.TIPOS_ALTA` (`cuenta_estado`,
-  `cuenta_roas_bajo`, `aprendizaje_limitado`, `perdedores_gastando`, `anuncios_con_problemas`) y cada tipo tiene su
+  `cuenta_roas_bajo`, `aprendizaje_limitado`, `perdedores_gastando`, `anuncios_con_problemas` y, desde PND-287
+  (2026-10-15), `conjuntos_con_problemas`) y cada tipo tiene su
   par `N_` (título y detalle) en `alertas.TEXTOS_META_RENDIMIENTO`: la fuente ignora un tipo sin texto, y una prueba
   exige que las tres listas coincidan. **Un tipo nuevo que pueda ser «alta» se agrega a `TIPOS_ALTA` y a
   `TEXTOS_META_RENDIMIENTO` (más su traducción), o su alerta se pierde en silencio.** Cada una sale como alerta de
@@ -87,8 +98,12 @@ Detalles que ya costaron una duda:
   volver cada 3 horas (sí vuelve si cambia el nivel); en los demás, tipo + cuenta + los ids de sus objetos. El título NO
   se guarda (el spec decía `{tipo, titulo, huella}`): guardado quedaría en el idioma del proyecto y la regla de esta
   skill es traducir al calcular. Un elemento roto (tipo desconocido, huella que no es sha256, algo que no es un dict)
-  se ignora. Cada cliente puede descartarla (es de su cuenta). Una copia que falla deja lo guardado, y las alertas
-  guardadas no caducan (PND-262); quitar la cuenta borra su fila y con ella sus alertas.
+  se ignora. **Solo un admin la descarta o la restaura** (PND-270, 2026-10-15, la regla de PND-124: hablan de la plata
+  de la pauta y el descarte es del proyecto): el cliente la ve con `puede_descartar` falso y las rutas le responden 403
+  por el prefijo `PREFIJOS_DESCARTE_ADMIN = ("meta_rendimiento:",)`, también si la alerta ya salió del cálculo. Una copia que falla deja lo guardado, pero solo vale
+  `HORAS_ALERTA_META_VIGENTE` (48) horas desde `ultima_copia` (PND-262, 2026-10-15, como los desgloses): una cuenta
+  que dejó de copiarse no deja su alerta para siempre, y sin fecha legible no sale; quitar la cuenta borra su fila y
+  con ella sus alertas.
 
 ## Quién ve qué: `solo_admin` (2026-10-02)
 

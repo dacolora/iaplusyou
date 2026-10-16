@@ -59,7 +59,7 @@ def test_reintentar_deja_solo_las_que_siguen_fallando(base_temporal, monkeypatch
     def _detalle(claves):
         pedidas.append(list(claves))
         return 2, [("b", "EndpointConnectionError")]
-    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _detalle)
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", _detalle)
     assert r2_pendientes.reintentar() == (2, 1)
     assert pedidas == [["a", "b", "c"]] and r2_pendientes.pendientes() == ["b"]
 
@@ -70,7 +70,7 @@ def test_reintentar_no_pierde_una_clave_anotada_mientras_borraba(base_temporal, 
     def _detalle(claves):
         r2_pendientes.anotar(["nueva", "a"])         # otro proceso suelta una cuenta y R2 le falla en ese momento
         return len(claves), []
-    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _detalle)
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", _detalle)
     assert r2_pendientes.reintentar() == (2, 1)
     assert r2_pendientes.pendientes() == ["nueva"]
 
@@ -84,7 +84,7 @@ def test_reintentar_toma_el_candado_antes_de_releer(base_temporal, monkeypatch, 
         otro["estado"] = escritor_en_medio("SELECT kv.valor", "update kv set valor='[\"a\", \"b\", \"ajena\"]' "
                                                                "where clave='r2:borrar_pendientes'")
         return len(claves), []
-    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _detalle)
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", _detalle)
     assert r2_pendientes.reintentar() == (2, 0)
     assert otro["estado"]["resultado"].startswith("bloqueado") and r2_pendientes.pendientes() == []
 
@@ -94,7 +94,7 @@ def test_reintentar_sin_r2_o_con_la_base_caida_no_lanza(base_temporal, monkeypat
 
     def _sin_r2(claves):
         raise RuntimeError("Faltan R2_ACCOUNT_ID")
-    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _sin_r2)
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", _sin_r2)
     with caplog.at_level(logging.WARNING):
         assert r2_pendientes.reintentar() == (0, 1)
     assert r2_pendientes.pendientes() == ["a"] and "RuntimeError" in caplog.text and "R2_ACCOUNT_ID" not in caplog.text
@@ -106,7 +106,7 @@ def test_reintentar_sin_r2_o_con_la_base_caida_no_lanza(base_temporal, monkeypat
 
 
 def test_reintentar_sin_pendientes_no_abre_r2(base_temporal, monkeypatch):
-    monkeypatch.setattr(r2_uploader, "delete_files_detalle", lambda claves: pytest.fail("no había nada que borrar"))
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", lambda claves: pytest.fail("no había nada que borrar"))
     assert r2_pendientes.reintentar() == (0, 0)
 
 
@@ -130,6 +130,88 @@ def test_delete_files_detalle_dice_que_claves_fallaron_y_delete_files_no_cambia(
     for funcion in (r2_uploader.delete_files_detalle, r2_uploader.delete_files):
         with pytest.raises(RuntimeError):
             funcion(["a.jpg"])
+
+
+# ---------------------------------------------------------------------- PND-303: tope por corrida y lotes ---
+
+def test_pnd303_reintentar_pide_como_mucho_el_tope_en_una_tanda_y_las_que_fallan_van_al_final(base_temporal,
+                                                                                               monkeypatch):
+    """PND-303 (decisión 2026-10-13): la limpieza diaria corre en el único hilo del carril general; con cientos de
+    claves y R2 lento lo tenía ocupado. Ahora pide como mucho TOPE_POR_CORRIDA en UNA llamada por lotes, y una clave que
+    R2 rechaza siempre pasa al final para que las de atrás también se intenten."""
+    assert r2_pendientes.TOPE_POR_CORRIDA == 200
+    monkeypatch.setattr(r2_pendientes, "TOPE_POR_CORRIDA", 3)
+    r2_pendientes.anotar(["a", "b", "c", "d", "e"])
+    pedidas = []
+
+    def _lote(claves):
+        pedidas.append(list(claves))
+        return len(claves) - 1, [("a", "AccessDenied")]
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", _lote)
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", lambda claves: pytest.fail("una por una no"))
+    assert r2_pendientes.reintentar() == (2, 3)
+    assert pedidas == [["a", "b", "c"]] and r2_pendientes.pendientes() == ["d", "e", "a"]
+    assert r2_pendientes.reintentar() == (2, 1)                   # al día siguiente le toca a las de atrás
+    assert pedidas[-1] == ["d", "e", "a"] and r2_pendientes.pendientes() == ["a"]
+
+
+def test_pnd303_con_r2_caido_nada_se_pierde_y_la_cola_rota(base_temporal, monkeypatch):
+    monkeypatch.setattr(r2_pendientes, "TOPE_POR_CORRIDA", 2)
+    r2_pendientes.anotar(["a", "b", "c"])
+
+    def _caido(claves):
+        raise ConnectionError("R2 no contesta")
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", _caido)
+    assert r2_pendientes.reintentar() == (0, 3)
+    assert sorted(r2_pendientes.pendientes()) == ["a", "b", "c"] and r2_pendientes.pendientes()[0] == "c"
+
+
+class _ClienteLote:
+    """Un cliente de R2 falso para DeleteObjects: `errores` = {clave: código} que R2 rechaza; `rechaza` = la tanda entera
+    vuelve con ClientError; `cae` = la tanda no llega."""
+
+    def __init__(self, errores=None, rechaza=False, cae=False):
+        self.errores, self.rechaza, self.cae = errores or {}, rechaza, cae
+        self.tandas, self.sueltas = [], []
+
+    def delete_objects(self, Bucket, Delete):          # noqa: N803 — la firma de boto3
+        claves = [o["Key"] for o in Delete["Objects"]]
+        self.tandas.append(claves)
+        assert Bucket == "bucket" and Delete["Quiet"] is True
+        if self.cae:
+            raise ConnectionError("tok-llave-de-prueba")          # llave-de-prueba
+        if self.rechaza:
+            from botocore.exceptions import ClientError
+            raise ClientError({"Error": {"Code": "NotImplemented", "Message": "x"}}, "DeleteObjects")
+        return {"Errors": [{"Key": k, "Code": c, "Message": "no"} for k, c in self.errores.items() if k in claves]}
+
+    def delete_object(self, Bucket, Key):              # noqa: N803
+        self.sueltas.append(Key)
+
+
+def test_pnd303_delete_files_lote_borra_de_a_1000_y_dice_que_claves_fallaron(monkeypatch):
+    monkeypatch.setenv("R2_BUCKET_NAME", "bucket")
+    cliente = _ClienteLote(errores={"k5": "AccessDenied", "k1500": "<raro>"})
+    armados = []
+    monkeypatch.setattr(r2_uploader, "_client", lambda: armados.append(cliente) or cliente)
+    assert r2_uploader.delete_files_lote([]) == (0, []) and armados == []
+    claves = [f"k{i}" for i in range(2500)]
+    assert r2_uploader.delete_files_lote(claves) == (2498, [("k5", "AccessDenied"), ("k1500", "ErrorR2")])
+    assert [len(t) for t in cliente.tandas] == [1000, 1000, 500] and len(armados) == 1 and cliente.sueltas == []
+
+
+def test_pnd303_una_tanda_rechazada_entera_va_una_por_una_y_una_que_no_llega_queda_para_manana(monkeypatch):
+    monkeypatch.setenv("R2_BUCKET_NAME", "bucket")
+    rechaza = _ClienteLote(rechaza=True)
+    monkeypatch.setattr(r2_uploader, "_client", lambda: rechaza)
+    assert r2_uploader.delete_files_lote(["a", "b"]) == (2, []) and rechaza.sueltas == ["a", "b"]
+    cae = _ClienteLote(cae=True)
+    monkeypatch.setattr(r2_uploader, "_client", lambda: cae)
+    assert r2_uploader.delete_files_lote(["a", "b"]) == (0, [("a", "ConnectionError"), ("b", "ConnectionError")])
+    assert cae.sueltas == []
+    monkeypatch.delenv("R2_BUCKET_NAME")
+    with pytest.raises(RuntimeError):
+        r2_uploader.delete_files_lote(["a"])
 
 
 # ---------------------------------------------------------------------- quién anota ---
@@ -172,7 +254,7 @@ def test_una_clave_anotada_se_borra_en_la_limpieza_diaria(base_temporal, monkeyp
     monkeypatch.delenv("R2_BUCKET_NAME", raising=False)
     creativo.borrar_copias("acme", [(7, "123")])
     borradas = []
-    monkeypatch.setattr(r2_uploader, "delete_files_detalle", lambda claves: (borradas.extend(claves), (len(claves), []))[1])
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", lambda claves: (borradas.extend(claves), (len(claves), []))[1])
     tareas_mr.meta_rend_limpiar({"payload": {}})
     assert borradas == [f"{BASE}/a7_123.jpg", f"{BASE}/a7_123.mp4"] and r2_pendientes.pendientes() == []
 
@@ -190,7 +272,7 @@ def test_el_aviso_de_reintentar_no_registra_las_claves(base_temporal, monkeypatc
         if r2 == "lanza":
             raise RuntimeError(f"no se pudo borrar {claves[0]}")
         return 1, [(CLAVE, "ClientError")]
-    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _detalle)
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", _detalle)
     with caplog.at_level(logging.DEBUG):
         r2_pendientes.reintentar()
     assert caplog.text and "clientes/" not in caplog.text
@@ -204,7 +286,7 @@ def test_los_avisos_de_borrar_copias_y_borrar_claves_no_registran_las_claves(bas
         if r2 == "lanza":
             raise RuntimeError(f"no se pudo borrar {claves[0]}")
         return 0, [(c, "ClientError") for c in claves]
-    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _detalle)
+    monkeypatch.setattr(r2_uploader, "delete_files_lote", _detalle)
     with caplog.at_level(logging.DEBUG):
         creativo.borrar_copias("acme", [(1, "123")])
         analisis.borrar_claves(["clientes/acme/meta_rendimiento/eval1_A1.jpg"])

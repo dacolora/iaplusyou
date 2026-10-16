@@ -222,13 +222,10 @@ def guardar_cuentas(cliente):
     cupo = max(0, cuentas.MAX_POR_PROYECTO - len(existentes))
     sobran = max(0, len(nuevas) - cupo)
     elegidas = existentes + nuevas[:cupo]
-    antes = set(propias)
     try:
         r = cuentas.elegir(cliente, elegidas, usuario=session.get("usuario"))
-    except Exception as e:  # noqa: BLE001 — borrar las copias de una quitada falló: esa cuenta sigue en el proyecto
-        for act in sorted(set(cuentas.ids(cliente)) - antes):
-            tareas_mr.encolar_sync(cliente, act)
-        flash(gettext("No se pudo quitar una cuenta (%(tipo)s): sigue en el proyecto, inténtalo de nuevo.",
+    except Exception as e:  # noqa: BLE001 — `elegir` es una sola transacción (PND-206): si falló, nada cambió
+        flash(gettext("No se pudieron cambiar las cuentas (%(tipo)s): todo sigue como estaba, inténtalo de nuevo.",
                       tipo=type(e).__name__), "error")
         return _volver(cliente)
     for act, pais in cambios_pais:
@@ -369,6 +366,15 @@ def evaluar(cliente):
     eid = datos.crear_evaluacion(cliente, prep["cuentas"], prep["desde"], prep["hasta"], prep["moneda"],
                                  prep["muestra"], prep["recomendaciones"], pedido_por=session.get("usuario"),
                                  extra=prep["extra"])
+    # PND-297 (decisión 2026-10-13): la muestra se armó ANTES de crear la fila. Si en ese rato se desconectó Meta (que
+    # borra las evaluaciones del proyecto), esta fila, con nombres y cifras de Meta, nacería después del borrado y
+    # quedaría viva. Con la fila ya creada se vuelve a mirar la conexión: sin token, o sin alguna de sus cuentas en el
+    # proyecto, se borra antes de encolar (nada se reservó ni se cobra). Al revés (la desconexión llega después de esta
+    # mirada) la fila ya existía y la desconexión la borra; la tarea, sin fila, no paga a nadie.
+    if not _token(cliente) or not set(prep["cuentas"] or []) <= set(cuentas.ids(cliente)):
+        datos.borrar_evaluacion(cliente, eid)
+        flash(gettext("Meta se desconectó mientras se preparaba la evaluación: no se creó ni se cobró nada."), "warn")
+        return _volver(cliente)
     try:
         encolada = tareas_mr.encolar_evaluacion(cliente, eid, costo_estimado=usd)
     except Exception:          # SaldoInsuficiente incluida: la fila se borra y la excepción sigue su camino

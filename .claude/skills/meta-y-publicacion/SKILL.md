@@ -106,7 +106,7 @@ mismo candado, así una reconexión en medio no se pisa con el token viejo y una
 falla no frena a los demás y el registro lleva solo el tipo del error. Alertas avisa 14 días antes (fuente
 `meta_acceso`, skill `alertas`) y la tarjeta conectada de Configuración › Conexiones dice «Acceso a los datos de Meta
 hasta el …» con «Renovar el acceso» (la ruta `meta_conectar`: reconectar reemplaza el token sin pasar por
-`_soltar_cuentas_meta`). Pruebas: `tests/test_meta_acceso_datos.py`. No cubre el modo agencia: el token del usuario
+`meta_conexion.borrar`, que borra las métricas copiadas). Pruebas: `tests/test_meta_acceso_datos.py`. No cubre el modo agencia: el token del usuario
 del sistema de Creatv vive en `kv` y no se revisa aquí.
 
 **`meta.json` guarda el mínimo de tope de la cuenta (PND-323, 2026-10-15).** `tope_minimo_meta`
@@ -115,3 +115,26 @@ del sistema de Creatv vive en `kv` y no se revisa aquí.
 el lanzador con `meta_conexion.guardar_tope_minimo` (único escritor fuera de la conexión: merge bajo el candado, solo si
 es la misma cuenta; también en modo agencia, porque es un dato de la cuenta y no pisa la asignación). Lo usa «Nuevo
 experimento» (skill `experimentos`).
+
+**Verificación del negocio (2026-10-15, PND-057; Daniel: «dale la alerta al cliente»).** La primera app de Creatv quedó
+restringida el 2026-09-14 con su verificación de negocio todavía en revisión. La misma periódica diaria
+`meta_revisar_acceso` llama también a `meta_conexion.revisar_negocio` (cada revisión con su propio try/except: una que
+falla no frena la otra): `GET act_…?fields=business{id,name,verification_status}` con el token del proyecto (el id de la
+cuenta solo como `act_<dígitos>`), y guarda `negocio` = {id, nombre, verificacion, ad_account_id, revisado_en} en
+`meta.json` con el mismo candado y la misma regla que los vencimientos (solo si sigue siendo la misma conexión: mismo
+token y misma cuenta). Un estado que no está en `ESTADOS_VERIFICACION`, una cuenta sin negocio o un campo que Meta no dejó
+leer guardan `verificacion` None: sin dato no se avisa. Solo app propia con token; en modo agencia la app es de Creatv.
+`negocio_sin_verificar(cliente)` lo lee para la fuente `meta_negocio` de Alertas (skill `alertas`), que avisa al cliente
+y al admin. Nunca se lee en una página. Pruebas: `tests/test_meta_negocio.py` (con dobles: no se llamó a Meta de
+verdad; la primera corrida real dirá si el token de usuario puede leer `verification_status`, y si no, queda None y no
+avisa).
+
+**Desconectar borra lo copiado, desde la capa de dominio (2026-10-15, PND-207).** `/privacidad` y `/eliminar-datos`
+prometen que quitar la conexión borra las métricas copiadas de Meta. Hasta ahora lo hacía la ruta
+(`dashboard._soltar_cuentas_meta`) y un llamador nuevo de `meta_conexion.borrar` o `meta_agencia.desasignar` lo habría
+saltado. Ahora las dos lo hacen por sí solas (`meta_conexion.soltar_copias` → `meta_rendimiento.soltar.soltar`, que
+nunca lanza) y devuelven un `meta_conexion.Soltado`: verdadero como antes (había conexión / estaba asignado) y con
+`fallo` = el tipo del error si algo no se pudo borrar; `meta_agencia.desconectar` devuelve `fallos` por proyecto. La
+ruta solo avisa (`dashboard._avisar_soltura`). Desde la ronda 2 (2026-10-15) las cuentas se sueltan al instante y las
+métricas copiadas las borra en los minutos siguientes la limpieza que se encola (`meta_rend_limpiar` del proyecto;
+skill `meta-rendimiento`); `/privacidad` y `/eliminar-datos` lo dicen así. `_borrar_crudo` (el que usa `desasignar` por dentro) no suelta nada.

@@ -1441,12 +1441,16 @@ def test_r7_sprint_vivo_ajeno_no_oculta_error_con_mismo_cf_id(base_temporal):
 H1, H2, H3 = "1" * 64, "2" * 64, "3" * 64
 
 
-def _cuenta_meta(act, nombre, alertas_=None, cliente="acme", moneda="SEK"):
+def _cuenta_meta(act, nombre, alertas_=None, cliente="acme", moneda="SEK", copia="2026-10-02T07:00:00"):
+    """Una cuenta de Meta del proyecto; con `alertas_`, lo que guardó su última copia buena, hecha en `copia` (por
+    defecto 3 horas antes de AHORA: PND-262 ignora lo guardado por una copia de hace más de 48 horas)."""
     from meta_rendimiento import cuentas
     cuentas.elegir(cliente, [*({"id": c["ad_account_id"], "name": c["nombre"], "currency": c["moneda"]}
                                for c in cuentas.listar(cliente)), {"id": act, "name": nombre, "currency": moneda}])
     if alertas_ is not None:
         cuentas.actualizar_extra(cliente, act, {"alertas": alertas_})
+        if copia:
+            cuentas.actualizar(cliente, act, ultima_copia=copia)
 
 
 def test_meta_rendimiento_una_alerta_por_recomendacion_alta_guardada(base_temporal):
@@ -1478,7 +1482,8 @@ def test_meta_rendimiento_cada_tipo_alto_tiene_su_texto(base_temporal):
     assert set(alertas.TEXTOS_META_RENDIMIENTO) == set(altos) and set(altos) <= set(recomendaciones.TIPOS)
     _cuenta_meta("act_1", "Norway", [{"tipo": t, "huella": f"{i:064x}"} for i, t in enumerate(altos)])
     a = alertas._fuente_meta_rendimiento("acme", AHORA)
-    assert len(a) == 5 and len({x["titulo"] for x in a}) == 5 and all("Norway" in x["titulo"] for x in a)
+    assert len(a) == len(altos) and len({x["titulo"] for x in a}) == len(altos)
+    assert all("Norway" in x["titulo"] for x in a)
 
 
 def test_meta_rendimiento_ignora_lo_guardado_que_no_vale(base_temporal):
@@ -1527,7 +1532,10 @@ def test_meta_rendimiento_descartar_vale_mientras_la_huella_sea_la_misma(base_te
     alertas.descartar("acme", clave, H1)
     r = alertas.visibles("acme", AHORA, rol="cliente")
     assert clave not in _claves(r["visibles"]) and clave in _claves(r["descartadas"])
-    assert [a["puede_descartar"] for a in r["descartadas"] if a["clave"] == clave] == [True]
+    # PND-270: el cliente la ve descartada (la descartó un admin) pero no puede restaurarla ni descartarla.
+    assert [a["puede_descartar"] for a in r["descartadas"] if a["clave"] == clave] == [False]
+    r_admin = alertas.visibles("acme", AHORA, rol="admin")
+    assert [a["puede_descartar"] for a in r_admin["descartadas"] if a["clave"] == clave] == [True]
     # La copia siguiente da otra huella (cambió la situación): vuelve sola.
     from meta_rendimiento import cuentas
     cuentas.actualizar_extra("acme", "act_1", {"alertas": [{"tipo": "cuenta_roas_bajo", "huella": H2}]})
@@ -1542,10 +1550,26 @@ def test_meta_rendimiento_la_huella_no_depende_del_idioma_y_el_texto_si(base_tem
     es = _por_clave(alertas._fuente_meta_rendimiento("acme", AHORA))
     with idiomas.en_idioma("en"):
         en = _por_clave(alertas._fuente_meta_rendimiento("acme", AHORA))
-    assert set(es) == set(en) and len(en) == 5
+    assert set(es) == set(en) and len(en) == len(alertas.TEXTOS_META_RENDIMIENTO)
     assert all(en[c]["huella"] == es[c]["huella"] for c in en)
     assert [(c, campo) for c in en for campo in ("titulo", "detalle") if en[c][campo] == es[c][campo]] == []
     assert en["meta_rendimiento:cuenta_roas_bajo:act_1"]["titulo"] == "“Norway” sells less than it spends"
+
+
+@__import__("pytest").mark.parametrize("copia, sale", [("2026-09-30T10:00:00", True), ("2026-09-30T09:59:59", False),
+                                         ("2026-09-20T10:00:00", False), (None, False), ("no es fecha", False)])
+def test_pnd262_lo_guardado_por_una_copia_de_hace_mas_de_48_horas_no_sale(base_temporal, copia, sale):
+    """PND-262 (decisión 2026-10-13): una cuenta que dejó de copiarse no deja su última recomendación «alta» en
+    Alertas para siempre. Vale 48 horas desde la última copia buena, como los desgloses; sin fecha legible, nada."""
+    import alertas
+    from meta_rendimiento import cuentas
+    _cuenta_meta("act_1", "Norway", [{"tipo": "cuenta_roas_bajo", "huella": H1}], copia=None)
+    _cuenta_meta("act_2", "Sweden", [{"tipo": "perdedores_gastando", "huella": H2}])   # al día: sale siempre
+    if copia:
+        cuentas.actualizar("acme", "act_1", ultima_copia=copia)
+    claves = _claves(alertas._fuente_meta_rendimiento("acme", AHORA))
+    assert ("meta_rendimiento:cuenta_roas_bajo:act_1" in claves) is sale
+    assert "meta_rendimiento:perdedores_gastando:act_2" in claves
 
 
 def test_meta_rendimiento_esta_registrada_y_la_pestana_meta_tiene_nombre():
@@ -1670,3 +1694,98 @@ def test_meta_acceso_esta_registrada_despues_de_meta():
     nombres = [n for n, _ in alertas.FUENTES]
     assert ("meta_acceso", alertas._fuente_meta_acceso) in alertas.FUENTES
     assert nombres.index("meta_acceso") == nombres.index("meta") + 1
+
+
+# ---------- Meta: el negocio de la conexión no está verificado (PND-057, 2026-10-15) ----------
+
+def _negocio_meta(monkeypatch, tmp_path, verificacion="not_verified", cliente="acme", nombre="Forja Habit",
+                  act="act_1", revisada="act_1", **campos):
+    """meta.json de una conexión propia con lo que guardó la revisión diaria del negocio de su cuenta."""
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "BASE_DIR", str(tmp_path))
+    datos = {"token": "EAAsecreto123456", "ad_account_id": act, "page_id": "9",
+             "negocio": {"id": "1766812841431317", "nombre": nombre, "verificacion": verificacion,
+                         "ad_account_id": revisada, "revisado_en": "2026-10-15T03:00:00"}, **campos}
+    meta_conexion._escribir_atomico(meta_conexion._path(cliente), datos)
+
+
+def test_meta_negocio_sin_verificar_avisa_al_cliente_con_lo_que_tiene_que_hacer(monkeypatch, tmp_path):
+    import alertas
+    _negocio_meta(monkeypatch, tmp_path)
+    [a] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert a["clave"] == "meta_negocio:verificacion" and a["nivel"] == "atencion" and a["grupo"] == "puesta_a_punto"
+    assert a["solo_admin"] is False and not alertas.descarte_solo_admin(a["clave"], [a])   # el cliente la resuelve
+    assert a["tab"] == "settings" and a["ancla"] == "config-meta"
+    assert a["titulo"] == "Tu negocio «Forja Habit» no está verificado en Meta"
+    assert "Verificación del negocio" in a["detalle"] and "restringir la app" in a["detalle"]
+    assert a["huella"] == alertas.huella("1766812841431317", "not_verified")
+
+
+def test_meta_negocio_en_revision_dice_que_espere_y_tiene_otra_huella(monkeypatch, tmp_path):
+    import alertas
+    _negocio_meta(monkeypatch, tmp_path, verificacion="pending")
+    [a] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert a["titulo"] == "Meta está revisando la verificación de tu negocio «Forja Habit»"
+    assert "restringir la app" in a["detalle"] and "más datos" in a["detalle"]
+    _negocio_meta(monkeypatch, tmp_path, verificacion="rejected")
+    [b] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert b["huella"] != a["huella"]                     # descartar «en revisión» no esconde un rechazo
+
+
+@__import__("pytest").mark.parametrize("caso", ["verificado", "sin_dato", "otra_cuenta", "agencia", "sin_token",
+                                                "sin_conexion"])
+def test_meta_negocio_sin_alerta(monkeypatch, tmp_path, caso):
+    import alertas
+    import meta_conexion
+    if caso == "verificado":
+        _negocio_meta(monkeypatch, tmp_path, verificacion="verified")
+    elif caso == "sin_dato":
+        _negocio_meta(monkeypatch, tmp_path, verificacion=None)
+    elif caso == "otra_cuenta":
+        _negocio_meta(monkeypatch, tmp_path, act="act_2")            # cambió de cuenta: la revisión era de la vieja
+    elif caso == "agencia":
+        _negocio_meta(monkeypatch, tmp_path, modo="agencia")
+    elif caso == "sin_token":
+        _negocio_meta(monkeypatch, tmp_path, token=None)
+    else:
+        monkeypatch.setattr(meta_conexion, "BASE_DIR", str(tmp_path))
+    assert alertas._fuente_meta_negocio("acme", AHORA) == []
+
+
+def test_meta_negocio_no_mezcla_proyectos_ni_llama_a_meta(monkeypatch, tmp_path, base_temporal):
+    import alertas
+    import meta_conexion
+
+    def _no(*a, **k):
+        raise AssertionError("no debía llamar a Meta")
+    monkeypatch.setattr(meta_conexion.requests, "get", _no)
+    _negocio_meta(monkeypatch, tmp_path, cliente="otro")
+    assert alertas._fuente_meta_negocio("acme", AHORA) == []
+    resultado, n = _consultas(base_temporal, alertas._fuente_meta_negocio, "otro", AHORA)
+    assert _claves(resultado) == ["meta_negocio:verificacion"] and n == 0
+    assert "EAAsecreto" not in json.dumps(resultado)
+
+
+def test_meta_negocio_el_nombre_de_meta_sale_limpio_y_acotado(monkeypatch, tmp_path):
+    import alertas
+    _negocio_meta(monkeypatch, tmp_path, nombre="Shop https://x.com/?access_token=EAAotro987654 " + "y" * 300)
+    [a] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert "EAAotro987654" not in a["titulo"] and len(a["titulo"]) < 220
+
+
+def test_meta_negocio_la_huella_no_depende_del_idioma_y_el_texto_si(monkeypatch, tmp_path):
+    import alertas
+    import idiomas
+    _negocio_meta(monkeypatch, tmp_path)
+    [es] = alertas._fuente_meta_negocio("acme", AHORA)
+    with idiomas.en_idioma("en"):
+        [en] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert en["huella"] == es["huella"] and en["titulo"] != es["titulo"] and en["detalle"] != es["detalle"]
+    assert en["titulo"] == "Your business “Forja Habit” is not verified on Meta"
+
+
+def test_meta_negocio_esta_registrada_despues_de_meta_acceso():
+    import alertas
+    nombres = [n for n, _ in alertas.FUENTES]
+    assert ("meta_negocio", alertas._fuente_meta_negocio) in alertas.FUENTES
+    assert nombres.index("meta_negocio") == nombres.index("meta_acceso") + 1

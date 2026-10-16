@@ -750,6 +750,29 @@ def test_pnd124_plata_visible_pero_solo_admin_descarta(app, monkeypatch, clave):
     assert cliente.post('/cliente/acme/alertas/descartar', data={'clave': clave, 'huella': a['huella']}).status_code == 403
 
 
+@pytest.mark.parametrize('tipo', ['cuenta_estado', 'cuenta_roas_bajo', 'aprendizaje_limitado',
+                                  'perdedores_gastando', 'anuncios_con_problemas', 'conjuntos_con_problemas'])
+def test_pnd270_meta_rendimiento_visible_pero_solo_admin_descarta(app, monkeypatch, tipo):
+    """PND-270 (decisión 2026-10-13, la regla de PND-124): las alertas del Diagnóstico de Meta las ve el cliente, pero
+    solo un admin las descarta o restaura; el servidor lo frena también si la alerta ya salió del cálculo."""
+    clave = f'meta_rendimiento:{tipo}:act_1'
+    a = _alerta(app, clave, grupo='decision', tab='rendimiento')
+    _fijas(app, monkeypatch, [a])
+    cliente = _cliente_rol_cliente(app)
+    tab = _tab(_html(cliente))
+    assert a['titulo'] in tab
+    assert 'name="clave"' not in tab
+    for accion in ('descartar', 'restaurar'):
+        assert cliente.post('/cliente/acme/alertas/' + accion,
+                            data={'clave': clave, 'huella': a['huella']}).status_code == 403
+    assert _descartes() == []
+    assert app['c'].post('/cliente/acme/alertas/descartar', data={'clave': clave, 'huella': a['huella']}).status_code == 302
+    assert _descartes()
+    _fijas(app, monkeypatch, [])
+    assert cliente.post('/cliente/acme/alertas/restaurar', data={'clave': clave, 'huella': H64}).status_code == 403
+    assert _descartes()
+
+
 @pytest.mark.parametrize('clave', ['tablero:ganador_sin_publicar:1', 'tablero:anuncios_rechazados:1'])
 def test_s1_alertas_de_plata_adicionales_protegidas_en_servidor(app, monkeypatch, clave):
     a = _alerta(app, clave)

@@ -292,7 +292,7 @@ el informe de la integración, al lado (`integracion-report.md`). Dónde vive ca
   Un análisis de un anuncio de Meta sin tienda también los ofrece si su video está en R2 (PND-289).
 - **Lo jubilado de esta rama**: las recomendaciones propias de E2 tarea 6 (`meta_rendimiento/recomendaciones.py` nuestro,
   `datos.objetos_para_recomendar`, `meta_rendimiento/constantes.py`, `tests/test_rendimiento_e2_recomendaciones.py`;
-  dos reglas sin equivalente quedaron como PND-287), la rama Meta de E2 tarea 5 (arriba) y la limpieza propia de la base
+  sus dos reglas sin equivalente se portaron al Diagnóstico el 2026-10-15, PND-287: conjuntos rechazados o con problemas y el motivo de una cuenta desactivada; skill `meta-rendimiento`), la rama Meta de E2 tarea 5 (arriba) y la limpieza propia de la base
   de pruebas (quedó la de main: `tests/test_conftest_limpieza.py`).
 - **Pendientes renumerados** (INT-6: main llegó al PND-270): los de esta rama, del 209 al 224, pasaron al 271–286 (209 →
   271, 210 → 272, …, 224 → 286); 271 y 282 están cerrados.

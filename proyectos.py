@@ -278,6 +278,29 @@ def agregar_aprendizaje(cliente, item):
     return item
 
 
+def reescribir_aprendizajes(cliente, cambiar):
+    """Aplica `cambiar(item) -> item` a cada aprendizaje y guarda solo si alguno cambió (PND-295: al desconectar Meta,
+    los de un anuncio de Meta pierden su nombre). Sin cambios no toma el candado ni escribe nada (así no crea archivos
+    de proyecto ni candados de más). Esa primera mirada va SIN candado: un aprendizaje que se agregue justo después no
+    la ve, y quien lo agrega tiene que mirar por su cuenta (`triple_whale.rutas.analisis_aprendizaje`). Devuelve
+    cuántos cambiaron."""
+    if not any(cambiar(x) != x for x in aprendizajes(cliente)):
+        return 0
+    return _reescribir_aprendizajes(cliente, cambiar)
+
+
+@_con_candado
+def _reescribir_aprendizajes(cliente, cambiar):
+    data = _cargar_para_escribir(cliente)
+    antes = aprendizajes(cliente)
+    despues = [cambiar(x) for x in antes]
+    n = sum(1 for a, b in zip(antes, despues) if a != b)
+    if n:
+        data["aprendizajes"] = despues
+        _json_store.guardar(_path(cliente), data)
+    return n
+
+
 @_con_candado
 def quitar_aprendizaje(cliente, aid):
     """True si existía y se quitó."""

@@ -342,16 +342,43 @@ def _borrar_crudo(cliente):
         return _borrar(_path(cliente))
 
 
+class Soltado:
+    """Lo que devuelven `borrar` y `meta_agencia.desasignar` (PND-207): es verdadero si había algo que quitar (lo que
+    devolvían antes) y `fallo` es el tipo del error si no se pudo borrar algo de lo copiado de Meta (para que la ruta
+    avise), o None."""
+    __slots__ = ("hecho", "fallo")
+
+    def __init__(self, hecho, fallo=None):
+        self.hecho, self.fallo = bool(hecho), fallo
+
+    def __bool__(self):
+        return self.hecho
+
+
+def soltar_copias(cliente):
+    """Borra lo copiado de Meta del proyecto (métricas, análisis de fuente Meta, evaluaciones y sus copias en R2) y
+    deja libres sus cuentas: `meta_rendimiento.soltar.soltar`. PND-207 (decisión 2026-10-13): lo llaman `borrar` y
+    `meta_agencia.desasignar` por sí solas, así ningún llamador puede quitar la conexión y dejar las copias que
+    /privacidad y /eliminar-datos prometen borrar. Nunca lanza: devuelve el tipo del error, o None."""
+    try:
+        from meta_rendimiento import soltar  # noqa: PLC0415 — meta_rendimiento importa este módulo
+        return soltar.soltar(cliente)
+    except Exception as e:  # noqa: BLE001 — la desconexión ya está hecha; se avisa con el tipo
+        return type(e).__name__
+
+
 def borrar(cliente):
-    """Desconecta el proyecto. En modo agencia esta función NO desasigna:
-    lanza ModoAgenciaError, porque salir del modo agencia es una decisión
-    explícita (meta_agencia.desasignar, gateada a admin en Task 2), no un
-    efecto secundario de un botón "desconectar" pensado para modo propia."""
+    """Desconecta el proyecto y borra lo copiado de Meta (`soltar_copias`, PND-207). Devuelve un `Soltado`: verdadero
+    si había conexión, y con `fallo` si no se pudo borrar algo de lo copiado (la desconexión se queda igual). En modo
+    agencia esta función NO desasigna: lanza ModoAgenciaError, porque salir del modo agencia es una decisión
+    explícita (meta_agencia.desasignar, gateada a admin en Task 2), no un efecto secundario de un botón "desconectar"
+    pensado para modo propia."""
     if modo(cliente) == MODO_AGENCIA:
         raise ModoAgenciaError(gettext(
             "Este proyecto está gestionado por Creatv (modo agencia): no se puede desconectar así. "
             "Un admin tiene que desasignarlo (Volver a modo propia)."))
-    return _borrar_crudo(cliente)
+    hecho = _borrar_crudo(cliente)
+    return Soltado(hecho, soltar_copias(cliente))
 
 
 def cargar_pendiente(cliente):
@@ -567,6 +594,70 @@ def revisar_vencimientos(cliente):
         _escribir_atomico(_path(cliente), {**actual, **vence})
     _cache_estado.pop(cliente, None)
     return vence
+
+
+# ---------- verificación del negocio (PND-057) ----------
+
+# Los valores de `verification_status` de un Business en la Graph API. Uno que no esté aquí (Meta agregó otro, o no
+# dejó leer el campo) no se guarda: sin dato no se avisa, nunca un estado inventado.
+ESTADOS_VERIFICACION = frozenset({"verified", "not_verified", "pending", "pending_submission", "pending_need_more_info",
+                                  "failed", "rejected", "revoked", "expired", "ineligible"})
+CAMPOS_NEGOCIO = "business{id,name,verification_status}"
+
+
+def _act(valor):
+    """`act_<dígitos>` o None: el id de la cuenta se usa como edge de Graph."""
+    v = str(valor or "").strip()
+    v = v if v.startswith("act_") else f"act_{v}"
+    return v if v[4:].isdigit() and 0 < len(v) - 4 <= 30 else None
+
+
+def revisar_negocio(cliente):
+    """PND-057 (Daniel, 2026-10-13: «dale la alerta al cliente»): lee en Meta si el negocio dueño de la cuenta
+    publicitaria de la conexión propia está verificado (`GET act_…?fields=business{id,name,verification_status}`, con
+    el token del proyecto) y lo guarda en meta.json como `negocio` = {id, nombre, verificacion, ad_account_id,
+    revisado_en}. Sin verificar, Meta puede restringir la app del proyecto (la primera app de Creatv quedó
+    restringida el 2026-09-14 con su verificación todavía en revisión). La corre la periódica diaria `meta_revisar_acceso`; nunca una página.
+
+    Devuelve lo leído, o None si no hay nada que revisar (sin conexión, sin token, sin cuenta o modo agencia: ahí la app
+    es de Creatv, no del cliente). Lanza MetaConexionError (sin token adentro) si Meta no contesta, sin tocar
+    meta.json. Como `revisar_vencimientos`: pregunta fuera del candado y escribe bajo él SOLO si sigue siendo la misma
+    conexión (mismo token y misma cuenta)."""
+    datos = _cargar_crudo(cliente)
+    if not datos or datos.get("modo") == MODO_AGENCIA or not datos.get("token"):
+        return None
+    act = _act(datos.get("ad_account_id"))
+    if not act:
+        return None
+    token = datos["token"]
+    negocio = (_graph_get(act, token, {"fields": CAMPOS_NEGOCIO}) or {}).get("business") or {}
+    estado_ = str(negocio.get("verification_status") or "").strip().lower()
+    info = {"id": str(negocio.get("id") or "") or None, "nombre": str(negocio.get("name") or "")[:200] or None,
+            "verificacion": estado_ if estado_ in ESTADOS_VERIFICACION else None, "ad_account_id": act,
+            "revisado_en": datetime.now().isoformat(timespec="seconds")}
+    with _candado(cliente):
+        actual = _cargar_crudo(cliente)
+        if (not actual or actual.get("modo") == MODO_AGENCIA or actual.get("token") != token
+                or _act(actual.get("ad_account_id")) != act):
+            return info
+        _escribir_atomico(_path(cliente), {**actual, "negocio": info})
+    return info
+
+
+def negocio_sin_verificar(cliente):
+    """{id, nombre, verificacion} del negocio de la conexión propia del proyecto si la última revisión diaria lo vio
+    sin verificar, o None (verificado, sin dato, sin conexión propia con token, o la revisión es de otra cuenta: el
+    proyecto cambió de cuenta y todavía no se volvió a revisar). Solo lee meta.json: lo usa la fuente `meta_negocio` de
+    Alertas, que nunca llama a Meta."""
+    datos = _cargar_crudo(cliente) or {}
+    if datos.get("modo") == MODO_AGENCIA or not datos.get("token"):
+        return None
+    n = datos.get("negocio")
+    if not isinstance(n, dict) or n.get("ad_account_id") != _act(datos.get("ad_account_id")):
+        return None
+    if n.get("verificacion") not in ESTADOS_VERIFICACION or n["verificacion"] == "verified":
+        return None
+    return {"id": n.get("id"), "nombre": n.get("nombre"), "verificacion": n["verificacion"]}
 
 
 def clientes():

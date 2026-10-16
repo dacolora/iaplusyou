@@ -342,33 +342,49 @@ def test_asignar_falla_o_proyecto_inexistente(app, monkeypatch):
 
 def test_desasignar(app, monkeypatch):
     llamadas = []
-    monkeypatch.setattr(app["ma"], "desasignar", lambda c: llamadas.append(c) or True)
+    monkeypatch.setattr(app["ma"], "desasignar", lambda c: llamadas.append(c) or mc.Soltado(True))
     r = app["admin"].post("/admin/meta/desasignar/acme", data={}, headers=SAME_ORIGIN)
     assert r.status_code == 302 and llamadas == ["acme"]
     assert any("volvió a modo propia" in m for m in _flashes(app["admin"]))
     assert app["registros"] and app["registros"][0][:4] == ("acme", "meta", "agencia", "ok")
-    monkeypatch.setattr(app["ma"], "desasignar", lambda c: False)
+    monkeypatch.setattr(app["ma"], "desasignar", lambda c: mc.Soltado(False))
     app["admin"].post("/admin/meta/desasignar/otro", data={}, headers=SAME_ORIGIN)
     assert any("no estaba en modo agencia" in m for m in _flashes(app["admin"]))
 
 
 def test_desasignar_borra_las_copias_y_libera_las_cuentas(app, monkeypatch):
+    """PND-207: es `meta_agencia.desasignar` (no la ruta) la que borra lo copiado de Meta del proyecto."""
     from meta_rendimiento import cuentas
     cuentas.elegir("acme", [{"id": "act_5", "name": "HappyFlops Norway", "currency": "SEK"}])
     cuentas.elegir("otro", [{"id": "act_6", "name": "HappyFlops Sweden", "currency": "SEK"}])
-    monkeypatch.setattr(app["ma"], "desasignar", lambda c: True)
+    _asignar_en_disco("acme")
     app["admin"].post("/admin/meta/desasignar/acme", data={}, headers=SAME_ORIGIN)
     assert cuentas.ids("acme") == [] and cuentas.ids("otro") == ["act_6"]
+    assert mc.modo("acme") == "propia"
+
+
+def test_desasignar_avisa_si_no_se_pudo_borrar_lo_copiado(app, monkeypatch):
+    monkeypatch.setattr(app["ma"], "desasignar", lambda c: mc.Soltado(True, "OperationalError"))
+    app["admin"].post("/admin/meta/desasignar/acme", data={}, headers=SAME_ORIGIN)
+    assert any("no se pudieron borrar sus métricas copiadas (OperationalError)" in m for m in _flashes(app["admin"]))
 
 
 def test_desconectar_la_agencia_borra_las_copias_de_cada_proyecto_asignado(app, monkeypatch):
     from meta_rendimiento import cuentas
     cuentas.elegir("acme", [{"id": "act_5", "name": "HappyFlops Norway", "currency": "SEK"}])
     cuentas.elegir("otro", [{"id": "act_6", "name": "HappyFlops Sweden", "currency": "SEK"}])
-    monkeypatch.setattr(app["ma"], "proyectos_asignados", lambda: {"acme": {}})
-    monkeypatch.setattr(app["ma"], "desconectar", lambda: {"habia": True, "desasignados": 1})
+    _asignar_en_disco("acme")
     app["admin"].post("/admin/meta/desconectar", data={}, headers=SAME_ORIGIN)
     assert cuentas.ids("acme") == [] and cuentas.ids("otro") == ["act_6"]
+
+
+def test_desconectar_la_agencia_avisa_por_cada_proyecto_que_no_se_pudo_soltar(app, monkeypatch):
+    monkeypatch.setattr(app["ma"], "proyectos_asignados", lambda: {"acme": {}, "otro": {}})
+    monkeypatch.setattr(app["ma"], "desconectar", lambda: {"habia": True, "desasignados": 2,
+                                                          "fallos": {"otro": "RuntimeError"}})
+    app["admin"].post("/admin/meta/desconectar", data={}, headers=SAME_ORIGIN)
+    avisos = [m for m in _flashes(app["admin"]) if "no se pudieron borrar sus métricas copiadas" in m]
+    assert len(avisos) == 1 and "(RuntimeError)" in avisos[0]
 
 
 # ---- vista del proyecto -----------------------------------------------------

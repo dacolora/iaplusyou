@@ -164,7 +164,23 @@ def test_borrar_cuenta_borra_sus_desgloses_y_no_los_de_otras(base_temporal):
 def test_borrar_cuenta_no_borra_las_evaluaciones(base_temporal):
     eid = datos.crear_evaluacion("hf", [A], "2026-09-10", "2026-10-09", "SEK", [{"ref": "a1"}], [], "ana")
     datos.borrar_cuenta("hf", A)
-    assert datos.evaluacion("hf", eid) is not None
+    assert datos.evaluacion("hf", eid, solo_visibles=False) is not None
+
+
+def test_la_evaluacion_de_una_cuenta_quitada_no_se_ve_y_vuelve_si_se_elige_otra_vez(base_temporal):
+    """Quien orquesta, 2026-10-15: la evaluación de una cuenta quitada no se muestra ni va a Claude, pero no se borra
+    (se pagó): si la cuenta vuelve a elegirse, reaparece. Basta con UNA cuenta suya quitada."""
+    from meta_rendimiento import cuentas
+    eid = _crear("hf")                                       # de A y B
+    sola_b = _crear("hf", cuentas=[B])
+    datos.actualizar_evaluacion(eid, estado="lista", resultado={"resumen": "bien"})
+    cuentas.elegir("hf", [{"id": B, "name": "B"}])            # se quita A
+    assert datos.evaluacion("hf", eid) is None and datos.evaluacion("hf", eid, solo_visibles=False)["id"] == eid
+    recientes, entera = datos.evaluaciones_panel("hf")
+    assert [e["id"] for e in recientes] == [sola_b] and entera is None
+    assert {e["id"] for e in datos.evaluaciones("hf")} == {eid, sola_b}     # para borrar sus copias al desconectar
+    cuentas.elegir("hf", [{"id": A, "name": "A"}, {"id": B, "name": "B"}])
+    assert datos.evaluacion("hf", eid)["id"] == eid and datos.evaluaciones_panel("hf")[1]["id"] == eid
 
 
 # ----------------------------------------------------------- gasto por conjunto ---
@@ -216,10 +232,19 @@ MUESTRA = [{"ref": "a1", "ad_id": "111", "ad_account_id": A}, {"ref": "a2", "ad_
 RECOS = [{"id": "r1", "tipo": "perdedores_gastando", "nivel": "alta"}]
 
 
+def _elegidas(cliente, cuentas_):
+    """Las cuentas de la evaluación elegidas en su proyecto: una evaluación de una cuenta que no lo está no se ve
+    (quien orquesta, 2026-10-15)."""
+    from meta_rendimiento import cuentas
+    actuales = [{"id": c["ad_account_id"], "name": c["nombre"]} for c in cuentas.listar(cliente)]
+    cuentas.elegir(cliente, actuales + [{"id": act, "name": act} for act in cuentas_])
+
+
 def _crear(cliente="hf", **k):
-    args = dict(cuentas=[A, B], desde="2026-09-10", hasta="2026-10-09", moneda="SEK", muestra=MUESTRA,
-                recomendaciones=RECOS, pedido_por="ana")
+    args = dict(cuentas=[A, B] if cliente == "hf" else ["act_9"], desde="2026-09-10", hasta="2026-10-09",
+                moneda="SEK", muestra=MUESTRA, recomendaciones=RECOS, pedido_por="ana")
     args.update(k)
+    _elegidas(cliente, args["cuentas"])
     return datos.crear_evaluacion(cliente, args["cuentas"], args["desde"], args["hasta"], args["moneda"],
                                   args["muestra"], args["recomendaciones"], args["pedido_por"])
 

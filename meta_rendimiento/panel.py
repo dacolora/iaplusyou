@@ -187,7 +187,8 @@ def _evaluar(ids, periodo_, recientes, previos, cuentas_por_id, reglas):
         for a in ev["anuncios"]:
             t = por_ad.get(a["ad_id"]) or {}
             a.update(ad_account_id=act, adset_id=t.get("adset_id"), campaign_id=t.get("campaign_id"),
-                     estado=t.get("estado"), miniatura_url=t.get("miniatura_url"), moneda=c.get("moneda"), cuenta=c)
+                     estado=t.get("estado"), miniatura_url=t.get("miniatura_url"), moneda=c.get("moneda"), cuenta=c,
+                     problemas_meta=t.get("problemas_meta") or [], miniatura_r2=t.get("miniatura_r2"))
             # «Sin rastreo» habla de los parámetros de Triple Whale: aquí no aplica.
             a["problemas"] = [p for p in a["problemas"] if p != "sin_rastreo"]
             anuncios.append(a)
@@ -286,11 +287,13 @@ def _entrada_reglas(cliente, en_alcance, hoy, reglas, filas_dia=None, anuncios=N
     if desgloses_30 is None:
         desgloses_30 = datos.desgloses(cliente, ids, DIAS_REGLAS)
     ahora = ahora or _ahora()
+    objetos = datos.objetos_activos(cliente, ids, con_problemas=True)   # y los conjuntos con problemas (PND-287)
     return {
         "cuentas": en_alcance,
         "totales_7": _totales_por_cuenta(filas_dia, desde_7, hasta),
         "totales_30": _totales_por_cuenta(filas_dia, desde_30, hasta),
-        "objetos": datos.objetos_activos(cliente, ids),
+        "objetos": [o for o in objetos if o["estado"] == "ACTIVE"],
+        "conjuntos_problema": [o for o in objetos if o["estado"] != "ACTIVE"],
         "conjuntos_7": _por_conjunto(a7),
         "anuncios": evaluados,
         "frecuencia_7": frecuencia_7,
@@ -686,6 +689,7 @@ def diagnostico(cliente, en_estructura, ids_evaluacion, dias, hoy, cuentas_por_i
             "conteo_recomendaciones": _conteo_niveles(recs),
             "max_filas": MAX_FILAS_GRUPO, "niveles_recomendacion": recomendaciones.NIVELES,
             "nombres_prioridad": NOMBRES_PRIORIDAD, "ventana_segmentos": ventana_seg,
+            "ventana_caro": DIAS_REGLAS,   # la marca «Caro» sale de la regla de 30 días, sea cual sea la tabla (PND-263)
             "segmentos": segmentos([f for f in desgloses if f["ventana"] == ventana_seg], en_estructura,
                                    _moneda_comun(en_estructura), recs, ahora),
             "evaluacion": ev, "dias": dias_eval, "actual": en_estructura[0] if len(en_estructura) == 1 else None,

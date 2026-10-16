@@ -198,11 +198,18 @@ def desconectar():
     alguien desasignara cada proyecto a mano — un "desconectar" que no
     desconecta nada visible para el cliente. Se eligió la opción simple:
     desasignar todo de una. Devuelve {"habia": bool (si había una conexión
-    que borrar), "desasignados": int (cuántos proyectos volvieron a propia)}."""
+    que borrar), "desasignados": int (cuántos proyectos volvieron a propia),
+    "fallos": {cliente: tipo del error} de los proyectos a los que no se les
+    pudo borrar algo de lo copiado de Meta (PND-207)}."""
     global _cache_registro
     habia = _leer_kv() is not None
     clientes = _clientes_en_modo_agencia()
-    desasignados = sum(1 for cliente in clientes if desasignar(cliente))
+    desasignados, fallos = 0, {}
+    for cliente in clientes:
+        r = desasignar(cliente)
+        desasignados += bool(r)
+        if r.fallo:
+            fallos[cliente] = r.fallo
     _borrar_kv()
     _cache_registro = None
     # Los proyectos ya se desasignaron arriba (cada desasignar() invalida su
@@ -211,7 +218,7 @@ def desconectar():
     _invalidar_caches(incluir_proyectos=False)
     if habia or desasignados:
         log.info("meta_agencia: Business desconectado (%d proyecto(s) desasignado(s))", desasignados)
-    return {"habia": habia, "desasignados": desasignados}
+    return {"habia": habia, "desasignados": desasignados, "fallos": fallos}
 
 
 def estado():
@@ -511,11 +518,13 @@ def asignar(cliente, ad_account_id, page_id=None, asignado_por=None, portafolio_
 
 def desasignar(cliente):
     """Saca el proyecto del modo agencia: restaura `propia_respaldo` si lo
-    había o borra meta.json. Nunca toca la conexión de la agencia. Devuelve
-    True si el proyecto estaba asignado."""
+    había o borra meta.json, y borra lo copiado de Meta y libera sus cuentas
+    (`meta_conexion.soltar_copias`, PND-207). Nunca toca la conexión de la
+    agencia. Devuelve un `meta_conexion.Soltado`: verdadero si el proyecto
+    estaba asignado, con `fallo` si no se pudo borrar algo de lo copiado."""
     previo = meta_conexion._cargar_crudo(cliente)
     if not previo or previo.get("modo") != MODO:
-        return False
+        return meta_conexion.Soltado(False)
     respaldo = previo.get("propia_respaldo")
     if isinstance(respaldo, dict) and respaldo:
         respaldo = {k: v for k, v in respaldo.items() if k not in ("modo", "propia_respaldo")}
@@ -524,7 +533,7 @@ def desasignar(cliente):
         meta_conexion._borrar_crudo(cliente)
     borrar_solicitud(cliente)
     log.info("meta_agencia: proyecto %s vuelve a modo propia", cliente)
-    return True
+    return meta_conexion.Soltado(True, meta_conexion.soltar_copias(cliente))
 
 
 def proyectos_asignados():

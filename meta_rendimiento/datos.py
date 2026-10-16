@@ -40,6 +40,21 @@ METRICAS_DESGLOSE = ("gasto", "impresiones", "clics", "clics_salida", "compras",
 _LARGO_CLAVE = 120
 # La «Evaluación con IA» (spec E2 §8). Lo que nunca se cambia después de crearla.
 ESTADOS_EVALUACION = ("en_cola", "analizando", "lista", "error")
+
+
+class CuentaSoltada(Exception):
+    """PND-206: la cuenta ya no está elegida en el proyecto (la quitaron o se desconectó Meta mientras su copia corría).
+    Un escritor llamado con `exigir_cuenta=True` la lanza ANTES de escribir nada y su transacción no deja rastro."""
+
+
+def _exigir_cuenta(con, cliente, act):
+    """Dentro de la transacción del escritor: toma el candado de escritura y comprueba que la cuenta siga elegida
+    (`cuentas.bloquear_elegida`); si no, CuentaSoltada. `cuentas.elegir` quita la cuenta en una transacción con el
+    mismo candado, así que no puede colarse entre esta comprobación y la escritura (sus copias las borra después la
+    limpieza, `soltar.barrer`)."""
+    from meta_rendimiento import cuentas  # noqa: PLC0415 — cuentas importa este módulo al borrar copias
+    if not cuentas.bloquear_elegida(con, cliente, act):
+        raise CuentaSoltada(act)
 _FIJOS_EVALUACION = ("id", "cliente", "creado_en", "actualizado_en")
 
 
@@ -84,9 +99,10 @@ def _con_alias_evaluacion(d):
 
 # ------------------------------------------------------------ escribir ---
 
-def _reemplazar(tabla, columnas, cliente, act, desde, hasta, filas, llave):
+def _reemplazar(tabla, columnas, cliente, act, desde, hasta, filas, llave, exigir_cuenta=False):
     """Borra [desde, hasta] de esa cuenta y escribe `filas` (las de fuera del rango se ignoran) en una
-    transacción. Si la misma `llave` llega dos veces en la tanda (solape al paginar), gana la última."""
+    transacción. Si la misma `llave` llega dos veces en la tanda (solape al paginar), gana la última.
+    `exigir_cuenta=True` (la copia): CuentaSoltada sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     ahora = db.ahora()
     por_llave = {}
     for f in filas or []:
@@ -104,6 +120,8 @@ def _reemplazar(tabla, columnas, cliente, act, desde, hasta, filas, llave):
         por_llave[k] = nueva
     registros = list(por_llave.values())
     with db.conectar() as con:
+        if exigir_cuenta:
+            _exigir_cuenta(con, cliente, act)
         con.execute(tabla.delete().where(tabla.c.cliente == cliente, tabla.c.ad_account_id == act,
                                          tabla.c.fecha >= desde, tabla.c.fecha <= hasta))
         if registros:
@@ -111,29 +129,32 @@ def _reemplazar(tabla, columnas, cliente, act, desde, hasta, filas, llave):
     return len(registros)
 
 
-def reemplazar_cuenta_dias(cliente, act, desde, hasta, filas):
+def reemplazar_cuenta_dias(cliente, act, desde, hasta, filas, exigir_cuenta=False):
     """La cuenta por día para [desde, hasta]: borra el rango de ESA cuenta y lo vuelve a escribir.
     Claves de fila: fecha, gasto, impresiones, alcance, clics, clics_salida, compras, valor, vistas_3s, thruplays.
     Devuelve cuántas filas escribió."""
     return _reemplazar(db.meta_cuenta_dia, METRICAS_CUENTA, cliente, act, desde, hasta, filas,
-                       llave=lambda r: r["fecha"])
+                       llave=lambda r: r["fecha"], exigir_cuenta=exigir_cuenta)
 
 
-def reemplazar_anuncio_dias(cliente, act, desde, hasta, filas):
+def reemplazar_anuncio_dias(cliente, act, desde, hasta, filas, exigir_cuenta=False):
     """El anuncio por día para [desde, hasta]: borra el rango de ESA cuenta y lo vuelve a escribir.
     Claves de fila: fecha, campaign_id, adset_id, ad_id y METRICAS_ANUNCIO. Una fila sin `ad_id` se ignora.
     Devuelve cuántas filas escribió."""
     return _reemplazar(db.meta_anuncio_dia, METRICAS_ANUNCIO, cliente, act, desde, hasta, filas,
-                       llave=lambda r: (r["ad_id"], r["fecha"]) if r.get("ad_id") else None)
+                       llave=lambda r: (r["ad_id"], r["fecha"]) if r.get("ad_id") else None,
+                       exigir_cuenta=exigir_cuenta)
 
 
-def guardar_objetos(cliente, act, objetos):
+def guardar_objetos(cliente, act, objetos, exigir_cuenta=False):
     """Upsert por (cliente, objeto_id) de campañas, conjuntos y anuncios. Solo se actualizan las columnas
     PRESENTES en cada dict: un objeto que llega solo con su nombre (viene de los insights, sin «estado») no borra
     el estado, el presupuesto, el aprendizaje ni la miniatura ya guardados. Un `nombre` None tampoco pisa el
     guardado. Claves: `nivel`, `objeto_id` y las columnas de meta_objeto (sin id/cliente/ad_account_id/
-    actualizado_en). Los objetos con el mismo juego de claves se escriben juntos en una tanda. Una `miniatura_url` que
-    no pasa `miniatura_valida` se descarta (las demás columnas del objeto sí se guardan). Devuelve cuántos."""
+    actualizado_en). `extra` se mezcla con el guardado (sus claves reemplazan las mismas y dejan las demás). Los
+    objetos con el mismo juego de claves se escriben juntos en una tanda. Una `miniatura_url` que
+    no pasa `miniatura_valida` se descarta (las demás columnas del objeto sí se guardan). Devuelve cuántos.
+    `exigir_cuenta=True` (la copia): CuentaSoltada sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     t = db.meta_objeto
     ahora = db.ahora()
     grupos = {}
@@ -148,13 +169,18 @@ def guardar_objetos(cliente, act, objetos):
         grupos.setdefault(frozenset(valores), []).append(valores)
     n = 0
     with db.conectar() as con:
+        if exigir_cuenta and grupos:
+            _exigir_cuenta(con, cliente, act)
         for claves, lote in grupos.items():
             filas = [dict(v, cliente=cliente, ad_account_id=act, actualizado_en=ahora,
                           **({} if "extra" in claves else {"extra": {}})) for v in lote]
             nuevo = insert_sqlite(t)
             set_ = {c: getattr(nuevo.excluded, c) for c in claves if c not in ("objeto_id", "extra")}
             if "extra" in claves:
-                set_["extra"] = nuevo.excluded.extra
+                # Se MEZCLA (json_patch) con lo guardado: la miniatura (`miniatura_en`) y los problemas de Meta
+                # (`problemas`, PND-258) llegan en pasos distintos de la copia y ninguno borra al otro.
+                set_["extra"] = sa.func.json_patch(sa.func.coalesce(t.c.extra, sa.literal_column("'{}'")),
+                                                   nuevo.excluded.extra)
             if "nombre" in claves:
                 set_["nombre"] = sa.func.coalesce(nuevo.excluded.nombre, t.c.nombre)
             set_["ad_account_id"] = nuevo.excluded.ad_account_id
@@ -189,9 +215,14 @@ def marcar_sin_estado(cliente, act, nivel, vistos, estados=None):
     return n
 
 
-def guardar_alcance(cliente, act, filas):
+def guardar_alcance(cliente, act, filas, completa=False, exigir_cuenta=False):
     """Alcance y frecuencia de una ventana (gente única: no se suma por días). Upsert por
-    (cliente, objeto_id, ventana). Claves: nivel, objeto_id, ventana, alcance, frecuencia. Devuelve cuántas."""
+    (cliente, objeto_id, ventana). Claves: nivel, objeto_id, ventana, alcance, frecuencia. Devuelve cuántas.
+
+    `completa=True` (la copia, con la lectura ENTERA de cada ventana que trae `filas`): en la misma transacción borra
+    las campañas de esa cuenta y esa ventana que no vinieron. Meta no devuelve fila de una campaña sin entrega en la
+    ventana, y sin esto su alcance se quedaba en el último valor para siempre (PND-199). `exigir_cuenta=True` (la
+    copia): CuentaSoltada sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     t = db.meta_alcance
     ahora = db.ahora()
     registros = [dict(cliente=cliente, ad_account_id=act, nivel=f["nivel"], objeto_id=str(f["objeto_id"]),
@@ -203,8 +234,19 @@ def guardar_alcance(cliente, act, filas):
     nuevo = insert_sqlite(t)
     set_ = {c: getattr(nuevo.excluded, c) for c in ("ad_account_id", "nivel", "alcance", "frecuencia", "calculado_en")}
     with db.conectar() as con:
+        if exigir_cuenta:
+            _exigir_cuenta(con, cliente, act)
         con.execute(nuevo.on_conflict_do_update(index_elements=["cliente", "objeto_id", "ventana"], set_=set_),
                     registros)
+        if completa:
+            for ventana in {r["ventana"] for r in registros}:
+                vinieron = {r["objeto_id"] for r in registros if r["ventana"] == ventana and r["nivel"] == "campana"}
+                cond = (t.c.cliente == cliente, t.c.ad_account_id == act, t.c.ventana == ventana,
+                        t.c.nivel == "campana")
+                guardadas = con.execute(sa.select(t.c.objeto_id).where(*cond)).scalars().all()
+                sobran = [i for i in guardadas if i not in vinieron]
+                for i in range(0, len(sobran), _TANDA_IDS):
+                    con.execute(t.delete().where(*cond, t.c.objeto_id.in_(sobran[i:i + _TANDA_IDS])))
     return len(registros)
 
 
@@ -218,12 +260,13 @@ def _ventana_desglose(ventana):
     return v
 
 
-def reemplazar_desgloses(cliente, act, ventana, dimension, filas):
+def reemplazar_desgloses(cliente, act, ventana, dimension, filas, exigir_cuenta=False):
     """Los desgloses de UNA cuenta para una ventana (7|30 días) y una dimensión (`DIMENSIONES`): borra esa
     combinación y escribe `filas` en una transacción (una lista vacía la deja vacía). Las otras ventanas,
     dimensiones y cuentas no se tocan. Claves de fila: `clave` (texto; una fila sin clave se ignora y, si llega
     repetida, gana la última) y `METRICAS_DESGLOSE`. Una ventana o dimensión fuera de lo conocido levanta
-    ValueError antes de tocar nada. Devuelve cuántas filas escribió."""
+    ValueError antes de tocar nada. Devuelve cuántas filas escribió. `exigir_cuenta=True` (la copia): CuentaSoltada
+    sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     ventana = _ventana_desglose(ventana)
     if dimension not in DIMENSIONES:
         raise ValueError(f"dimensión de desglose inválida: {dimension!r}")
@@ -240,6 +283,8 @@ def reemplazar_desgloses(cliente, act, ventana, dimension, filas):
                                 calculado_en=ahora)
     registros = list(por_clave.values())
     with db.conectar() as con:
+        if exigir_cuenta:
+            _exigir_cuenta(con, cliente, act)
         con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act, t.c.ventana == ventana,
                                      t.c.dimension == dimension))
         if registros:
@@ -286,7 +331,7 @@ def borrar_evaluacion(cliente, evaluacion_id):
 
 def borrar_evaluaciones(cliente):
     """Borra TODAS las evaluaciones de ese proyecto (E2-R2: desconectar Meta borra las métricas copiadas y una
-    evaluación guarda nombres y métricas de anuncios de Meta). Solo la llama `dashboard._soltar_cuentas_meta`: ni
+    evaluación guarda nombres y métricas de anuncios de Meta). Solo la llama `meta_rendimiento.soltar` (desconectar; PND-207): ni
     `borrar_cuenta` ni `cuentas.elegir` la usan, porque también corren al cambiar las cuentas elegidas, y lo que se
     pagó no se pierde por eso. No toca la tabla `gasto`. Devuelve cuántas borró."""
     t = db.meta_evaluacion
@@ -294,12 +339,63 @@ def borrar_evaluaciones(cliente):
         return con.execute(t.delete().where(t.c.cliente == cliente)).rowcount
 
 
-def borrar_cuenta(cliente, act):
+def borrar_cuenta(cliente, act, con=None):
     """Quita las copias de esa cuenta en ese proyecto: los días de cuenta y de anuncio, los objetos, el alcance y los
-    desgloses (nunca `meta_cuenta`, lo de otro proyecto ni las evaluaciones: se pagaron y se conservan)."""
+    desgloses (nunca `meta_cuenta`, lo de otro proyecto ni las evaluaciones: se pagaron y se conservan). Con `con`,
+    dentro de esa transacción (la de `cuentas.elegir`, PND-206)."""
+    if con is None:
+        with db.conectar() as con_:
+            return borrar_cuenta(cliente, act, con=con_)
+    for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose):
+        con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act))
+
+
+# Las tablas con copias de una cuenta (PND-206/207, ronda 2): las que la limpieza barre cuando la cuenta ya no está
+# elegida en su proyecto. Las evaluaciones no: son pagadas y solo se van al desconectar Meta (`borrar_evaluaciones`).
+TABLAS_COPIA = ("meta_cuenta_dia", "meta_anuncio_dia", "meta_objeto", "meta_alcance", "meta_desglose")
+LOTE_BARRIDO = 5000     # filas por transacción al barrer: el candado de escritura de SQLite se suelta entre lotes
+
+
+def _no_elegida(t):
+    """La fila es de una cuenta que NO está elegida en su proyecto (`meta_cuenta`, de `cuentas`)."""
+    c = db.meta_cuenta
+    return ~sa.exists().where(c.c.cliente == t.c.cliente, c.c.ad_account_id == t.c.ad_account_id)
+
+
+def cuentas_huerfanas(cliente=None):
+    """{(cliente, ad_account_id)} con copias en alguna de `TABLAS_COPIA` pero sin la cuenta elegida en ese proyecto: lo
+    que dejó quitar una cuenta o desconectar Meta (desde la ronda 2 de PND-206/207 `cuentas.elegir` ya no borra copias
+    dentro de su transacción), una copia vieja que quedó huérfana antes de PND-206 o un barrido a medias. Con `cliente`,
+    solo las de ese proyecto. Una consulta por tabla."""
+    salida = set()
     with db.conectar() as con:
-        for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose):
-            con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act))
+        for nombre in TABLAS_COPIA:
+            t = getattr(db, nombre)
+            q = sa.select(t.c.cliente, t.c.ad_account_id).where(_no_elegida(t)).distinct()
+            if cliente is not None:
+                q = q.where(t.c.cliente == cliente)
+            salida |= {(r.cliente, r.ad_account_id) for r in con.execute(q) if r.ad_account_id}
+    return salida
+
+
+def borrar_huerfanas(cliente, act, lote=LOTE_BARRIDO):
+    """Borra las copias de la cuenta `act` del proyecto `cliente` en `TABLAS_COPIA`, de `lote` en `lote` filas, cada lote
+    en su propia transacción (el candado se suelta entre lotes: la copia de 7 cuentas son decenas de miles de filas y un
+    escritor que espera más de 5 s falla). Cada lote vuelve a mirar, en la misma sentencia, que la cuenta siga sin
+    elegir: si alguien la vuelve a elegir a mitad, se deja de borrar (sus copias nuevas no se tocan). Devuelve cuántas
+    filas borró."""
+    n = 0
+    for nombre in TABLAS_COPIA:
+        t = getattr(db, nombre)
+        while True:
+            ids = (sa.select(t.c.id).where(t.c.cliente == cliente, t.c.ad_account_id == act, _no_elegida(t))
+                   .limit(int(lote)).scalar_subquery())
+            with db.conectar() as con:
+                borradas = con.execute(t.delete().where(t.c.id.in_(ids), _no_elegida(t))).rowcount
+            n += borradas
+            if borradas < lote:
+                break
+    return n
 
 
 def purgar_anuncios(antes_de):
@@ -411,6 +507,39 @@ def anuncios_sin_miniatura_al_dia(cliente, act, desde, horas=20, ahora=None):
     return salida
 
 
+def miniaturas_por_copiar(cliente, act, desde, limite):
+    """[(ad_id, miniatura_url, creative_id)] de los anuncios de ESA cuenta con gasto desde `desde` (AAAA-MM-DD) y una
+    miniatura de Meta guardada que todavía no tienen copia en R2 de su creativo actual (`extra.miniatura_r2` y
+    `extra.miniatura_r2_de`; PND-194), los de más gasto primero, como mucho `limite`. Una consulta."""
+    a, o = db.meta_anuncio_dia, db.meta_objeto
+    gasto = (sa.select(a.c.ad_id, sa.func.sum(a.c.gasto).label("gasto"))
+             .where(a.c.cliente == cliente, a.c.ad_account_id == act, a.c.fecha >= desde, a.c.gasto > 0,
+                    a.c.ad_id.is_not(None))
+             .group_by(a.c.ad_id).subquery("g"))
+    copiada_de = sa.func.json_extract(o.c.extra, "$.miniatura_r2_de")
+    q = (sa.select(o.c.objeto_id, o.c.miniatura_url, o.c.creative_id)
+         .select_from(gasto.join(o, sa.and_(o.c.cliente == cliente, o.c.objeto_id == gasto.c.ad_id)))
+         .where(o.c.ad_account_id == act, o.c.nivel == "anuncio", o.c.miniatura_url.is_not(None),
+                sa.or_(sa.func.json_extract(o.c.extra, "$.miniatura_r2").is_(None), copiada_de.is_(None),
+                       copiada_de != sa.func.coalesce(o.c.creative_id, "")))
+         .order_by(gasto.c.gasto.desc(), o.c.objeto_id)
+         .limit(int(limite)))
+    with db.conectar() as con:
+        return [(str(r.objeto_id), r.miniatura_url, r.creative_id) for r in con.execute(q)]
+
+
+def anuncios_con_miniatura_r2(cliente, act, con=None):
+    """Los ad_id de ESA cuenta cuya miniatura se copió a R2 (`extra.miniatura_r2`, PND-194): soltar la cuenta borra
+    esas copias DESPUÉS de las filas (`cuentas.elegir`). Con `con`, dentro de esa transacción."""
+    if con is None:
+        with db.conectar() as con_:
+            return anuncios_con_miniatura_r2(cliente, act, con=con_)
+    o = db.meta_objeto
+    q = sa.select(o.c.objeto_id).where(o.c.cliente == cliente, o.c.ad_account_id == act, o.c.nivel == "anuncio",
+                                       sa.func.json_extract(o.c.extra, "$.miniatura_r2").is_not(None))
+    return [str(r) for r in con.execute(q).scalars()]
+
+
 def cuenta_por_dia(cliente, cuentas, desde, hasta):
     """Las filas de meta_cuenta_dia del rango (para el gráfico diario), por fecha y cuenta."""
     if not cuentas:
@@ -508,8 +637,8 @@ def totales_por_anuncio(cliente, cuentas, desde, hasta):
                      *_sumas(a, METRICAS_ANUNCIO))
            .where(*_donde(a, cliente, cuentas, desde, hasta))
            .group_by(a.c.ad_account_id, a.c.ad_id).subquery("agg"))
-    q = (sa.select(agg, o.c.nombre.label("anuncio"), o.c.estado, o.c.miniatura_url, s.c.nombre.label("conjunto"),
-                   c.c.nombre.label("campana"))
+    q = (sa.select(agg, o.c.nombre.label("anuncio"), o.c.estado, o.c.miniatura_url, o.c.extra.label("extra_objeto"),
+                   s.c.nombre.label("conjunto"), c.c.nombre.label("campana"))
          .select_from(agg.outerjoin(o, sa.and_(o.c.cliente == cliente, o.c.objeto_id == agg.c.ad_id))
                       .outerjoin(s, sa.and_(s.c.cliente == cliente, s.c.objeto_id == agg.c.adset_id))
                       .outerjoin(c, sa.and_(c.c.cliente == cliente, c.c.objeto_id == agg.c.campaign_id)))
@@ -520,8 +649,24 @@ def totales_por_anuncio(cliente, cuentas, desde, hasta):
         ad_account_id=f["ad_account_id"], ad_id=f["ad_id"], adset_id=f["adset_id"], campaign_id=f["campaign_id"],
         anuncio=f["anuncio"], conjunto=f["conjunto"], campana=f["campana"], estado=f["estado"],
         miniatura_url=f["miniatura_url"], primera_fecha=f["primera_fecha"], ultima_fecha=f["ultima_fecha"],
-        dias_con_gasto=int(f["dias_con_gasto"] or 0), canal="meta", **_medidas(f, METRICAS_ANUNCIO)))
+        dias_con_gasto=int(f["dias_con_gasto"] or 0), canal="meta", problemas_meta=_problemas_meta(f["extra_objeto"]),
+        miniatura_r2=_miniatura_r2(f["extra_objeto"]), **_medidas(f, METRICAS_ANUNCIO)))
         for f in filas]
+
+
+def _miniatura_r2(extra):
+    """La copia en R2 de la miniatura (`extra.miniatura_r2`, PND-194), o None. Quien la pinta la vuelve a pasar por
+    `triple_whale.medio_permitido`."""
+    url = (extra or {}).get("miniatura_r2") if isinstance(extra, dict) else None
+    return url if isinstance(url, str) and url else None
+
+
+def _problemas_meta(extra):
+    """Los problemas que Meta le marca al anuncio (`extra.problemas`, guardados por la copia desde PND-258): una lista
+    de {"resumen", "mensaje"} con texto, o [] (sin problemas, o copiado antes de PND-258)."""
+    problemas = (extra or {}).get("problemas") if isinstance(extra, dict) else None
+    return [{"resumen": p.get("resumen"), "mensaje": p.get("mensaje")} for p in problemas or []
+            if isinstance(p, dict) and (p.get("resumen") or p.get("mensaje"))] if isinstance(problemas, list) else []
 
 
 def alcance(cliente, cuentas, ventana, nivel="cuenta"):
@@ -672,21 +817,31 @@ def desgloses(cliente, cuentas, ventana):
                  clave=f["clave"], calculado_en=f["calculado_en"], **_medidas(f, METRICAS_DESGLOSE)) for f in filas]
 
 
-def objetos_activos(cliente, cuentas):
+ESTADOS_PROBLEMA_CONJUNTO = ("WITH_ISSUES", "DISAPPROVED")
+
+
+def objetos_activos(cliente, cuentas, con_problemas=False):
     """Las campañas y los conjuntos ACTIVE de esas cuentas, en UNA consulta (las reglas de diagnóstico miran su
     presupuesto diario y su aprendizaje): `objeto_id`, `ad_account_id`, `nivel`, `nombre`, `estado`,
-    `presupuesto_diario`, `aprendizaje`, `campaign_id` y `padre_id`. Los anuncios no vienen: la pestaña ya los trae
-    con sus métricas."""
+    `presupuesto_diario`, `aprendizaje`, `campaign_id`, `padre_id` y `problemas_meta` (lo que Meta dice de sus
+    problemas, `extra.problemas`). Los anuncios no vienen: la pestaña ya los trae con sus métricas. `con_problemas`
+    (PND-287): en la misma consulta, también los conjuntos WITH_ISSUES o DISAPPROVED; quien llama los separa por
+    `estado`."""
     if not cuentas:
         return []
     t = db.meta_objeto
+    estado = t.c.estado == "ACTIVE"
+    if con_problemas:
+        estado = sa.or_(estado, sa.and_(t.c.nivel == "conjunto", t.c.estado.in_(ESTADOS_PROBLEMA_CONJUNTO)))
     q = (sa.select(t.c.objeto_id, t.c.ad_account_id, t.c.nivel, t.c.nombre, t.c.estado, t.c.presupuesto_diario,
-                   t.c.aprendizaje, t.c.campaign_id, t.c.padre_id)
-         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), t.c.estado == "ACTIVE",
+                   t.c.aprendizaje, t.c.campaign_id, t.c.padre_id, t.c.extra)
+         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), estado,
                 t.c.nivel.in_(("campana", "conjunto")))
          .order_by(t.c.ad_account_id, t.c.nivel, t.c.objeto_id))
     with db.conectar() as con:
-        return [dict(f) for f in con.execute(q).mappings().all()]
+        filas = con.execute(q).mappings().all()
+    return [dict({k: v for k, v in f.items() if k != "extra"}, problemas_meta=_problemas_meta(f["extra"]))
+            for f in filas]
 
 
 def gasto_por_conjunto(cliente, cuentas, desde, hasta):
@@ -712,17 +867,35 @@ def medios_anuncios(cliente, ad_ids):
     if not ids:
         return {}
     t = db.meta_objeto
+    # Solo de cuentas elegidas: las copias de una cuenta quitada esperan a la limpieza unos minutos y no se usan más.
     q = sa.select(t.c.objeto_id, t.c.miniatura_url, t.c.video_id).where(
-        t.c.cliente == cliente, t.c.nivel == "anuncio", t.c.objeto_id.in_(ids))
+        t.c.cliente == cliente, t.c.nivel == "anuncio", t.c.objeto_id.in_(ids), ~_no_elegida(t))
     with db.conectar() as con:
         return {r.objeto_id: {"miniatura_url": r.miniatura_url, "video_id": r.video_id} for r in con.execute(q)}
 
 
-def evaluacion(cliente, evaluacion_id):
-    """La evaluación como dict, o None si no existe o es de otro proyecto."""
+def _evaluacion_visible(t):
+    """La evaluación es de cuentas que SIGUEN elegidas en su proyecto: todas las de `cuentas` están en `meta_cuenta`.
+    Quien orquesta, 2026-10-15: la de una cuenta quitada no se muestra ni va a Claude (ni como contexto ni en «Evaluar
+    con IA»), pero no se borra (se pagó): si la cuenta vuelve a elegirse, reaparece. Desconectar Meta sí las borra."""
+    j = sa.func.json_each(t.c.cuentas).table_valued("value").alias("j")
+    c = db.meta_cuenta
+    falta = (sa.select(sa.literal(1)).select_from(j)
+             .where(~sa.exists().where(c.c.cliente == t.c.cliente, c.c.ad_account_id == j.c.value)))
+    return ~sa.exists(falta)
+
+
+def evaluacion(cliente, evaluacion_id, solo_visibles=True):
+    """La evaluación como dict, o None si no existe, es de otro proyecto o (con `solo_visibles`, lo de siempre) alguna
+    de sus cuentas ya no está elegida: la pantalla, «Llevar a Crear» y la tarea antes de llamar a Claude no la ven.
+    `solo_visibles=False` solo para quien la marca o la limpia (el gancho de interrupción, la tarea al dejarla en
+    error)."""
     t = db.meta_evaluacion
+    q = sa.select(t).where(t.c.id == evaluacion_id, t.c.cliente == cliente)
+    if solo_visibles:
+        q = q.where(_evaluacion_visible(t))
     with db.conectar() as con:
-        fila = con.execute(sa.select(t).where(t.c.id == evaluacion_id, t.c.cliente == cliente)).first()
+        fila = con.execute(q).first()
     return dict(fila._mapping) if fila else None
 
 
@@ -746,9 +919,10 @@ def evaluaciones_panel(cliente, limite=8):
     leerlas."""
     t = db.meta_evaluacion
     u, r = t.alias("u"), t.alias("r")
-    ultima = (sa.select(u.c.id).where(u.c.cliente == cliente, u.c.estado == "lista")
+    # Solo las de cuentas que siguen elegidas (`_evaluacion_visible`): la de una cuenta quitada no se muestra.
+    ultima = (sa.select(u.c.id).where(u.c.cliente == cliente, u.c.estado == "lista", _evaluacion_visible(u))
               .order_by(u.c.creado_en.desc(), u.c.id.desc()).limit(1).scalar_subquery())
-    ventana = (sa.select(r.c.id).where(r.c.cliente == cliente)
+    ventana = (sa.select(r.c.id).where(r.c.cliente == cliente, _evaluacion_visible(r))
                .order_by(r.c.creado_en.desc(), r.c.id.desc()).limit(limite))
     es_ultima = t.c.id == ultima
     columnas = ([c for c in t.c if c.name not in _PESADAS_EVALUACION]

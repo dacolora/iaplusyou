@@ -53,6 +53,8 @@ def _meta_falsa(monkeypatch, debug=None, falla_debug=False, al_depurar=None):
             return _Resp({"data": debug if debug is not None else {
                 "app_id": "111", "type": "USER", "is_valid": True, "expires_at": 0,
                 "data_access_expires_at": VENCE_DATOS}})
+        if edge.startswith("act_"):   # PND-057: la misma periódica lee la verificación del negocio de la cuenta
+            return _Resp({"id": edge, "business": {"id": "77", "name": "Forja Habit", "verification_status": "verified"}})
         raise AssertionError(f"llamada inesperada a {url}")
     monkeypatch.setattr(mc.requests, "get", fake_get)
     return llamadas

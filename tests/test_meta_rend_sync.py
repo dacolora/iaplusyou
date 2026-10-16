@@ -130,7 +130,8 @@ class FakeGraph:
             return self.anuncios
         assert edge == f"{ACT}/insights"
         if params["level"] == "campaign":
-            return [{"campaign_id": "c1", "reach": str(int(params["date_preset"][5:-1]) * 10), "frequency": "2.0"}]
+            return [{"campaign_id": c, "reach": str(int(params["date_preset"][5:-1]) * 10), "frequency": "2.0"}
+                    for c in getattr(self, "campanas_alcance", ["c1"])]
         assert params["level"] == "account" and params["time_increment"] == 1
         if self.falla_cuenta_n and len(self.de("paginar", "/insights")) - self._de_campana() == self.falla_cuenta_n:
             raise graph.ErrorGraph("Meta pidió esperar", codigo=17)
@@ -377,6 +378,76 @@ def test_alcance_por_ventana_a_nivel_de_cuenta_y_de_campana(cuenta, monkeypatch)
     for w in (7, 14, 30, 90):
         assert datos.alcance(CLI, [ACT], w, "cuenta")[ACT] == {"alcance": w * 100, "frecuencia": 1.5}
         assert datos.alcance(CLI, [ACT], w, "campana")["c1"] == {"alcance": w * 10, "frecuencia": 2.0}
+
+
+def _filas_de_la_cuenta(cliente=CLI, act=ACT):
+    with db.conectar() as con:
+        return sum(con.execute(sa.select(sa.func.count()).select_from(t).where(
+            t.c.cliente == cliente, t.c.ad_account_id == act)).scalar()
+            for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose))
+
+
+@pytest.mark.parametrize("cuando", ["informe", "alcance", "desgloses"])
+def test_pnd206_quitar_la_cuenta_a_media_copia_no_deja_copias_huerfanas(cuenta, monkeypatch, cuando):
+    """PND-206 (decisión 2026-10-13): la copia comprueba que la cuenta siga elegida antes de cada escritura. Si la
+    quitan mientras Meta responde, lo ya escrito se fue con ella y la copia no vuelve a escribir: termina «omitida»."""
+    g = FakeGraph(monkeypatch)
+    nombre = {"informe": "informe", "alcance": "get", "desgloses": "paginar"}[cuando]
+    pedir = getattr(g, nombre)
+    soltada = []
+
+    def es_el_momento(edge, params):
+        if cuando == "alcance":                          # Meta responde el alcance de la cuenta (paso 5)
+            return edge == f"{ACT}/insights" and "date_preset" in params
+        if cuando == "desgloses":                        # Meta responde un desglose (paso 7)
+            return "breakdowns" in params
+        return True                                      # Meta responde el primer informe de anuncios (paso 4)
+
+    def y_se_suelta(edge, token, params=None, *a, **k):
+        r = pedir(edge, token, params, *a, **k)
+        if not soltada and es_el_momento(edge, params or {}):
+            soltada.append(cuentas.elegir(CLI, []))
+            soltada.append(_filas_de_la_cuenta())         # lo copiado hasta que se soltó: lo borra la limpieza
+        return r
+    monkeypatch.setattr(sync.graph, nombre, y_se_suelta)
+    r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert soltada and soltada[0]["quitadas"] == [ACT]
+    assert r["omitida"] is True
+    assert cuentas.cuenta(CLI, ACT) is None and _filas_de_la_cuenta() == soltada[1]   # después, nada más se escribió
+    from meta_rendimiento import soltar
+    soltar.barrer(CLI)                                     # la limpieza que encoló `elegir`
+    assert _filas_de_la_cuenta() == 0
+
+
+def test_pnd199_una_campana_que_dejo_de_entregar_pierde_su_alcance(cuenta, monkeypatch):
+    """PND-199 (decisión 2026-10-13): Meta no devuelve fila de una campaña sin entrega en la ventana; su alcance no
+    puede quedarse en el último valor. Lo de otra cuenta y otro proyecto no se toca."""
+    datos.guardar_alcance("otro", "act_9", [{"nivel": "campana", "objeto_id": "c9", "ventana": 7, "alcance": 5,
+                                            "frecuencia": 1.0}])
+    datos.guardar_alcance(CLI, "act_2", [{"nivel": "campana", "objeto_id": "c8", "ventana": 7, "alcance": 6,
+                                         "frecuencia": 1.0}])
+    g = FakeGraph(monkeypatch)
+    g.campanas_alcance = ["c1", "c2"]
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert set(datos.alcance(CLI, [ACT], 7, "campana")) == {"c1", "c2"}
+    g.campanas_alcance = ["c1"]                      # c2 ya no entrega
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    for w in (7, 14, 30, 90):
+        assert set(datos.alcance(CLI, [ACT], w, "campana")) == {"c1"}
+        assert datos.alcance(CLI, [ACT], w, "cuenta")[ACT]["alcance"] == w * 100
+    assert set(datos.alcance("otro", ["act_9"], 7, "campana")) == {"c9"}
+    assert set(datos.alcance(CLI, ["act_2"], 7, "campana")) == {"c8"}
+
+
+def test_pnd199_una_ventana_que_meta_no_acepta_no_borra_su_alcance(cuenta, monkeypatch):
+    g = FakeGraph(monkeypatch)
+    g.campanas_alcance = ["c1", "c2"]
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    g = FakeGraph(monkeypatch, falla_ventana=("last_14d", graph.ErrorGraph("parámetro inválido", codigo=100)))
+    g.campanas_alcance = ["c1"]
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert set(datos.alcance(CLI, [ACT], 14, "campana")) == {"c1", "c2"}     # sin lectura, nada se borra
+    assert set(datos.alcance(CLI, [ACT], 30, "campana")) == {"c1"}
 
 
 def test_una_ventana_con_parametro_invalido_se_salta_y_las_demas_siguen(cuenta, monkeypatch):
@@ -991,3 +1062,60 @@ def test_una_cuenta_omitida_no_pide_desgloses(base_temporal, monkeypatch):
     g = FakeGraph(monkeypatch)
     assert sync.sincronizar(CLI, ACT, "tok", hoy=HOY)["omitida"] is True
     assert g.de("desglose") == []
+
+
+# ------------------------------------------------------------ PND-258: el motivo de cada anuncio con problemas ---
+
+ISSUES = [{"error_code": 1487890, "error_summary": "Ad Rejected", "level": "AD",
+           "error_message": "Your ad wasn't approved because it doesn't follow our\nAdvertising Policies.",
+           "error_type": "HARD_ERROR"}]
+
+
+def test_pnd258_problemas_de_meta_en_una_linea_acotados_y_sin_basura():
+    assert sync.problemas_de(ISSUES) == [{"resumen": "Ad Rejected", "mensaje": (
+        "Your ad wasn't approved because it doesn't follow our Advertising Policies.")}]
+    assert sync.problemas_de(None) == [] and sync.problemas_de("texto") == [] and sync.problemas_de([1, {}]) == []
+    largos = sync.problemas_de([{"error_summary": "x" * 500, "error_message": "y" * 900}] * 5)
+    assert len(largos) == sync.MAX_PROBLEMAS
+    assert len(largos[0]["resumen"]) == sync.LARGO_RESUMEN and len(largos[0]["mensaje"]) == sync.LARGO_MENSAJE
+    assert "issues_info" in sync.CAMPOS_ANUNCIO.split(",")
+
+
+def test_pnd258_la_copia_guarda_el_problema_y_lo_quita_cuando_se_resuelve(cuenta, monkeypatch):
+    con_problema = [{"id": "a1", "name": "Video 1", "adset_id": "s1", "campaign_id": "c1",
+                     "effective_status": "WITH_ISSUES", "issues_info": ISSUES, "creative": _creative("a1")}]
+    FakeGraph(monkeypatch, anuncios=con_problema)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    a = _objeto("anuncio", "a1")
+    assert a["extra"]["problemas"] == sync.problemas_de(ISSUES) and a["extra"]["miniatura_en"]
+    assert datos.totales_por_anuncio(CLI, [ACT], "2026-09-01", HOY.isoformat())[0]["problemas_meta"] == \
+        sync.problemas_de(ISSUES)
+    FakeGraph(monkeypatch, anuncios=[dict(con_problema[0], effective_status="ACTIVE", issues_info=None)])
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert _objeto("anuncio", "a1")["extra"]["problemas"] == []
+
+
+def test_pnd258_la_miniatura_que_llega_despues_no_borra_el_problema(cuenta, monkeypatch):
+    """`extra` se mezcla: la miniatura del paso diario (`miniatura_en`) y los problemas del listado no se pisan."""
+    sin_miniatura = [{"id": "a1", "name": "Video 1", "adset_id": "s1", "campaign_id": "c1",
+                      "effective_status": "DISAPPROVED", "issues_info": ISSUES, "creative": {"id": "cr_a1"}}]
+    FakeGraph(monkeypatch, anuncios=sin_miniatura, miniaturas={"a1": _creative("a1")})
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    a = _objeto("anuncio", "a1")
+    assert a["miniatura_url"] == "https://scontent.xx.fbcdn.net/a1.jpg" and a["extra"]["miniatura_en"]
+    assert a["extra"]["problemas"] == sync.problemas_de(ISSUES)
+
+
+def test_pnd287_la_copia_guarda_el_motivo_de_un_conjunto_con_problemas(cuenta, monkeypatch):
+    conjuntos = [{"id": "s1", "name": "Mujeres", "campaign_id": "c1", "effective_status": "ACTIVE",
+                  "daily_budget": "50000", "learning_stage_info": {"status": "FAIL"}},
+                 {"id": "s2", "name": "Hombres", "campaign_id": "c1", "effective_status": "WITH_ISSUES",
+                  "issues_info": [{"error_summary": "Ad set has issues", "error_message": "Payment failed."}]}]
+    FakeGraph(monkeypatch, conjuntos=conjuntos)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert "issues_info" in sync.CAMPOS_CONJUNTO.split(",")
+    assert [o["objeto_id"] for o in datos.objetos_activos(CLI, [ACT]) if o["nivel"] == "conjunto"] == ["s1"]
+    todos = {o["objeto_id"]: o for o in datos.objetos_activos(CLI, [ACT], con_problemas=True)
+             if o["nivel"] == "conjunto"}
+    assert todos["s2"]["estado"] == "WITH_ISSUES" and todos["s1"]["problemas_meta"] == []
+    assert todos["s2"]["problemas_meta"] == [{"resumen": "Ad set has issues", "mensaje": "Payment failed."}]

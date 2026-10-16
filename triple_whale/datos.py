@@ -852,24 +852,53 @@ def borrar_analisis(cliente, analisis_id):
         return con.execute(t.delete().where(t.c.id == analisis_id, t.c.cliente == cliente)).rowcount == 1
 
 
-def borrar_analisis_meta(cliente, cuentas):
+def _cuenta_meta_no_elegida(t):
+    """El análisis de fuente Meta es de una cuenta que ya no está elegida en su proyecto (`meta_cuenta`)."""
+    c = db.meta_cuenta
+    return ~sa.exists().where(c.c.cliente == t.c.cliente,
+                              c.c.ad_account_id == sa.func.json_extract(t.c.foto, "$.ad_account_id"))
+
+
+def cuentas_meta_huerfanas(cliente=None):
+    """{(cliente, ad_account_id)} de los análisis «Cómo mejorarlo» de fuente Meta cuya cuenta ya no está elegida en su
+    proyecto: lo que la limpieza de Meta rendimiento (`meta_rendimiento.soltar.barrer`) borra si quedó algo. Una
+    consulta."""
+    t = db.tw_analisis
+    cuenta = sa.func.json_extract(t.c.foto, "$.ad_account_id")
+    q = (sa.select(t.c.cliente, cuenta.label("act"))
+         .where(sa.func.json_extract(t.c.foto, "$.fuente") == "meta", _cuenta_meta_no_elegida(t)).distinct())
+    if cliente is not None:
+        q = q.where(t.c.cliente == cliente)
+    with db.conectar() as con:
+        return {(r.cliente, str(r.act)) for r in con.execute(q) if r.act}
+
+
+def borrar_analisis_meta(cliente, cuentas, con=None, solo_no_elegidas=False):
     """Borra los análisis «Cómo mejorarlo» de fuente Meta (`foto.fuente == "meta"`) de esas cuentas de Meta
     (`foto.ad_account_id`) y devuelve [(id, ad_id)] de los borrados, para que quien llama borre DESPUÉS sus copias en R2
     (`meta_rendimiento.creativo.borrar_copias`). S1 (revisión final de Rendimiento E2, auditor de seguridad,
     2026-10-10): esas filas guardan nombre, campaña, cifras, cuenta, título y copy copiados de Meta, y soltar la cuenta
     (quitarla o desconectar Meta) promete borrarlos (`/eliminar-datos`). Un análisis de Triple Whale nunca se toca,
-    aunque sea del mismo anuncio. Una sola transacción; una lista vacía no toca la base. El gasto ya pagado se queda en
-    `gasto`."""
+    aunque sea del mismo anuncio. Una sola transacción (con `con`, la de quien llama: `meta_rendimiento.cuentas.elegir`,
+    PND-206); una lista vacía no toca la base. El gasto ya pagado se queda en `gasto`."""
     cuentas = [str(c) for c in cuentas or [] if c]
     if not cuentas:
         return []
+    if con is None:
+        with db.conectar() as con_:
+            return borrar_analisis_meta(cliente, cuentas, con=con_, solo_no_elegidas=solo_no_elegidas)
     t = db.tw_analisis
     donde = sa.and_(t.c.cliente == cliente, sa.func.json_extract(t.c.foto, "$.fuente") == "meta",
                     sa.func.json_extract(t.c.foto, "$.ad_account_id").in_(cuentas))
-    with db.conectar() as con:
-        filas = [(int(r.id), r.ad_id) for r in con.execute(sa.select(t.c.id, t.c.ad_id).where(donde))]
-        if filas:
-            con.execute(t.delete().where(t.c.cliente == cliente, t.c.id.in_([i for i, _ in filas])))
+    if solo_no_elegidas:
+        # Ronda 2 de PND-206/207: se borra DESPUÉS de soltar la cuenta y fuera de esa transacción. Si alguien la volvió
+        # a elegir mientras tanto, sus análisis se quedan. Un UPDATE sin efecto toma el candado de escritura ANTES de
+        # leer (el patrón de `cuentas._bloquear`): lo que se lee es lo que se borra.
+        con.execute(t.update().where(t.c.id == -1).values(cliente=t.c.cliente))
+        donde = sa.and_(donde, _cuenta_meta_no_elegida(t))
+    filas = [(int(r.id), r.ad_id) for r in con.execute(sa.select(t.c.id, t.c.ad_id).where(donde))]
+    if filas:
+        con.execute(t.delete().where(t.c.cliente == cliente, t.c.id.in_([i for i, _ in filas])))
     return filas
 
 

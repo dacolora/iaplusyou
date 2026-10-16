@@ -143,6 +143,17 @@ def _primero(lista):
     return None
 
 
+def _primer_video(feed):
+    """El `video_id` (solo dígitos) del primer video de un `asset_feed_spec` (creativo dinámico: varios videos,
+    imágenes y textos que Meta combina), o None. PND-293: sin esto «Cómo mejorarlo» de un anuncio dinámico juzgaba por
+    la miniatura y su precio suponía 30 s de Whisper."""
+    for item in feed.get("videos") if isinstance(feed.get("videos"), list) else []:
+        video_id = _id(item.get("video_id")) if isinstance(item, dict) else None
+        if video_id:
+            return video_id
+    return None
+
+
 def _textos(c):
     """(título, copy): los del creativo y, si faltan, los de `object_story_spec` o el primero de `asset_feed_spec`."""
     historia = _dic(c.get("object_story_spec"))
@@ -245,7 +256,7 @@ def traer(cliente, ad_id, analisis_id):
         return salida
     salida["titulo"], salida["copy"] = _textos(c)
     salida["cta"] = _texto(c.get("call_to_action_type"), MAX_CTA)
-    video_id = _id(c.get("video_id"))
+    video_id = _id(c.get("video_id")) or _primer_video(_dic(c.get("asset_feed_spec")))
     es_video = bool(video_id) or str(c.get("object_type") or "").upper() == "VIDEO"
     salida["tipo"] = "video" if es_video else "imagen"
     if video_id:

@@ -93,8 +93,11 @@ def medio_meta(a):
         imagen = ((fila.get("foto") or {}).get("creativo") or {}).get("imagen_url")
         if triple_whale.medio_permitido(imagen):
             return {"imagen": imagen}
+    # PND-194: la copia en R2 de la miniatura (la de Meta caduca); si todavía no la hay, la de Meta mientras dure.
+    # `miniatura`: llega chica (64 px): la tarjeta la muestra sin agrandarla (`.tw-medio-miniatura`).
+    if triple_whale.medio_permitido(a.get("miniatura_r2")):
+        return {"imagen": a["miniatura_r2"], "miniatura": True}
     mini = a.get("miniatura_url")
-    # `miniatura`: la de Meta llega chica (64 px): la tarjeta la muestra sin agrandarla (`.tw-medio-miniatura`).
     return {"imagen": mini, "miniatura": True} if meta_datos.miniatura_valida(mini) else {}
 
 

@@ -364,6 +364,78 @@ def test_problemas_sin_gasto_30_usa_el_del_periodo_evaluado():
     assert una(rec.calcular(e), "anuncios_con_problemas")["impacto"]["monto"] == pytest.approx(1.0)
 
 
+def test_pnd258_problemas_dicen_lo_que_meta_marca_a_cada_anuncio_sin_tocar_lo_que_va_a_claude():
+    """PND-258: el Diagnóstico decía «anuncios con problemas» sin decir cuál; ahora `problemas` trae lo que Meta dice de
+    cada uno (el de más gasto primero, uno por anuncio, como mucho MAX_PROBLEMAS_VISIBLES). `que_hacer` y `por_que`
+    (lo que la «Evaluación con IA» le manda a Claude) no cambian."""
+    def con_meta(ad_id, gasto_30, *problemas, **kw):
+        a = anuncio(ad_id, gasto_30=gasto_30, **kw)
+        a["problemas_meta"] = list(problemas)
+        return a
+    rechazo = {"resumen": "Ad Rejected", "mensaje": "Your ad doesn't follow our Advertising Policies."}
+    sin_mensaje = {"resumen": "Limited delivery", "mensaje": None}
+    e = entrada(anuncios=[con_meta("1", 20.0, sin_mensaje, estado="WITH_ISSUES"),
+                          con_meta("2", 90.0, rechazo, {"resumen": "Otro", "mensaje": "otro"}, estado="DISAPPROVED"),
+                          con_meta("3", 50.0, estado="WITH_ISSUES")])          # copiado antes de PND-258: sin motivo
+    r = una(rec.calcular(e), "anuncios_con_problemas")
+    assert r["problemas"] == [
+        {"nombre": "Anuncio 2", "texto": "Ad Rejected: Your ad doesn't follow our Advertising Policies."},
+        {"nombre": "Anuncio 1", "texto": "Limited delivery"}]
+    sin = una(rec.calcular(entrada(anuncios=[anuncio(a["ad_id"], gasto_30=a["gasto_30"], estado=a["estado"])
+                                             for a in e["anuncios"]])), "anuncios_con_problemas")
+    assert (r["que_hacer"], r["por_que"], r["id"]) == (sin["que_hacer"], sin["por_que"], sin["id"])
+    muchos = entrada(anuncios=[con_meta(str(i), 10.0 + i, rechazo, estado="WITH_ISSUES") for i in range(15)])
+    assert len(una(rec.calcular(muchos), "anuncios_con_problemas")["problemas"]) == rec.MAX_PROBLEMAS_VISIBLES
+
+
+# ------------------------------------------------------------ PND-287: las dos reglas jubiladas de Rendimiento E2 ---
+
+def test_pnd287_conjuntos_rechazados_o_con_problemas_alta_con_lo_que_dice_meta():
+    """Un conjunto WITH_ISSUES o DISAPPROVED frena todos sus anuncios: alta (va a Alertas), aunque ya no gaste, con el
+    motivo de Meta de cada uno y los conjuntos seleccionados en el Administrador."""
+    bloqueado = conjunto("901", "800", estado="WITH_ISSUES", nombre="Mujeres 25-34")
+    bloqueado["problemas_meta"] = [{"resumen": "Ad set has issues", "mensaje": "The payment method failed."}]
+    e = entrada(conjuntos_problema=[conjunto("902", "800", estado="DISAPPROVED"), bloqueado,
+                                    conjunto("903", "800", estado="PAUSED"), conjunto("904", "800")],
+                conjuntos_7={"901": {"gasto": 70.0, "compras": 0.0, "valor": 0.0}})
+    r = una(rec.calcular(e), "conjuntos_con_problemas")
+    assert r["nivel"] == "alta" and [o["id"] for o in r["objetos"]] == ["901", "902"]   # el de más gasto primero
+    assert r["enlace"] == administrador.enlace(ACT, "conjunto", ["901", "902"])
+    assert r["impacto"]["monto"] == pytest.approx(10.0) and r["fila"]["cifra"] == "2 conjuntos"
+    assert r["problemas"] == [{"nombre": "Mujeres 25-34", "texto": "Ad set has issues: The payment method failed."}]
+    assert r["id"] == rec.huella("conjuntos_con_problemas", ACT, "alta")
+    assert de_tipo(rec.calcular(entrada(conjuntos_problema=[conjunto("903", "800", estado="PAUSED")])),
+                   "conjuntos_con_problemas") == []
+
+
+def test_pnd287_un_conjunto_bloqueado_sin_gasto_tambien_cuenta():
+    r = una(rec.calcular(entrada(conjuntos_problema=[conjunto("902", "800", estado="DISAPPROVED")])),
+            "conjuntos_con_problemas")
+    assert r["impacto"] is None and r["fila"]["nota"] == "sin gasto en 7 días" and r["problemas"] == []
+
+
+@pytest.mark.parametrize("codigo, motivo", [(1, "incumplimiento de las políticas de publicidad"),
+                                            (3, "riesgo en los pagos"),
+                                            (15, "cuenta comprometida (alguien entró sin permiso)")])
+def test_pnd287_cuenta_desactivada_dice_el_motivo_en_palabras(codigo, motivo):
+    c = cuenta(status=2)
+    c["extra"]["cuenta"]["disable_reason"] = codigo
+    r = una(rec.calcular(entrada(cuentas=[c])), "cuenta_estado")
+    assert r["fila"]["cifra"] == "No está activa" and r["fila"]["nota"] == f"motivo según Meta: {motivo}"
+    # El motivo va en la fila, no en lo que la «Evaluación con IA» le manda a Claude.
+    assert motivo not in r["por_que"] and motivo not in r["que_hacer"]
+
+
+def test_pnd287_un_motivo_desconocido_o_sin_desactivar_no_inventa_nada():
+    c = cuenta(status=2)
+    c["extra"]["cuenta"]["disable_reason"] = 4
+    assert una(rec.calcular(entrada(cuentas=[c])), "cuenta_estado")["fila"]["nota"] is None
+    c = cuenta(status=2, spend_cap="1000000", amount_spent="950000")
+    c["extra"]["cuenta"]["disable_reason"] = 3
+    assert una(rec.calcular(entrada(cuentas=[c])), "cuenta_estado")["fila"]["nota"] == (
+        "motivo según Meta: riesgo en los pagos · 95 % de su tope de gasto")
+
+
 # ------------------------------------------------------------ cuenta con ROAS bajo ---
 
 def test_cuenta_roas_bajo_alta_bajo_0_5_con_1000_de_gasto():
@@ -561,7 +633,7 @@ def test_huella_es_la_de_alertas_sha256_completo():
     assert rec.huella("a", "b", 3) == alertas.huella("a", "b", 3)
     assert r["id"] == alertas.huella("perdedores_gastando", ACT, "media")
     assert rec.AGREGADOS == ("aprendizaje_limitado", "perdedores_gastando", "anuncios_con_problemas",
-                             "cuenta_roas_bajo", "cuenta_estado")
+                             "cuenta_roas_bajo", "cuenta_estado", "conjuntos_con_problemas")
     for x in rec.calcular(_segmentos()) + rec.calcular(_abo()) + rec.calcular(_fatiga()):
         assert re.fullmatch(alertas.HUELLA_VALIDA, x["id"])
 
@@ -689,7 +761,7 @@ def test_fila_de_aprendizaje_con_la_barra_de_conjuntos_y_la_parte_del_gasto():
 
 
 def test_cada_regla_trae_su_fila_y_no_repite_el_titulo():
-    """Las nueve reglas arman su fila (la de respaldo, solo el título, es para una recomendación sin cifras)."""
+    """Las diez reglas arman su fila (la de respaldo, solo el título, es para una recomendación sin cifras)."""
     e = _segmentos()
     e["cuentas"] = [cuenta(status=9, spend_cap="1000000", amount_spent="950000")]
     e["totales_7"] = {ACT: {"gasto": 1000.0, "valor": 2000.0, "compras": 20.0}}
@@ -703,6 +775,7 @@ def test_cada_regla_trae_su_fila_y_no_repite_el_titulo():
                      anuncio("3", adset_id="901", veredicto="perdedor", gasto_7=250.0),
                      anuncio("4", adset_id="901", estado="DISAPPROVED", gasto_7=5.0, gasto_30=60.0)]
     e["frecuencia_7"] = {"800": {"alcance": 5000, "frecuencia": 3.4}}
+    e["conjuntos_problema"] = [conjunto("903", "800", estado="WITH_ISSUES")]
     recs = rec.calcular(e)
     assert {r["tipo"] for r in recs} == set(rec.TIPOS)
     for r in recs:
@@ -794,3 +867,24 @@ def test_agrupado_en_ingles_con_el_catalogo():
     assert ap["recs"][0]["fila"]["gasto"] == "30%" and ap["recs"][0]["fila"]["cifra"] == "1 of 4"
     assert ap["impacto"]["texto"] == "71.43 SEK per day at stake"
     assert roas["consejo"].startswith("Pause or rebuild these accounts")
+
+
+def test_pnd258_el_diagnostico_muestra_el_motivo_de_cada_anuncio_escapado():
+    """La fila de «Anuncios que Meta frena» abre la lista de lo que Meta dice de cada anuncio. Nombres y textos de
+    Meta son texto ajeno: solo autoescape."""
+    from flask import render_template
+
+    import dashboard
+    from meta_rendimiento import panel
+    a = anuncio("1", gasto_30=60.0, estado="DISAPPROVED")
+    a["nombre"] = "<script>alert(1)</script> Video"
+    a["problemas_meta"] = [{"resumen": "Ad Rejected", "mensaje": "<b>Policy</b> issue"}]
+    recs = rec.calcular(entrada(anuncios=[a]))
+    mr = {"grupos": rec.agrupar(recs), "conteo_recomendaciones": {"alta": 0, "media": 1, "baja": 0},
+          "max_filas": panel.MAX_FILAS_GRUPO, "niveles_recomendacion": rec.NIVELES,
+          "nombres_prioridad": panel.NOMBRES_PRIORIDAD}
+    with dashboard.app.test_request_context():
+        html = render_template("_meta_diagnostico.html", mr=mr, actual=None)
+    assert "Lo que dice Meta de cada uno:" in html and 'class="meta-diag-problemas"' in html
+    assert "Ad Rejected: &lt;b&gt;Policy&lt;/b&gt; issue" in html
+    assert "<script>alert(1)</script>" not in html and "&lt;script&gt;" in html

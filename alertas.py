@@ -85,10 +85,16 @@ PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarg
 TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
                         "tablero:experimento_error", "crear:prompt_listo",
                         "tablero:ganador_sin_publicar", "tablero:anuncios_rechazados"}
+# PND-270 (decisión 2026-10-13, la misma regla que PND-124): las del Diagnóstico de Meta (perdedores gastando, ROAS
+# bajo, aprendizaje limitado, anuncios con problemas, estado de la cuenta) hablan de la plata de la pauta. Las ve el
+# cliente, pero el descarte es del proyecto: si un cliente la descartara, se la escondería al admin. Por prefijo, así
+# vale para todo tipo, también uno que ya no esté en el cálculo.
+PREFIJOS_DESCARTE_ADMIN = ("meta_rendimiento:",)
 
 
 def descarte_solo_admin(clave, calculadas=()):
-    return es_solo_admin(clave, calculadas) or ":".join(clave.split(":")[:2]) in TIPOS_DESCARTE_ADMIN
+    return (es_solo_admin(clave, calculadas) or ":".join(clave.split(":")[:2]) in TIPOS_DESCARTE_ADMIN
+            or clave.startswith(PREFIJOS_DESCARTE_ADMIN))
 
 
 # (nombre, función(cliente, ahora_iso) -> lista de alertas), en el orden en
@@ -426,6 +432,32 @@ def _fuente_meta_acceso(cliente, ahora):
                     "settings", ancla="config-meta")]
 
 
+def _fuente_meta_negocio(cliente, ahora):
+    """PND-057 (Daniel, 2026-10-13: «dale la alerta al cliente»): el negocio dueño de la cuenta publicitaria de la
+    conexión propia no está verificado en Meta, según la última revisión diaria (`meta_revisar_acceso` →
+    `meta_conexion.revisar_negocio`, guardada en meta.json). Sin verificar, Meta puede restringir la app del proyecto
+    (la primera app de Creatv quedó restringida el 2026-09-14). La ven el admin y el cliente, que es quien verifica su
+    negocio. Solo lee meta.json: ni la base ni Meta. La huella es el negocio y su estado: descartar «en revisión» no
+    esconde un «rechazado», y otro negocio vuelve a avisar. El nombre del negocio es dato de Meta: pasa por `_limpio`."""
+    import meta_conexion  # noqa: PLC0415 — arrastra requests; aquí solo se lee meta.json
+    n = meta_conexion.negocio_sin_verificar(cliente)
+    if not n:
+        return []
+    nombre = _limpio(n.get("nombre") or n.get("id") or "", 120) or "—"
+    riesgo = gettext("Mientras no esté verificado, Meta puede restringir la app de tu conexión y Creatv dejaría de "
+                     "lanzar tus anuncios y de leer sus métricas.")
+    if n["verificacion"] == "pending":
+        titulo = gettext("Meta está revisando la verificación de tu negocio «%(negocio)s»", negocio=nombre)
+        detalle = gettext("%(riesgo)s Si Meta te pide más datos, respóndelos en business.facebook.com › Configuración "
+                          "del negocio › Centro de seguridad.", riesgo=riesgo)
+    else:
+        titulo = gettext("Tu negocio «%(negocio)s» no está verificado en Meta", negocio=nombre)
+        detalle = gettext("Verifícalo en business.facebook.com › Configuración del negocio › Centro de seguridad › "
+                          "Verificación del negocio. %(riesgo)s", riesgo=riesgo)
+    return [_alerta("meta_negocio:verificacion", huella(n.get("id") or "", n["verificacion"]), "atencion",
+                    "puesta_a_punto", titulo, detalle, "settings", ancla="config-meta")]
+
+
 # Meta rendimiento (spec E2 §10): el título y el detalle de cada tipo de recomendación que puede ser «alta»
 # (`meta_rendimiento.recomendaciones`). La copia guarda solo tipo y huella; las cifras y los nombres de campañas
 # están en el «Diagnóstico» de Meta, que desde la integración con main (2026-10-10) pinta la pestaña Rendimiento, adonde
@@ -448,8 +480,16 @@ TEXTOS_META_RENDIMIENTO = {
     "anuncios_con_problemas": (idiomas.N_("Anuncios rechazados siguen gastando en «%(cuenta)s»"),
                                idiomas.N_("Meta los rechazó y gastaron en los últimos 7 días. Revísalos en el "
                                           "Administrador de anuncios desde el Diagnóstico de la pestaña Rendimiento.")),
+    # PND-287 (2026-10-15): la regla de conjuntos rechazados o con problemas que Rendimiento E2 tenía y se jubiló.
+    "conjuntos_con_problemas": (idiomas.N_("Conjuntos rechazados o con problemas en «%(cuenta)s»"),
+                                idiomas.N_("Meta les marca un problema que frena la entrega de sus anuncios. Lo que "
+                                           "dice de cada uno está en el Diagnóstico de la pestaña Rendimiento.")),
 }
 _ACT_VALIDA = r"act_[0-9]{1,30}"
+# PND-262 (decisión 2026-10-13): lo que guardó la última copia buena de una cuenta vale 48 horas, como los desgloses
+# (`meta_rendimiento.panel.HORAS_DESGLOSE_VIGENTE`). Una cuenta que dejó de copiarse no puede dejar en Alertas, para
+# siempre, una recomendación que ya no sabemos si es cierta.
+HORAS_ALERTA_META_VIGENTE = 48
 
 
 def _fuente_meta_rendimiento(cliente, ahora):
@@ -459,13 +499,15 @@ def _fuente_meta_rendimiento(cliente, ahora):
     `atencion`, a la pestaña Rendimiento (el «Diagnóstico» llega por fetch: no hay ancla en la página). La huella es la de la
     recomendación (tipo + cuenta + nivel en las que juntan toda la cuenta): un descarte vale hasta que la situación
     cambie. El título lleva el nombre de la cuenta (dato de Meta, pasado por `_limpio`) y se arma aquí, en el idioma
-    de quien mira. Un elemento roto (otro tipo, otra huella, algo que no es un dict) se ignora."""
+    de quien mira. Un elemento roto (otro tipo, otra huella, algo que no es un dict) se ignora. Lo guardado por una
+    cuenta sin copia buena en `HORAS_ALERTA_META_VIGENTE` horas (o sin fecha legible) no sale (PND-262)."""
     from meta_rendimiento import cuentas  # noqa: PLC0415
     out = []
     for c in cuentas.listar(cliente):
         act = c.get("ad_account_id") or ""
         guardadas = (c.get("extra") or {}).get("alertas")
-        if not re.fullmatch(_ACT_VALIDA, act) or not isinstance(guardadas, list):
+        if not re.fullmatch(_ACT_VALIDA, act) or not isinstance(guardadas, list) \
+                or not _copia_vigente(c.get("ultima_copia"), ahora):
             continue
         nombre = _limpio(c.get("nombre") or act, 120)
         for g in guardadas:
@@ -476,6 +518,16 @@ def _fuente_meta_rendimiento(cliente, ahora):
             out.append(_alerta(f"meta_rendimiento:{g['tipo']}:{act}", g["huella"], "atencion", "decision",
                                gettext(titulo, cuenta=nombre), gettext(detalle), "rendimiento", entidad=act))
     return out
+
+
+def _copia_vigente(ultima_copia, ahora):
+    """¿La última copia buena (`db.ahora()`, hora local sin zona) tiene a lo sumo HORAS_ALERTA_META_VIGENTE horas?"""
+    try:
+        copia = datetime.fromisoformat(str(ultima_copia)[:19])
+        hoy = datetime.fromisoformat(str(ahora)[:19])
+    except ValueError:
+        return False
+    return hoy - copia <= timedelta(hours=HORAS_ALERTA_META_VIGENTE)
 
 
 # ---------- fuentes: faltantes del proyecto ----------
@@ -1088,5 +1140,6 @@ FUENTES.extend([
     ("cobros", _fuente_cobros),
     ("meta", _fuente_meta),
     ("meta_acceso", _fuente_meta_acceso),
+    ("meta_negocio", _fuente_meta_negocio),
     ("meta_rendimiento", _fuente_meta_rendimiento),
 ])
