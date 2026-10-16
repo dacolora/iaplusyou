@@ -76,6 +76,7 @@ def llamar(model_path, payload, timeout=600, poll_interval=3, on_progreso=None):
     Va AL FINAL de la firma para no romper a los llamadores existentes."""
     resp = requests.post(f"{QUEUE_BASE_URL}/{model_path}", json=payload, headers=_headers(), timeout=30)
     if not resp.ok:
+        _sin_saldo(resp, model_path)
         raise RuntimeError(f"fal.ai ({model_path}) respondió {resp.status_code} al encolar: {resp.text[:500]}")
     encolado = resp.json()
     status_url = encolado["status_url"]
@@ -114,6 +115,21 @@ def llamar(model_path, payload, timeout=600, poll_interval=3, on_progreso=None):
         return _resultado()
     cobrado = not (estado == "IN_QUEUE" and _cancelar(status_url))
     raise EsperaAgotadaFal(model_path, encolado.get("request_id"), estado, cobrado)
+
+
+def _sin_saldo(resp, model_path):
+    """PND-215 (decisión 2026-10-13, lote 2): si fal rechazó el pedido por falta de saldo (403 «Exhausted balance»,
+    402…), lo anota como Seedance (`saldo.marcar("fal")`: el aviso de Crear, la alerta de fal y el correo al admin) y
+    lanza `fal_video.SinSaldo`, que las tareas de voz y música dicen en palabras. Las voces, la música y los
+    subtítulos pasan por aquí; antes fallaban con el texto crudo de fal y nadie se enteraba. Otro rechazo: no hace
+    nada (quien llama lanza el RuntimeError de siempre)."""
+    from providers import fal_video  # noqa: PLC0415 — fal_video importa este módulo
+    error = fal_video.error_de_respuesta(resp, model_path)
+    if not isinstance(error, fal_video.SinSaldo):
+        return
+    import saldo  # noqa: PLC0415 — perezoso: solo en este caso raro (nunca lanza)
+    saldo.marcar("fal", error.detalle)
+    raise error
 
 
 def _cancelar(status_url):

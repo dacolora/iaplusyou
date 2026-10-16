@@ -129,3 +129,13 @@ que pagó la voz falló después (el worker devolvió el cobro), Mis voces la re
 (`voces_propias.crear` con la ficha de la misma referencia), con el precio que la persona vio al lanzarla, se cobra con
 `gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`). Pendiente propuesto: un botón con su precio para
 cobrar la recuperada por el GET.
+
+**Sin saldo en fal por el lado del audio (PND-215, decisión 2026-10-13, lote 2).** `fal_client.llamar` (voces de Audios,
+del anuncio hablado y de las finales, Mi música, la música de fondo, Whisper de los subtítulos, las voces propias)
+reconoce al encolar que fal no tiene saldo (`fal_video.error_de_respuesta`: 402, «Exhausted balance», «top up»…),
+llama a `saldo.marcar("fal")` como Seedance (el aviso de Crear, la alerta `saldo:fal`/`saldo:fal_recarga` y el correo
+al admin, sin el proyecto: `fal_client` no lo conoce) y lanza `fal_video.SinSaldo`. Las tareas de voz
+(`errores_voz.publico`) y la canción de Mi música lo dicen en palabras (`saldo.mensaje_audio`); otro rechazo de fal sigue
+siendo el RuntimeError de siempre. Un audio que sale bien no limpia el aviso (lo limpia la próxima generación de
+Seedance que sale bien o vence a las 12 h): limpiarlo en cada llamada de fal tocaría la base en cada voz. Pruebas:
+`tests/test_saldo_fal_audio.py`.

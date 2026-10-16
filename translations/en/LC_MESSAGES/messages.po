@@ -1865,6 +1865,10 @@ msgid "%(proveedor)s, el proveedor de videos e imágenes, se quedó sin saldo: n
 msgstr "%(proveedor)s, the video and image provider, ran out of credit: nothing was generated or charged. Creatv has been notified; try again once it is topped up."
 
 #, python-format
+msgid "%(proveedor)s, el proveedor de voces, música y subtítulos, se quedó sin saldo: no se generó ni se cobró nada. Ya se avisó a Creatv; vuelve a intentarlo cuando lo recargue."
+msgstr "%(proveedor)s, the voice, music and subtitle provider, ran out of credit: nothing was generated or charged. Creatv has been notified; try again once it is topped up."
+
+#, python-format
 msgid "%(proyecto)s ahora cobra lo que genera."
 msgstr "%(proyecto)s now pays for what it generates."
 

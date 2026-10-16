@@ -182,7 +182,7 @@ que fal ya terminó y cobró pero cuyo resultado no se pudo traer (429, 5xx, red
 `ErrorProveedor` es solo para un 4xx con motivo (revisión del guardián de gasto, 2026-10-09). Sin saldo en fal (PND-213, 2026-10-09): `_aviso_sin_saldo.html` pinta un aviso aparte con `con_fal` (solo lo pone Crear)
 y `aviso_saldo_fal`/`modelos_fal`; Alertas suma `saldo:fal`/`saldo:fal_recarga`. Pendientes: la factura de
 fal de la prueba real y de un 4:3 o un solo texto (PND-211, dentro de la auditoría de PND-013), videos de referencia como
-video (PND-212), el audio de fal no marca el saldo (PND-215).
+video (PND-212). Desde PND-215 (2026-10-15) el audio de fal también marca el saldo (skill `audios-y-voces`).
 
 **Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «<proveedor> no aceptó el pedido y no se cobró nada: <motivo>…» (WaveSpeed o fal.ai, `saldo.nombre_proveedor`) (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
 
