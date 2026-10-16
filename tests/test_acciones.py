@@ -569,14 +569,16 @@ def test_pedir_derivar_y_rescatar_llevan_precio_estimado(ent):
     modelos_regen = [dv.modelo_regeneracion({"modelo": "wan3"}, k) for k in range(2)]
     assert modelos_regen == ["kling_o3_pro", "seedance25"]
     videos = [gastos.estimar("video", modelo=m, duracion=8)["usd"] for m in modelos_regen]
-    esperado = round(3 * final_2 + sum(v + final_2 for v in videos), 4)   # reglas por defecto: 3 re-ediciones, 2 regeneraciones
+    variar = gastos.TARIFAS["variar_guion"]                     # PND-110: cada re-edición escribe su guion variado
+    esperado = round(3 * (final_2 + variar) + sum(v + final_2 for v in videos), 4)   # 3 re-ediciones, 2 regeneraciones
     assert precio["usd"] == esperado and precio["usd"] > 0
     assert precio["texto"] == f"{gastos.formatear(esperado)} aprox."
 
     assert ac.pedir("acme", eid, "rescatar", {"ep_id": ep}, "perdedor")[0] == "propuesta"
     prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "rescatar"][0]
     precio = prop["payload"]["precio_estimado"]
-    assert precio["usd"] == gastos.TARIFAS["final"] and precio["texto"] == "US$ 0,20 aprox."
+    assert precio["usd"] == pytest.approx(gastos.TARIFAS["final"] + gastos.TARIFAS["variar_guion"])
+    assert precio["texto"] == "US$ 0,48 aprox."                  # la final (0,28) y el guion variado (0,20)
 
 
 def test_pedir_precio_no_disponible_no_bloquea(ent):
@@ -612,7 +614,8 @@ def test_precio_estimado_del_rescate_respeta_el_salto(ent, monkeypatch):
     monkeypatch.setattr(cf, "cargar", lambda c: {"cf_1": {"modelo": "wan3", "duracion_objetivo": 8}})
     monkeypatch.setattr(gastos, "estimar", lambda tipo, **k: {"usd": 1.0 if tipo == "final" else 5.0, "texto": "x"})
     e = ex.obtener("acme", eid)
-    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep})["usd"] == 1.0                 # escalón 1: una final
+    variar = gastos.TARIFAS["variar_guion"]
+    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep})["usd"] == 1.0 + variar        # escalón 1: re-edición
     assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep, "salto": 3})["usd"] == 6.0     # regenerar: video + final
     ex.actualizar_pieza("acme", ep, escalon_rescate=2)
     e = ex.obtener("acme", eid)

@@ -52,27 +52,32 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    (2 × US$ 0,04) más ≈ 10 000 de entrada cada una (2 × US$ 0,02) y Whisper
 #    de la referencia (US$ 0,01) = US$ 0,13. Se redondea HACIA ARRIBA a un
 #    tope redondo: el estimado nunca queda por debajo del real.
-#    PND-110 (2026-10-15): calibrado con la tabla `gasto` de producción. `guion`
-#    tiene 6 filas con costo (2026-09-27 a 2026-10-10): promedio US$ 0,0398,
-#    máximo 0,0702 (desde el 2026-10-02: 5 filas, promedio 0,0457, mediana
-#    0,0464). Con tan pocas muestras la regla es el MÁXIMO real × 1,2,
-#    redondeado hacia arriba a 2 decimales (no el promedio: el precio a la vista
-#    no puede quedarse corto) → 0,0702 × 1,2 = 0,084 → US$ 0,09. Recalibrar con
-#    la misma regla cuando haya más filas. OJO (guardian-gasto, 2026-10-15): con
-#    la vuelta de corrección (2 de 4 casos en la prueba del 2026-10-10) lo real
-#    ronda 0,11–0,12 y queda POR ENCIMA de 0,09: el precio a la vista puede
-#    quedarse corto. Pendiente de que Daniel decida (0,13 cubre las dos llamadas).
+#    PND-110 (2026-10-15, decisión de quien orquesta tras guardian-gasto: el
+#    precio visto nunca se queda corto): se queda en 0,13. La tabla `gasto` de
+#    producción tiene 6 filas `guion` con costo (2026-09-27 a 2026-10-10):
+#    promedio US$ 0,0398, máximo 0,0702, todas SIN vuelta de corrección. Con la
+#    corrección (2 de 4 casos en la prueba real del 2026-10-10) lo medido es
+#    0,11–0,12; por eso no se baja a 0,09 (máximo × 1,2), que dejaba ese caso
+#    por encima del precio a la vista. Ojo: con el tope de salida de hoy
+#    (`final_edition/guion.py` MAX_TOKENS = 8 000) el peor caso por topes es
+#    2 × (8 000 × 10 + 10 000 × 2) / 1e6 + 0,01 = 0,21; 0,13 cubre lo medido.
 #  - fal.ai: ElevenLabs multilingual-v2 ~US$ 0,05 por pieza de 15-20 s de
 #    voz (por carácter); Stable Audio ~US$ 0,02 por pista (cacheada por
 #    estilo+duración, así que suele salir 0); whisper ~US$ 0,01 por clip.
-#  - final = guion localizado (peor caso US$ 0,12: dos llamadas al tope) + voz
-#    (0,05) + música (0,02, casi siempre en caché) + whisper (0,01) ≈ US$ 0,20
-#    por país (era 0,10 con el guion a 0,01 fijo; 2026-10-02).
-#    PND-110 (2026-10-15): se queda en 0,20. La tabla `gasto` de producción
-#    solo tiene 3 filas `final`, todas «importado del historial de piezas» de
-#    septiembre (0,0508; 0,0694; 0,0921), anteriores al camino actual (guion
-#    por su `usage` real + voz + música + whisper): no sirven para calibrarla.
-#    Con filas del camino actual, la misma regla del guion (máximo × 1,2).
+#  - final = guion localizado + voz (0,05) + música (0,02, casi siempre en
+#    caché) + whisper (0,01). PND-110 (2026-10-15): el comentario viejo suponía
+#    el guion localizado con la salida al tope de 4 000 (0,12) y la tarifa era
+#    0,20; con el tope de hoy (`final_edition/guion.py` MAX_TOKENS = 8 000) el
+#    peor caso del guion localizado son dos llamadas (la corrección) al tope:
+#    2 × (8 000 × US$ 10/M + ≈ 10 000 × US$ 2/M) = 0,20, y la final entera
+#    0,20 + 0,05 + 0,02 + 0,01 = US$ 0,28 por país. La tabla `gasto` no sirve
+#    para calibrarla: sus 3 filas `final` son «importado del historial de
+#    piezas» de septiembre (0,0508; 0,0694; 0,0921), anteriores a este camino.
+#    Una VARIANTE (re-edición de una derivación) escribe además su guion
+#    variado una vez (`guion.variar_guion`, el mismo peor caso de 0,20):
+#    `variar_guion` y lo suman el precio de derivar/rescatar
+#    (`acciones._precio_estimado`) y la reserva de su final
+#    (`derivaciones._encolar_final`).
 #    `derivaciones._avanzar_finales` encola un `final_producir` POR país
 #    (guion localizado, voz vía fal/ElevenLabs y whisper propios; solo la
 #    música se cachea y a veces sale gratis) — no hay descuento por país
@@ -98,7 +103,7 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    US$ 0,21; con el tope viejo de 16 000 no terminaba. Se estima 0,07 por
 #    cada 100 palabras sobre 0,06, sin pasar del peor caso del tope (48 000).
 TARIFAS = {
-    "guion": 0.09,   # PND-110: máximo real 0,0702 × 1,2, hacia arriba (ver arriba)
+    "guion": 0.13,   # PND-110: cubre la vuelta de corrección medida (0,11–0,12); ver arriba
     "regla_producto": 0.01,
     # Texto orgánico («Escribir con IA», la publicación de una ganadora): la doctrina en el system y hasta 4 000
     # tokens de salida con el pensamiento. Peor caso con ese tope: 4 000 × US$ 10/M + ≈ 6 000 de entrada (la
@@ -126,7 +131,8 @@ TARIFAS = {
     "musica": 0.02,
     "musica_elevenlabs": 0.60,   # canción de 60 s con ElevenLabs vía fal (US$ 0,60 por minuto empezado)
     "whisper": 0.01,
-    "final": 0.20,
+    "final": 0.28,   # PND-110: peor caso con el tope de 8 000 (ver arriba)
+    "variar_guion": 0.20,   # el guion de una variante, una vez por re-edición (ver «final» arriba)
     # Doctrina, bloque 2: una llamada con la doctrina en el system y pensamiento
     # adaptativo. Medido en la prueba real (2026-09-27) con la caché fría, el
     # peor caso: reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007. Redondeado hacia arriba.
@@ -559,7 +565,8 @@ _ESTIMADORES = {
     "imagen": _estimar_imagen,
     "swap": _estimar_swap,
     "final": _estimar_final,
-    "reedicion": _estimar_final,
+    "reedicion": lambda paises=1, **_: (TARIFAS["final"] * max(1, int(paises or 1)) + TARIFAS["variar_guion"],
+                                        "guion variado y sus finales"),
     "guion": lambda **_: (TARIFAS["guion"], "hasta dos llamadas a Claude y la transcripción de la referencia"),
     "regla_producto": lambda **_: (TARIFAS["regla_producto"], "una llamada corta a Claude"),
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),

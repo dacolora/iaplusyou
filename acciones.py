@@ -478,7 +478,8 @@ def _precio_estimado(cliente, ex, accion, payload):
         if final_1["usd"] is None:
             return {"usd": None, "texto": sin_precio}
         final = n_paises * final_1["usd"]
-        usd = n_re * final
+        # Cada re-edición es una variante: además de sus finales escribe una vez su guion variado (PND-110).
+        usd = n_re * (final + gastos.TARIFAS["variar_guion"])
         duracion = sesion.get("duracion_objetivo")
         con_sonido = sesion.get("con_sonido", True) is not False
         for k in range(n_rg):
