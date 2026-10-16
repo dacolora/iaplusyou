@@ -98,7 +98,9 @@ origin/main y empezar por las pruebas de `fp_describir` con saldo 0 (debe respon
   ninguna variable `SMTP_*`; sí tiene `PLATAFORMA_URL`. Las unidades de systemd cargan el `.env` con `EnvironmentFile`
   (por eso `SMTP_FROM` va entre comillas dobles).
 - Comando para que Daniel pegue la llave de Resend sin que pase por el chat (ya se le dio):
-  `ssh -t deploy@app.creatvmachine.com 'cd /home/deploy/iaplusyou && cp .env .env.bak_smtp && read -rs -p "Llave de Resend: " K && echo && printf "\nSMTP_HOST=smtp.resend.com\nSMTP_PORT=587\nSMTP_USER=resend\nSMTP_PASS=%s\nSMTP_FROM=\"Creatv <hola@creatvmachine.com>\"\n" "$K" >> .env && unset K && echo listo'`.
+  `ssh -t deploy@app.creatvmachine.com 'cd /home/deploy/iaplusyou && cp .env .env.bak_smtp && read -rs -p "Llave de Resend: " K && echo && printf "\nSMTP_HOST=smtp.resend.com\nSMTP_PORT=587\nSMTP_USER=resend\nSMTP_PASS=%s\nSMTP_FROM=\"Galadsy <hola@galadsy.com>\"\n" "$K" >> .env && unset K && echo listo'`.
+  (2026-10-15: desde hoy la app vive en `galadsy.com`, PND-326; el dominio que se verifica en Resend y el remitente son
+  `galadsy.com`, no `creatvmachine.com`; el `ssh` sigue por `app.creatvmachine.com` porque `known_hosts` conoce esa clave.)
   Después hay que reiniciar los dos servicios (cola vacía) y la guía de `llaves.py:133-143` habla de Google («contraseña
   de aplicación»): ajustarla a Resend.
 - Forja gastó en Meta: experimento 3 ≈ 95 459 COP (2026-09-29/30) y experimento 5 ≈ 42 498 COP (2026-10-08): hay
