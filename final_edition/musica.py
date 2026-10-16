@@ -37,7 +37,7 @@ class PistaPagadaError(RuntimeError):
 
 
 def obtener_pista(estilo, segundos, carpeta_cache=None, on_progreso=None):
-    """Devuelve `({"archivo", "url", "estilo", "generada"}, costo_usd)`.
+    """Devuelve `({"archivo", "url", "estilo", "generada", "clave"}, costo_usd)`.
     `segundos` se redondea hacia arriba al múltiplo de 15 más cercano (máx. 45)."""
     if estilo not in tipos.ESTILOS_MUSICA:
         validos = ", ".join(sorted(tipos.ESTILOS_MUSICA))
@@ -61,7 +61,7 @@ def obtener_pista(estilo, segundos, carpeta_cache=None, on_progreso=None):
             if not os.path.exists(archivo_local):
                 _descargar(entrada["url"], archivo_local)
             resultado = {"archivo": archivo_local, "url": entrada["url"],
-                         "estilo": estilo, "generada": False}
+                         "estilo": estilo, "generada": False, "clave": clave}
             return resultado, 0
 
         prompt = tipos.ESTILOS_MUSICA[estilo]
@@ -83,7 +83,9 @@ def obtener_pista(estilo, segundos, carpeta_cache=None, on_progreso=None):
         except Exception as e:
             raise PistaPagadaError(e, costo, generado["url"]) from e
 
-    resultado = {"archivo": archivo_local, "url": url_r2, "estilo": estilo, "generada": True}
+    # `clave`: la de la caché (estilo y duración); el legado de Final edition la usa para cobrar una pista pagada por
+    # una final que falló cuando otra la reusa (PND-337).
+    resultado = {"archivo": archivo_local, "url": url_r2, "estilo": estilo, "generada": True, "clave": clave}
     return resultado, costo
 
 

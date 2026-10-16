@@ -619,13 +619,19 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
     guion = None
     capas = {}
     degradada = False
+    # PND-337 (el cobro al reusar de PND-314, portado al legado): lo pagado en esta corrida que queda guardado para
+    # reusarse ({clave: usd}: la pista de música nueva) y lo que esta corrida reusa (el guion base, una pista ya
+    # pagada). Si falla, `cache` va en su gasto; si se entrega, lo reusado que nadie cobró pasa a su fila.
+    cache, reusadas = {}, set()
 
     avisar(ETAPAS_FINAL[0][0])
     variando = False
     try:
         # Guion base (una vez por sesión) — si aún no existe se escribe aquí.
         guion_base = creative_flow.guion_base(cliente, cf_id)
-        if not guion_base:
+        if guion_base:
+            reusadas.add(clave_guion_base(cf_id, guion_base))
+        else:
             guion_base, costo_base = preparar_guion(cliente, cf_id, o, ref_sufijo=ref_sufijo)
             costo += costo_base
             # F.1: si la sesión no tenía ángulo, preparar_guion pudo guardar
@@ -787,6 +793,12 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
                 else:
                     pista, c = musica.obtener_pista(estilo, duracion_final)
                     proveedor, parametros = "fal/stable-audio", {"estilo": estilo, "url": pista.get("url")}
+                    if pista.get("clave"):
+                        # La pista queda en la caché de música: nueva (pagada aquí) o reusada.
+                        if pista.get("generada") and c:
+                            cache[f"musica:{pista['clave']}"] = round(float(c), 4)
+                        elif not pista.get("generada"):
+                            reusadas.add(f"musica:{pista['clave']}")
                 pista_musica = pista.get("archivo")
                 costo += float(c or 0.0)
                 capa("musica", proveedor, parametros, c)
@@ -824,12 +836,15 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
                                   "mezcla": o.get("mezcla") or mezcla.PRESET_DEFECTO})
     except Exception as e:
         _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, fallo=True,
-                               ref_sufijo=ref_sufijo)
+                               ref_sufijo=ref_sufijo, cache=cache)
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas,
                                        costo_usd=round(costo, 4), guion=guion)
         raise
 
-    _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo)
+    # PND-337: lo que esta final reusó de un intento fallido (y nadie cobró) se cobra aquí, que sí se entrega.
+    traslados = gastos.pendientes_por_clave(cliente, claves_reusables(cf_id), reusadas) if reusadas else []
+    _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo,
+                           traslados=traslados)
     creative_flow.actualizar_final(
         cliente, final_id, estado="degradada" if degradada else "listo", url_video=url_video,
         url_miniatura=url_miniatura, url_local=resultado["archivo"],

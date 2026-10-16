@@ -129,9 +129,13 @@ guion va por VERSIÓN (`clave_guion_base(cf_id, guion)`, una huella del JSON): s
 nadie reusa no se cobra. Lo mismo con
 la voz cruda de Audios y del anuncio hablado (`audios.voz_cruda`, clave `voz:<hash>`, puesta solo después de bajar,
 subir y guardar la voz): una voz pagada por un `audio_generar` que falló en la mezcla se cobra cuando otra tarea la
-reusa. Fuera: el camino legado
-(`FINAL_EDITION_LEGADO=1`) y una voz que quedó en caché sin que se guardara su destino (un Conflicto tras dos
-reintentos). Pruebas: `tests/test_fe_cobro_al_reusar.py`.
+reusa. El camino legado
+(`FINAL_EDITION_LEGADO=1`) hace lo mismo desde PND-337 (decisión 2026-10-15, lote 3) con lo que él reusa: el guion base
+(`clave_guion_base`) y la pista de música de la caché global (`musica.obtener_pista` devuelve su `clave`; una pista
+nueva va en el `extra.cache` de la final fallida como `musica:<clave>` y la que se reusa se cobra en la final que sí se
+entrega). El legado no guarda voces ni traducciones entre intentos: no hay más que cobrar. Fuera: una voz que quedó en
+caché sin que se guardara su destino en la vía del editor (un Conflicto tras dos reintentos). Pruebas:
+`tests/test_fe_cobro_al_reusar.py`, `tests/test_fe_legado_cobro_al_reusar.py`.
 
 **La negativa de Claude no paga la corrección (PND-241, decisión 2026-10-13, lote 1).** Visto con
 cf_20261007_221411_960598 (colorado_forja, 2026-10-10): una respuesta sin JSON pagaba la vuelta de corrección y la
