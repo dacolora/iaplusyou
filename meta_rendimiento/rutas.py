@@ -222,13 +222,10 @@ def guardar_cuentas(cliente):
     cupo = max(0, cuentas.MAX_POR_PROYECTO - len(existentes))
     sobran = max(0, len(nuevas) - cupo)
     elegidas = existentes + nuevas[:cupo]
-    antes = set(propias)
     try:
         r = cuentas.elegir(cliente, elegidas, usuario=session.get("usuario"))
-    except Exception as e:  # noqa: BLE001 — borrar las copias de una quitada falló: esa cuenta sigue en el proyecto
-        for act in sorted(set(cuentas.ids(cliente)) - antes):
-            tareas_mr.encolar_sync(cliente, act)
-        flash(gettext("No se pudo quitar una cuenta (%(tipo)s): sigue en el proyecto, inténtalo de nuevo.",
+    except Exception as e:  # noqa: BLE001 — `elegir` es una sola transacción (PND-206): si falló, nada cambió
+        flash(gettext("No se pudieron cambiar las cuentas (%(tipo)s): todo sigue como estaba, inténtalo de nuevo.",
                       tipo=type(e).__name__), "error")
         return _volver(cliente)
     for act, pais in cambios_pais:

@@ -852,24 +852,26 @@ def borrar_analisis(cliente, analisis_id):
         return con.execute(t.delete().where(t.c.id == analisis_id, t.c.cliente == cliente)).rowcount == 1
 
 
-def borrar_analisis_meta(cliente, cuentas):
+def borrar_analisis_meta(cliente, cuentas, con=None):
     """Borra los análisis «Cómo mejorarlo» de fuente Meta (`foto.fuente == "meta"`) de esas cuentas de Meta
     (`foto.ad_account_id`) y devuelve [(id, ad_id)] de los borrados, para que quien llama borre DESPUÉS sus copias en R2
     (`meta_rendimiento.creativo.borrar_copias`). S1 (revisión final de Rendimiento E2, auditor de seguridad,
     2026-10-10): esas filas guardan nombre, campaña, cifras, cuenta, título y copy copiados de Meta, y soltar la cuenta
     (quitarla o desconectar Meta) promete borrarlos (`/eliminar-datos`). Un análisis de Triple Whale nunca se toca,
-    aunque sea del mismo anuncio. Una sola transacción; una lista vacía no toca la base. El gasto ya pagado se queda en
-    `gasto`."""
+    aunque sea del mismo anuncio. Una sola transacción (con `con`, la de quien llama: `meta_rendimiento.cuentas.elegir`,
+    PND-206); una lista vacía no toca la base. El gasto ya pagado se queda en `gasto`."""
     cuentas = [str(c) for c in cuentas or [] if c]
     if not cuentas:
         return []
+    if con is None:
+        with db.conectar() as con_:
+            return borrar_analisis_meta(cliente, cuentas, con=con_)
     t = db.tw_analisis
     donde = sa.and_(t.c.cliente == cliente, sa.func.json_extract(t.c.foto, "$.fuente") == "meta",
                     sa.func.json_extract(t.c.foto, "$.ad_account_id").in_(cuentas))
-    with db.conectar() as con:
-        filas = [(int(r.id), r.ad_id) for r in con.execute(sa.select(t.c.id, t.c.ad_id).where(donde))]
-        if filas:
-            con.execute(t.delete().where(t.c.cliente == cliente, t.c.id.in_([i for i, _ in filas])))
+    filas = [(int(r.id), r.ad_id) for r in con.execute(sa.select(t.c.id, t.c.ad_id).where(donde))]
+    if filas:
+        con.execute(t.delete().where(t.c.cliente == cliente, t.c.id.in_([i for i, _ in filas])))
     return filas
 
 

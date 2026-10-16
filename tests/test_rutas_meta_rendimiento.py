@@ -323,15 +323,15 @@ def test_guardar_cuentas_si_falla_al_quitar_avisa_y_la_cuenta_sigue(conectado, m
     monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
                         lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
 
-    def falla(cliente, act):
+    def falla(con, cliente, act):
         raise RuntimeError("disco lleno")
     monkeypatch.setattr(cuentas, "_borrar_copias", falla)
     r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A]})
     assert r.status_code == 302
-    assert B in cuentas.ids("acme")
-    assert any("inténtalo de nuevo" in m for m in _flashes(conectado["c"]))
-    # La que sí entró antes del fallo queda con su copia en cola.
-    assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
+    # PND-206: `elegir` es una sola transacción; si quitar falla, la nueva tampoco entra y nada se encola.
+    assert cuentas.ids("acme") == [B]
+    assert any("todo sigue como estaba, inténtalo de nuevo" in m for m in _flashes(conectado["c"]))
+    assert _tareas() == []
 
 
 def test_error_de_meta_al_listar_sin_token(conectado, monkeypatch):
@@ -749,7 +749,7 @@ def test_si_falla_borrar_las_copias_las_evaluaciones_se_borran_igual(conectado, 
     _sembrar()
     e = _evaluar("acme")
 
-    def falla(cliente, act):
+    def falla(con, cliente, act):
         raise RuntimeError(f"disco lleno con {TOKEN}")
     monkeypatch.setattr(cuentas, "_borrar_copias", falla)
     _desconectar(conectado, monkeypatch)
@@ -782,7 +782,7 @@ def test_si_borrar_las_copias_falla_la_desconexion_se_queda_y_se_avisa(conectado
     monkeypatch.setattr(mc, "revocar", lambda c: False)
     monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or True)
 
-    def falla(cliente, act):
+    def falla(con, cliente, act):
         raise RuntimeError(f"disco lleno con {TOKEN}")
     monkeypatch.setattr(cuentas, "_borrar_copias", falla)
     r = conectado["c"].post("/cliente/acme/meta/desconectar")

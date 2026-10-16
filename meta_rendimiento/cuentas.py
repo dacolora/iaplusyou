@@ -7,7 +7,7 @@ aparecen en otro."""
 import re
 
 import sqlalchemy as sa
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import db
 from triple_whale import datos as tw_datos
@@ -79,59 +79,68 @@ def dueno(ad_account_id):
         return con.execute(sa.select(_C.cliente).where(_C.ad_account_id == normalizar_id(ad_account_id))).scalar()
 
 
-def _borrar_copias(cliente, ad_account_id):
-    """Borra las copias de la cuenta: sus métricas (`datos.borrar_cuenta`) y, desde S1 (revisión final de Rendimiento
-    E2, 2026-10-10), los análisis «Cómo mejorarlo» de sus anuncios de fuente Meta, que guardan nombres, cifras, título y
-    copy copiados de Meta. Devuelve [(analisis_id, ad_id)] de esos análisis: sus copias en R2 se borran al final de
-    `elegir`, después de las filas."""
+def _borrar_copias(con, cliente, ad_account_id):
+    """Borra, dentro de la transacción `con` de `elegir`, las copias de la cuenta: sus métricas (`datos.borrar_cuenta`)
+    y, desde S1 (revisión final de Rendimiento E2, 2026-10-10), los análisis «Cómo mejorarlo» de sus anuncios de fuente
+    Meta, que guardan nombres, cifras, título y copy copiados de Meta. Devuelve [(analisis_id, ad_id)] de esos análisis:
+    sus copias en R2 se borran al final de `elegir`, después del commit."""
     from meta_rendimiento import datos  # noqa: PLC0415 — datos importa cuentas en sus pruebas
-    datos.borrar_cuenta(cliente, ad_account_id)
-    return tw_datos.borrar_analisis_meta(cliente, [ad_account_id])
+    datos.borrar_cuenta(cliente, ad_account_id, con=con)
+    return tw_datos.borrar_analisis_meta(cliente, [ad_account_id], con=con)
+
+
+def _dueno(con, act):
+    return con.execute(sa.select(_C.cliente).where(_C.ad_account_id == act)).scalar()
+
+
+def bloquear_elegida(con, cliente, ad_account_id):
+    """True si la cuenta sigue elegida en el proyecto, con el candado de escritura de SQLite ya tomado en `con` (un
+    UPDATE sin efecto sobre su fila, el patrón de `_bloquear`). PND-206: la copia (`datos`, con `exigir_cuenta=True`)
+    lo pregunta en la MISMA transacción en la que escribe, así `elegir` no puede quitar la cuenta entre la pregunta y
+    la escritura y no quedan copias huérfanas. No cambia nada de la fila."""
+    return _bloquear(con, (_C.cliente == cliente) & (_C.ad_account_id == normalizar_id(ad_account_id)))
 
 
 def elegir(cliente, elegidas, usuario=None):
     """Deja en el proyecto exactamente `elegidas` (las de otro proyecto se rechazan). Devuelve {"agregadas",
     "quitadas", "rechazadas", "fallos_r2"}: `fallos_r2`, el tipo de cada copia en R2 de un análisis «Cómo mejorarlo»
-    de una cuenta quitada que no se pudo borrar (S1; quien llama avisa). Sus filas ya se borraron antes de tocar R2."""
+    de una cuenta quitada que no se pudo borrar (S1; quien llama avisa).
+
+    PND-206 (decisión 2026-10-13): todo en UNA transacción que toma el candado de escritura ANTES de leer qué cuentas
+    tiene el proyecto. Agregar, quitar y borrar las copias de las quitadas (métricas y análisis de fuente Meta) pasa
+    entero o no pasa: si algo falla, el proyecto se queda como estaba y la excepción sube (quien llama avisa y la
+    persona reintenta). Mientras dura, una copia que quiere escribir espera, y después ve que su cuenta ya no está
+    (`bloquear_elegida`) y no escribe. Las copias en R2 se borran DESPUÉS del commit: si la transacción no se
+    confirmó, sus filas siguen y sus imágenes también."""
     nuevas = {normalizar_id(c["id"]): c for c in elegidas or [] if c.get("id")}
-    actuales = set(ids(cliente))
-    agregadas, rechazadas = [], []
+    agregadas, rechazadas, copiadas = [], [], []
     ahora = db.ahora()
-    for act, c in nuevas.items():
-        if act in actuales:
-            continue
-        otro = dueno(act)
-        if otro and otro != cliente:
-            rechazadas.append(act)
-            continue
-        try:
-            with db.conectar() as con:
-                con.execute(db.meta_cuenta.insert().values(
-                    cliente=cliente, creado_en=ahora, actualizado_en=ahora, ad_account_id=act,
-                    nombre=c.get("name"), moneda=(c.get("currency") or "")[:3] or None,
-                    pais=_pais(c.get("pais")), estado="nueva", agregada_por=usuario, extra={}))
-            agregadas.append(act)
-        except IntegrityError:
-            rechazadas.append(act)
-    quitadas = sorted(actuales - set(nuevas))
-    copiadas, fallos_r2 = [], []
-    try:
+    with db.conectar() as con:
+        con.execute(db.meta_cuenta.update().where(_C.cliente == cliente).values(actualizado_en=_C.actualizado_en))
+        actuales = set(con.execute(sa.select(_C.ad_account_id).where(_C.cliente == cliente)).scalars())
+        for act, c in nuevas.items():
+            if act in actuales:
+                continue
+            otro = _dueno(con, act)
+            if otro and otro != cliente:
+                rechazadas.append(act)
+                continue
+            # El índice único `uq_meta_cuenta_act` es la última palabra: si otro proyecto la tomó, no entra.
+            r = con.execute(insert_sqlite(db.meta_cuenta).values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, ad_account_id=act,
+                nombre=c.get("name"), moneda=(c.get("currency") or "")[:3] or None,
+                pais=_pais(c.get("pais")), estado="nueva", agregada_por=usuario, extra={}).on_conflict_do_nothing())
+            (agregadas if r.rowcount == 1 else rechazadas).append(act)
+        quitadas = sorted(actuales - set(nuevas))
         for act in quitadas:
-            # Primero las copias y después la fila: si borrar las copias falla, la cuenta sigue en el proyecto
-            # y el próximo `elegir` reintenta las dos cosas (al revés quedarían copias huérfanas para siempre).
-            copiadas += _borrar_copias(cliente, act) or []
-            with db.conectar() as con:
-                con.execute(db.meta_cuenta.delete().where(_C.cliente == cliente, _C.ad_account_id == act))
-            # PND-295 (2026-10-12): un «Cómo mejorarlo» pedido mientras tanto pudo crear su fila entre el barrido de
-            # arriba y el borrado de la cuenta (el pedido comprueba la cuenta después de crearla, y en ese momento
-            # todavía estaba). Ninguna suelta futura la alcanzaría: se barre otra vez, y sus copias van al `finally`.
-            copiadas += tw_datos.borrar_analisis_meta(cliente, [act]) or []
-    finally:
-        # S1: las copias en R2 de los análisis ya borrados, al final y con un solo cliente de R2 (también si otra
-        # cuenta falló después: sus filas ya no están y nadie más sabría esas claves). `borrar_copias` nunca lanza.
-        if copiadas:
-            from meta_rendimiento import creativo  # noqa: PLC0415 — tardío: creativo carga Graph, R2 y triple_whale
-            _, fallos_r2 = creativo.borrar_copias(cliente, copiadas)
+            copiadas += _borrar_copias(con, cliente, act) or []
+            con.execute(db.meta_cuenta.delete().where(_C.cliente == cliente, _C.ad_account_id == act))
+    fallos_r2 = []
+    if copiadas:
+        # S1: las copias en R2 de los análisis ya borrados, con un solo cliente de R2. `borrar_copias` nunca lanza y
+        # anota lo que R2 no borró en `storage.r2_pendientes` para el reintento diario.
+        from meta_rendimiento import creativo  # noqa: PLC0415 — tardío: creativo carga Graph, R2 y triple_whale
+        _, fallos_r2 = creativo.borrar_copias(cliente, copiadas)
     return {"agregadas": agregadas, "quitadas": quitadas, "rechazadas": rechazadas, "fallos_r2": fallos_r2}
 
 

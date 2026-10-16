@@ -13858,6 +13858,10 @@ msgstr "Some images or videos copied from that account couldn't be deleted from 
 msgid "No se pudieron calcular las alertas. Recarga la página; si sigue, avisa a Creatv."
 msgstr "Couldn't work out the alerts. Reload the page; if it keeps happening, let Creatv know."
 
+#, python-format
+msgid "No se pudieron cambiar las cuentas (%(tipo)s): todo sigue como estaba, inténtalo de nuevo."
+msgstr "The accounts could not be changed (%(tipo)s): everything is as it was, try again."
+
 msgid "No se pudieron cargar los resultados"
 msgstr "Couldn't load the results"
 
@@ -14304,10 +14308,6 @@ msgstr "Could not publish organically"
 
 msgid "No se pudo publicar."
 msgstr "Couldn't publish."
-
-#, python-format
-msgid "No se pudo quitar una cuenta (%(tipo)s): sigue en el proyecto, inténtalo de nuevo."
-msgstr "Couldn't remove an account (%(tipo)s): it's still in the project, try again."
 
 #, python-format
 msgid "No se pudo redactar el texto (%(error)s); al aprobar se redacta de nuevo."

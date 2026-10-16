@@ -307,7 +307,9 @@ def _miniaturas(cliente, act, token, hoy):
                 objetos.append(_con_miniatura_en({
                     "nivel": "anuncio", "objeto_id": ad_id, "creative_id": creative.get("id"),
                     "miniatura_url": creative["thumbnail_url"], "video_id": creative.get("video_id")}))
-            n += datos.guardar_objetos(cliente, act, objetos)
+            n += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
+        except datos.CuentaSoltada:
+            raise   # la cuenta se soltó en medio: la copia termina sin escribir más (PND-206)
         except Exception as e:  # noqa: BLE001 — las miniaturas nunca tumban la copia
             log.warning("meta miniaturas %s: lote de %s saltado (%s)", act, len(lote), type(e).__name__)
             if isinstance(e, graph.ErrorGraph) and e.limite:
@@ -345,17 +347,30 @@ def _alcance_de_ventana(act, token, w):
 
 # --------------------------------------------------------------- sincronizar ---
 
+_OMITIDA = {"omitida": True, "dias_cuenta": 0, "filas_anuncio": 0, "objetos": 0, "desde": None, "hasta": None}
+
+
 def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     """Copia la cuenta `ad_account_id` del proyecto `cliente`. Devuelve
     {"omitida", "dias_cuenta", "filas_anuncio", "objetos", "desde", "hasta"}. `on_etapa(nombre, progreso 0-100)`
     se llama al empezar cada paso. Una ErrorGraph sube sin tocar el estado de la cuenta (queda «copiando»).
 
     Si la cuenta ya no está en el proyecto (la quitaron mientras esperaba su turno) no se llama a Meta ni se
-    escribe nada: devuelve `omitida=True`."""
+    escribe nada: devuelve `omitida=True`. PND-206: cada escritura comprueba, en su misma transacción, que la cuenta
+    siga elegida (`exigir_cuenta=True`); si la quitaron A MEDIA copia, lo ya escrito se fue con ella
+    (`cuentas.elegir` borra las copias), nada más se escribe y también devuelve `omitida=True`."""
     act = cuentas.normalizar_id(ad_account_id)
     guardada = cuentas.cuenta(cliente, act)
     if guardada is None:
-        return {"omitida": True, "dias_cuenta": 0, "filas_anuncio": 0, "objetos": 0, "desde": None, "hasta": None}
+        return dict(_OMITIDA)
+    try:
+        return _sincronizar(cliente, act, token, guardada, hoy, on_etapa)
+    except datos.CuentaSoltada:
+        log.info("meta copia %s: la cuenta se soltó a media copia; no se escribe más", act)
+        return dict(_OMITIDA)
+
+
+def _sincronizar(cliente, act, token, guardada, hoy, on_etapa):
 
     def etapa(nombre, progreso):
         if on_etapa:
@@ -382,11 +397,11 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     n_objetos = 0
     campanas = _listar(act, token, "campaigns", CAMPOS_CAMPANA, ESTADOS)
     objetos = objetos_de(campanas, [], [], moneda)
-    n_objetos += datos.guardar_objetos(cliente, act, objetos)
+    n_objetos += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
     datos.marcar_sin_estado(cliente, act, "campana", [o["objeto_id"] for o in objetos])
     conjuntos = _listar(act, token, "adsets", CAMPOS_CONJUNTO, ESTADOS)
     objetos = objetos_de([], conjuntos, [], moneda)
-    n_objetos += datos.guardar_objetos(cliente, act, objetos)
+    n_objetos += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
     datos.marcar_sin_estado(cliente, act, "conjunto", [o["objeto_id"] for o in objetos])
     # Anuncios: siempre los que entregan o esperan (con creativo). Los pausados (campos ligeros) y la limpieza de
     # los archivados solo cuando el último listado completo tiene más de 20 horas: son miles de filas y cada página
@@ -395,13 +410,13 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     completo = _listado_vencido(extra.get("listado_completo_en"))
     anuncios = _listar(act, token, "ads", CAMPOS_ANUNCIO, ESTADOS_ANUNCIO, LIMITE_ANUNCIOS)
     objetos = objetos_de([], [], anuncios, moneda)
-    n_objetos += datos.guardar_objetos(cliente, act, objetos)
+    n_objetos += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
     vistos = {o["objeto_id"] for o in objetos}
     anuncios = objetos = None
     if completo:
         pausados = _listar(act, token, "ads", CAMPOS_ANUNCIO_LIGERO, ESTADOS_ANUNCIO_PAUSADOS)
         objetos = objetos_de([], [], [], moneda, anuncios_ligeros=pausados)
-        n_objetos += datos.guardar_objetos(cliente, act, objetos)
+        n_objetos += datos.guardar_objetos(cliente, act, objetos, exigir_cuenta=True)
         vistos.update(o["objeto_id"] for o in objetos)
         pausados = objetos = None
         datos.marcar_sin_estado(cliente, act, "anuncio", vistos)
@@ -422,7 +437,8 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
         filas = graph.paginar(f"{act}/insights", token, {
             "level": "account", "time_increment": 1, "time_range": _rango(a, b), "fields": CAMPOS_CUENTA_DIA,
             "limit": LIMITE_PAGINA})
-        dias_cuenta += datos.reemplazar_cuenta_dias(cliente, act, a, b, [fila_cuenta(f) for f in filas])
+        dias_cuenta += datos.reemplazar_cuenta_dias(cliente, act, a, b, [fila_cuenta(f) for f in filas],
+                                                    exigir_cuenta=True)
         filas = None
         if relleno:   # hasta dónde llegó la primera copia: si Meta pide esperar, la siguiente sigue desde aquí
             cuentas.actualizar_extra(cliente, act, {"cuenta_desde": a})
@@ -436,8 +452,8 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
         graph.informe(act, token, {
             "level": "ad", "time_increment": 1, "time_range": _rango(a, b), "fields": CAMPOS_ANUNCIO_DIA,
             "limit": LIMITE_PAGINA}, por_pagina=_por_pagina(filas, nombres))
-        filas_anuncio += datos.reemplazar_anuncio_dias(cliente, act, a, b, filas)
-        datos.guardar_objetos(cliente, act, list(nombres.values()))
+        filas_anuncio += datos.reemplazar_anuncio_dias(cliente, act, a, b, filas, exigir_cuenta=True)
+        datos.guardar_objetos(cliente, act, list(nombres.values()), exigir_cuenta=True)
         filas = nombres = None
         if relleno:
             cuentas.actualizar_extra(cliente, act, {"anuncios_desde": a})
@@ -454,7 +470,7 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     for w in VENTANAS_ALCANCE:
         filas = _alcance_de_ventana(act, token, w)
         if filas:
-            datos.guardar_alcance(cliente, act, filas, completa=True)
+            datos.guardar_alcance(cliente, act, filas, completa=True, exigir_cuenta=True)
 
     # 6. Tasas de cambio a USD (nunca lanza). Desde el día más viejo YA guardado de la cuenta, no solo desde esta
     # corrida: si el relleno se hizo en varias corridas, los días de las primeras también necesitan su tasa.
@@ -468,7 +484,7 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     # igual, porque reintentarlo en cada corrida de 3 horas serían 64 consultas al día en vez de 8.
     if _listado_vencido(extra.get("desglose_en")):   # la misma regla de las 20 horas del listado completo
         etapa(ETAPA_ALCANCE, 95)
-        desgloses.copiar(cliente, act, token)
+        desgloses.copiar(cliente, act, token, exigir_cuenta=True)
         cuentas.actualizar_extra(cliente, act, {"desglose_en": db.ahora()})
 
     cuentas.actualizar(cliente, act, estado="ok", error=None, ultima_copia=db.ahora())

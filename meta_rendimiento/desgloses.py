@@ -33,10 +33,11 @@ def fila(f, dimension):
     return {"clave": clave, **{m: base[m] for m in datos.METRICAS_DESGLOSE}}
 
 
-def copiar(cliente, act, token):
+def copiar(cliente, act, token, exigir_cuenta=False):
     """Pide a Meta los 8 desgloses de la cuenta `act` y reemplaza cada uno en la base. Devuelve cuántas filas escribió.
     Un `ErrorGraph` de límite sube; cualquier otro error de una combinación se anota y sigue con la siguiente (esa
-    combinación conserva lo que tenía hasta la próxima copia diaria)."""
+    combinación conserva lo que tenía hasta la próxima copia diaria). `exigir_cuenta=True` (la copia, PND-206): si la
+    cuenta se soltó en medio, `datos.CuentaSoltada` sube sin escribir."""
     n = 0
     for ventana in VENTANAS:
         for dimension, breakdowns in DIMENSIONES.items():
@@ -45,9 +46,9 @@ def copiar(cliente, act, token):
                     "level": "account", "date_preset": f"last_{ventana}d", "breakdowns": breakdowns,
                     "fields": CAMPOS, "limit": LIMITE_PAGINA})
                 n += datos.reemplazar_desgloses(cliente, act, ventana, dimension,
-                                                [fila(f, dimension) for f in filas])
+                                                [fila(f, dimension) for f in filas], exigir_cuenta=exigir_cuenta)
             except Exception as e:  # noqa: BLE001 — una combinación que falla no tumba las demás ni la copia
-                if isinstance(e, graph.ErrorGraph) and e.limite:
+                if isinstance(e, graph.ErrorGraph) and e.limite or isinstance(e, datos.CuentaSoltada):
                     raise
                 log.warning("meta desgloses %s: %s de %s días saltado (%s)", act, dimension, ventana,
                             type(e).__name__)

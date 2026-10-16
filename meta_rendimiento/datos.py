@@ -40,6 +40,20 @@ METRICAS_DESGLOSE = ("gasto", "impresiones", "clics", "clics_salida", "compras",
 _LARGO_CLAVE = 120
 # La «Evaluación con IA» (spec E2 §8). Lo que nunca se cambia después de crearla.
 ESTADOS_EVALUACION = ("en_cola", "analizando", "lista", "error")
+
+
+class CuentaSoltada(Exception):
+    """PND-206: la cuenta ya no está elegida en el proyecto (la quitaron o se desconectó Meta mientras su copia corría).
+    Un escritor llamado con `exigir_cuenta=True` la lanza ANTES de escribir nada y su transacción no deja rastro."""
+
+
+def _exigir_cuenta(con, cliente, act):
+    """Dentro de la transacción del escritor: toma el candado de escritura y comprueba que la cuenta siga elegida
+    (`cuentas.bloquear_elegida`); si no, CuentaSoltada. `cuentas.elegir` quita la cuenta y sus copias en una sola
+    transacción, así que no puede colarse entre esta comprobación y la escritura."""
+    from meta_rendimiento import cuentas  # noqa: PLC0415 — cuentas importa este módulo al borrar copias
+    if not cuentas.bloquear_elegida(con, cliente, act):
+        raise CuentaSoltada(act)
 _FIJOS_EVALUACION = ("id", "cliente", "creado_en", "actualizado_en")
 
 
@@ -84,9 +98,10 @@ def _con_alias_evaluacion(d):
 
 # ------------------------------------------------------------ escribir ---
 
-def _reemplazar(tabla, columnas, cliente, act, desde, hasta, filas, llave):
+def _reemplazar(tabla, columnas, cliente, act, desde, hasta, filas, llave, exigir_cuenta=False):
     """Borra [desde, hasta] de esa cuenta y escribe `filas` (las de fuera del rango se ignoran) en una
-    transacción. Si la misma `llave` llega dos veces en la tanda (solape al paginar), gana la última."""
+    transacción. Si la misma `llave` llega dos veces en la tanda (solape al paginar), gana la última.
+    `exigir_cuenta=True` (la copia): CuentaSoltada sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     ahora = db.ahora()
     por_llave = {}
     for f in filas or []:
@@ -104,6 +119,8 @@ def _reemplazar(tabla, columnas, cliente, act, desde, hasta, filas, llave):
         por_llave[k] = nueva
     registros = list(por_llave.values())
     with db.conectar() as con:
+        if exigir_cuenta:
+            _exigir_cuenta(con, cliente, act)
         con.execute(tabla.delete().where(tabla.c.cliente == cliente, tabla.c.ad_account_id == act,
                                          tabla.c.fecha >= desde, tabla.c.fecha <= hasta))
         if registros:
@@ -111,29 +128,31 @@ def _reemplazar(tabla, columnas, cliente, act, desde, hasta, filas, llave):
     return len(registros)
 
 
-def reemplazar_cuenta_dias(cliente, act, desde, hasta, filas):
+def reemplazar_cuenta_dias(cliente, act, desde, hasta, filas, exigir_cuenta=False):
     """La cuenta por día para [desde, hasta]: borra el rango de ESA cuenta y lo vuelve a escribir.
     Claves de fila: fecha, gasto, impresiones, alcance, clics, clics_salida, compras, valor, vistas_3s, thruplays.
     Devuelve cuántas filas escribió."""
     return _reemplazar(db.meta_cuenta_dia, METRICAS_CUENTA, cliente, act, desde, hasta, filas,
-                       llave=lambda r: r["fecha"])
+                       llave=lambda r: r["fecha"], exigir_cuenta=exigir_cuenta)
 
 
-def reemplazar_anuncio_dias(cliente, act, desde, hasta, filas):
+def reemplazar_anuncio_dias(cliente, act, desde, hasta, filas, exigir_cuenta=False):
     """El anuncio por día para [desde, hasta]: borra el rango de ESA cuenta y lo vuelve a escribir.
     Claves de fila: fecha, campaign_id, adset_id, ad_id y METRICAS_ANUNCIO. Una fila sin `ad_id` se ignora.
     Devuelve cuántas filas escribió."""
     return _reemplazar(db.meta_anuncio_dia, METRICAS_ANUNCIO, cliente, act, desde, hasta, filas,
-                       llave=lambda r: (r["ad_id"], r["fecha"]) if r.get("ad_id") else None)
+                       llave=lambda r: (r["ad_id"], r["fecha"]) if r.get("ad_id") else None,
+                       exigir_cuenta=exigir_cuenta)
 
 
-def guardar_objetos(cliente, act, objetos):
+def guardar_objetos(cliente, act, objetos, exigir_cuenta=False):
     """Upsert por (cliente, objeto_id) de campañas, conjuntos y anuncios. Solo se actualizan las columnas
     PRESENTES en cada dict: un objeto que llega solo con su nombre (viene de los insights, sin «estado») no borra
     el estado, el presupuesto, el aprendizaje ni la miniatura ya guardados. Un `nombre` None tampoco pisa el
     guardado. Claves: `nivel`, `objeto_id` y las columnas de meta_objeto (sin id/cliente/ad_account_id/
     actualizado_en). Los objetos con el mismo juego de claves se escriben juntos en una tanda. Una `miniatura_url` que
-    no pasa `miniatura_valida` se descarta (las demás columnas del objeto sí se guardan). Devuelve cuántos."""
+    no pasa `miniatura_valida` se descarta (las demás columnas del objeto sí se guardan). Devuelve cuántos.
+    `exigir_cuenta=True` (la copia): CuentaSoltada sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     t = db.meta_objeto
     ahora = db.ahora()
     grupos = {}
@@ -148,6 +167,8 @@ def guardar_objetos(cliente, act, objetos):
         grupos.setdefault(frozenset(valores), []).append(valores)
     n = 0
     with db.conectar() as con:
+        if exigir_cuenta and grupos:
+            _exigir_cuenta(con, cliente, act)
         for claves, lote in grupos.items():
             filas = [dict(v, cliente=cliente, ad_account_id=act, actualizado_en=ahora,
                           **({} if "extra" in claves else {"extra": {}})) for v in lote]
@@ -189,13 +210,14 @@ def marcar_sin_estado(cliente, act, nivel, vistos, estados=None):
     return n
 
 
-def guardar_alcance(cliente, act, filas, completa=False):
+def guardar_alcance(cliente, act, filas, completa=False, exigir_cuenta=False):
     """Alcance y frecuencia de una ventana (gente única: no se suma por días). Upsert por
     (cliente, objeto_id, ventana). Claves: nivel, objeto_id, ventana, alcance, frecuencia. Devuelve cuántas.
 
     `completa=True` (la copia, con la lectura ENTERA de cada ventana que trae `filas`): en la misma transacción borra
     las campañas de esa cuenta y esa ventana que no vinieron. Meta no devuelve fila de una campaña sin entrega en la
-    ventana, y sin esto su alcance se quedaba en el último valor para siempre (PND-199)."""
+    ventana, y sin esto su alcance se quedaba en el último valor para siempre (PND-199). `exigir_cuenta=True` (la
+    copia): CuentaSoltada sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     t = db.meta_alcance
     ahora = db.ahora()
     registros = [dict(cliente=cliente, ad_account_id=act, nivel=f["nivel"], objeto_id=str(f["objeto_id"]),
@@ -207,6 +229,8 @@ def guardar_alcance(cliente, act, filas, completa=False):
     nuevo = insert_sqlite(t)
     set_ = {c: getattr(nuevo.excluded, c) for c in ("ad_account_id", "nivel", "alcance", "frecuencia", "calculado_en")}
     with db.conectar() as con:
+        if exigir_cuenta:
+            _exigir_cuenta(con, cliente, act)
         con.execute(nuevo.on_conflict_do_update(index_elements=["cliente", "objeto_id", "ventana"], set_=set_),
                     registros)
         if completa:
@@ -231,12 +255,13 @@ def _ventana_desglose(ventana):
     return v
 
 
-def reemplazar_desgloses(cliente, act, ventana, dimension, filas):
+def reemplazar_desgloses(cliente, act, ventana, dimension, filas, exigir_cuenta=False):
     """Los desgloses de UNA cuenta para una ventana (7|30 días) y una dimensión (`DIMENSIONES`): borra esa
     combinación y escribe `filas` en una transacción (una lista vacía la deja vacía). Las otras ventanas,
     dimensiones y cuentas no se tocan. Claves de fila: `clave` (texto; una fila sin clave se ignora y, si llega
     repetida, gana la última) y `METRICAS_DESGLOSE`. Una ventana o dimensión fuera de lo conocido levanta
-    ValueError antes de tocar nada. Devuelve cuántas filas escribió."""
+    ValueError antes de tocar nada. Devuelve cuántas filas escribió. `exigir_cuenta=True` (la copia): CuentaSoltada
+    sin escribir nada si la cuenta ya no está elegida (PND-206)."""
     ventana = _ventana_desglose(ventana)
     if dimension not in DIMENSIONES:
         raise ValueError(f"dimensión de desglose inválida: {dimension!r}")
@@ -253,6 +278,8 @@ def reemplazar_desgloses(cliente, act, ventana, dimension, filas):
                                 calculado_en=ahora)
     registros = list(por_clave.values())
     with db.conectar() as con:
+        if exigir_cuenta:
+            _exigir_cuenta(con, cliente, act)
         con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act, t.c.ventana == ventana,
                                      t.c.dimension == dimension))
         if registros:
@@ -307,12 +334,15 @@ def borrar_evaluaciones(cliente):
         return con.execute(t.delete().where(t.c.cliente == cliente)).rowcount
 
 
-def borrar_cuenta(cliente, act):
+def borrar_cuenta(cliente, act, con=None):
     """Quita las copias de esa cuenta en ese proyecto: los días de cuenta y de anuncio, los objetos, el alcance y los
-    desgloses (nunca `meta_cuenta`, lo de otro proyecto ni las evaluaciones: se pagaron y se conservan)."""
-    with db.conectar() as con:
-        for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose):
-            con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act))
+    desgloses (nunca `meta_cuenta`, lo de otro proyecto ni las evaluaciones: se pagaron y se conservan). Con `con`,
+    dentro de esa transacción (la de `cuentas.elegir`, PND-206)."""
+    if con is None:
+        with db.conectar() as con_:
+            return borrar_cuenta(cliente, act, con=con_)
+    for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose):
+        con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act))
 
 
 def purgar_anuncios(antes_de):

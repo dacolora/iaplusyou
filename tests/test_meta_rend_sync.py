@@ -380,6 +380,41 @@ def test_alcance_por_ventana_a_nivel_de_cuenta_y_de_campana(cuenta, monkeypatch)
         assert datos.alcance(CLI, [ACT], w, "campana")["c1"] == {"alcance": w * 10, "frecuencia": 2.0}
 
 
+def _filas_de_la_cuenta(cliente=CLI, act=ACT):
+    with db.conectar() as con:
+        return sum(con.execute(sa.select(sa.func.count()).select_from(t).where(
+            t.c.cliente == cliente, t.c.ad_account_id == act)).scalar()
+            for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose))
+
+
+@pytest.mark.parametrize("cuando", ["informe", "alcance", "desgloses"])
+def test_pnd206_quitar_la_cuenta_a_media_copia_no_deja_copias_huerfanas(cuenta, monkeypatch, cuando):
+    """PND-206 (decisión 2026-10-13): la copia comprueba que la cuenta siga elegida antes de cada escritura. Si la
+    quitan mientras Meta responde, lo ya escrito se fue con ella y la copia no vuelve a escribir: termina «omitida»."""
+    g = FakeGraph(monkeypatch)
+    nombre = {"informe": "informe", "alcance": "get", "desgloses": "paginar"}[cuando]
+    pedir = getattr(g, nombre)
+    soltada = []
+
+    def es_el_momento(edge, params):
+        if cuando == "alcance":                          # Meta responde el alcance de la cuenta (paso 5)
+            return edge == f"{ACT}/insights" and "date_preset" in params
+        if cuando == "desgloses":                        # Meta responde un desglose (paso 7)
+            return "breakdowns" in params
+        return True                                      # Meta responde el primer informe de anuncios (paso 4)
+
+    def y_se_suelta(edge, token, params=None, *a, **k):
+        r = pedir(edge, token, params, *a, **k)
+        if not soltada and es_el_momento(edge, params or {}):
+            soltada.append(cuentas.elegir(CLI, []))
+        return r
+    monkeypatch.setattr(sync.graph, nombre, y_se_suelta)
+    r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert soltada and soltada[0]["quitadas"] == [ACT]
+    assert r["omitida"] is True
+    assert cuentas.cuenta(CLI, ACT) is None and _filas_de_la_cuenta() == 0
+
+
 def test_pnd199_una_campana_que_dejo_de_entregar_pierde_su_alcance(cuenta, monkeypatch):
     """PND-199 (decisión 2026-10-13): Meta no devuelve fila de una campaña sin entrega en la ventana; su alcance no
     puede quedarse en el último valor. Lo de otra cuenta y otro proyecto no se toca."""

@@ -47,7 +47,7 @@ def test_normalizar_id():
 
 def test_elegir_reemplaza_y_rechaza_cuentas_de_otro_proyecto(base_temporal, monkeypatch):
     borradas = []
-    monkeypatch.setattr(cuentas, "_borrar_copias", lambda c, a: borradas.append((c, a)))
+    monkeypatch.setattr(cuentas, "_borrar_copias", lambda con, c, a: borradas.append((c, a)))
     r = cuentas.elegir("happyflops", [dict(c, pais=cuentas.adivinar_pais(c["name"])) for c in HF[:3]], usuario="admin")
     assert sorted(r["agregadas"]) == sorted(c["id"] for c in HF[:3]) and not r["rechazadas"]
     assert {c["ad_account_id"]: c["pais"] for c in cuentas.listar("happyflops")}["act_709406360806038"] == "NO"
@@ -80,7 +80,7 @@ def test_actualizar_extra_mezcla(base_temporal):
 
 def test_elegir_idempotente_conserva_lo_ya_copiado_y_acepta_ids_sin_prefijo(base_temporal, monkeypatch):
     borradas = []
-    monkeypatch.setattr(cuentas, "_borrar_copias", lambda c, a: borradas.append((c, a)))
+    monkeypatch.setattr(cuentas, "_borrar_copias", lambda con, c, a: borradas.append((c, a)))
     cuentas.elegir("acme", [HF[0]])
     cuentas.actualizar("acme", "709406360806038", estado="ok", ultima_copia="2026-10-08 10:00:00",
                        moneda="NOK", inventado="no se guarda")
@@ -98,16 +98,16 @@ def test_elegir_idempotente_conserva_lo_ya_copiado_y_acepta_ids_sin_prefijo(base
 
 def test_la_carrera_por_la_misma_cuenta_la_rechaza_el_indice(base_temporal, monkeypatch):
     # Otro proyecto la tomó entre el chequeo y el insert: el índice único responde y va a rechazadas.
-    monkeypatch.setattr(cuentas, "_borrar_copias", lambda c, a: None)
+    monkeypatch.setattr(cuentas, "_borrar_copias", lambda con, c, a: None)
     cuentas.elegir("happyflops", [HF[0]])
-    monkeypatch.setattr(cuentas, "dueno", lambda act: None)
+    monkeypatch.setattr(cuentas, "_dueno", lambda con, act: None)
     r = cuentas.elegir("otro", [HF[0]])
     assert r == {"agregadas": [], "quitadas": [], "rechazadas": ["act_709406360806038"], "fallos_r2": []}
     assert cuentas.ids("otro") == []
 
 
 def test_listar_ordena_por_nombre_y_aisla_proyectos(base_temporal, monkeypatch):
-    monkeypatch.setattr(cuentas, "_borrar_copias", lambda c, a: None)
+    monkeypatch.setattr(cuentas, "_borrar_copias", lambda con, c, a: None)
     cuentas.elegir("acme", [HF[3], HF[0], HF[1]])
     cuentas.elegir("otro", [HF[2]])
     assert [c["nombre"] for c in cuentas.listar("acme")] == [
@@ -126,7 +126,7 @@ def test_si_borrar_copias_falla_la_cuenta_sigue_y_el_siguiente_elegir_reintenta(
     # R5: primero las copias, después la fila; si las copias fallan la fila sobrevive y no quedan huérfanas.
     llamadas = []
 
-    def _borrar(c, a):
+    def _borrar(con, c, a):
         llamadas.append((c, a))
         if len(llamadas) == 1:
             raise RuntimeError("falló el borrado de copias")
@@ -141,35 +141,120 @@ def test_si_borrar_copias_falla_la_cuenta_sigue_y_el_siguiente_elegir_reintenta(
     assert llamadas == [("acme", "act_883891256188845")] * 2
 
 
-def test_elegir_barre_otra_vez_tras_borrar_la_cuenta(base_temporal, monkeypatch):
-    """PND-295 (3), 2026-10-12: un «Cómo mejorarlo» pedido mientras se soltaba la cuenta puede crear su fila entre el
-    primer barrido y el borrado de la cuenta; ninguna suelta posterior la alcanzaría. `elegir` barre otra vez después
-    de borrar la cuenta, y sus copias en R2 se borran con las del primer barrido."""
-    import db
-    from meta_rendimiento import creativo
+def _sembrar_copias(cliente, act):
+    """Una fila de cada copia de la cuenta (días, anuncio, objeto, alcance, desglose) y un análisis de fuente Meta."""
+    from meta_rendimiento import datos
     from triple_whale import datos as tw_datos
+    datos.reemplazar_cuenta_dias(cliente, act, "2026-10-01", "2026-10-01", [{"fecha": "2026-10-01", "gasto": 1}])
+    datos.reemplazar_anuncio_dias(cliente, act, "2026-10-01", "2026-10-01",
+                                  [{"fecha": "2026-10-01", "ad_id": "a1", "gasto": 1}])
+    datos.guardar_objetos(cliente, act, [{"nivel": "anuncio", "objeto_id": f"{act}_a1", "nombre": "Video"}])
+    datos.guardar_alcance(cliente, act, [{"nivel": "cuenta", "objeto_id": act, "ventana": 7, "alcance": 1}])
+    datos.reemplazar_desgloses(cliente, act, 7, "pais", [{"clave": "NO", "gasto": 1}])
+    return tw_datos.crear_analisis(cliente, None, "facebook-ads", "111", "2026-09-01", "2026-09-30", "SEK",
+                                   {"fuente": "meta", "ad_account_id": act, "nombre": "Video"})
+
+
+def _filas_de(cliente, act):
+    import db
+    with db.conectar() as con:
+        n = sum(con.execute(sa.select(sa.func.count()).select_from(t).where(
+            t.c.cliente == cliente, t.c.ad_account_id == act)).scalar()
+            for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose))
+        return n + con.execute(sa.select(sa.func.count()).select_from(db.tw_analisis).where(
+            db.tw_analisis.c.cliente == cliente)).scalar()
+
+
+def test_pnd206_elegir_es_una_sola_transaccion(base_temporal, monkeypatch):
+    """PND-206 (decisión 2026-10-13): agregar y quitar pasan enteros o no pasan. Si borrar las copias de la quitada
+    falla, la agregada tampoco entra, la quitada sigue con todas sus copias y no se borra nada de R2."""
+    from meta_rendimiento import creativo, datos
+    norway, sweden = HF[0], dict(HF[1], id="act_2")
+    cuentas.elegir("acme", [norway, sweden])
+    _sembrar_copias("acme", "act_2")
+    antes = _filas_de("acme", "act_2")
+    r2 = []
+    monkeypatch.setattr(creativo, "borrar_copias", lambda c, filas: r2.append(filas) or (0, []))
+    real = datos.borrar_cuenta
+
+    def a_medias(cliente, act, con=None):
+        real(cliente, act, con=con)           # alcanza a borrar las métricas…
+        raise RuntimeError("disco lleno")     # …y falla antes de los análisis y de la fila de la cuenta
+    monkeypatch.setattr(datos, "borrar_cuenta", a_medias)
+    with pytest.raises(RuntimeError):
+        cuentas.elegir("acme", [norway, HF[2]])
+    assert sorted(cuentas.ids("acme")) == sorted([norway["id"], "act_2"])     # HF[2] no entró: nada cambió
+    assert _filas_de("acme", "act_2") == antes and r2 == []
+    monkeypatch.setattr(datos, "borrar_cuenta", real)
+    r = cuentas.elegir("acme", [norway, HF[2]])
+    assert r["quitadas"] == ["act_2"] and r["agregadas"] == [HF[2]["id"]]
+    assert _filas_de("acme", "act_2") == 0 and len(r2) == 1
+
+
+def test_pnd206_una_copia_que_escribe_mientras_se_suelta_la_cuenta_no_deja_huerfanas(base_temporal):
+    """La copia comprueba la cuenta en la MISMA transacción en la que escribe: si `elegir` la está quitando, espera a
+    que termine, ve que ya no está y no escribe (CuentaSoltada). Sin esa comprobación la copia volvía a escribir días
+    de una cuenta que ya no estaba en `meta_cuenta` y nadie los borraba."""
+    import db
+    from meta_rendimiento import datos
     act = HF[0]["id"]
     cuentas.elegir("acme", [HF[0]])
-    foto = {"fuente": "meta", "ad_account_id": act, "nombre": "Video"}
-    vieja = tw_datos.crear_analisis("acme", None, "facebook-ads", "111", "2026-09-01", "2026-09-30", "SEK", foto)
-    barrer, nuevas, cuentas_vistas = tw_datos.borrar_analisis_meta, [], []
+    pausado, soltar = threading.Event(), threading.Event()
+    a = {"ident": None, "hecho": False}
+    errores, resultado = [], []
 
-    def _barrer(cliente, ids):
-        cuentas_vistas.append(cuentas.ids("acme"))    # el segundo barrido tiene que ir DESPUÉS de borrar la cuenta
-        borradas = barrer(cliente, ids)
-        if not nuevas:           # el pedido llega justo después del primer barrido, antes de borrar la cuenta
-            nuevas.append(tw_datos.crear_analisis("acme", None, "facebook-ads", "222", "2026-09-01", "2026-09-30",
-                                                  "SEK", foto))
-        return borradas
-    monkeypatch.setattr(cuentas.tw_datos, "borrar_analisis_meta", _barrer)
-    copias = []
-    monkeypatch.setattr(creativo, "borrar_copias", lambda c, filas: copias.append((c, list(filas))) or (0, []))
-    r = cuentas.elegir("acme", [])
-    assert r["quitadas"] == [act] and r["fallos_r2"] == [] and cuentas.ids("acme") == []
-    with db.conectar() as con:
-        assert con.execute(sa.select(db.tw_analisis.c.id)).all() == []
-    assert copias == [("acme", [(vieja, "111"), (nuevas[0], "222")])]
-    assert cuentas_vistas == [[act], []]
+    @sa.event.listens_for(db.engine(), "after_cursor_execute")
+    def _pausar(conn, cursor, statement, parameters, context, executemany):
+        if threading.get_ident() == a["ident"] and not a["hecho"] and statement.lstrip().upper().startswith("DELETE"):
+            a["hecho"] = True               # `elegir` ya tomó el candado y empezó a borrar copias
+            pausado.set()
+            soltar.wait(timeout=10)
+
+    def _elegir():
+        a["ident"] = threading.get_ident()
+        try:
+            cuentas.elegir("acme", [])
+        except Exception as e:  # noqa: BLE001
+            errores.append(e)
+
+    def _copia():
+        try:
+            datos.reemplazar_cuenta_dias("acme", act, "2026-10-01", "2026-10-01",
+                                         [{"fecha": "2026-10-01", "gasto": 9}], exigir_cuenta=True)
+            resultado.append("escribió")
+        except datos.CuentaSoltada:
+            resultado.append("soltada")
+        except Exception as e:  # noqa: BLE001
+            errores.append(e)
+
+    ta = threading.Thread(target=_elegir)
+    ta.start()
+    assert pausado.wait(timeout=10)
+    tb = threading.Thread(target=_copia)
+    tb.start()
+    tb.join(0.3)
+    assert tb.is_alive()                     # la copia espera el candado de `elegir`
+    soltar.set()
+    ta.join(10)
+    tb.join(10)
+    sa.event.remove(db.engine(), "after_cursor_execute", _pausar)
+    assert errores == [] and resultado == ["soltada"]
+    assert cuentas.ids("acme") == [] and _filas_de("acme", act) == 0
+
+
+def test_pnd206_con_la_cuenta_elegida_la_copia_escribe(base_temporal):
+    from meta_rendimiento import datos
+    cuentas.elegir("acme", [HF[0]])
+    assert datos.reemplazar_cuenta_dias("acme", HF[0]["id"], "2026-10-01", "2026-10-01",
+                                        [{"fecha": "2026-10-01", "gasto": 9}], exigir_cuenta=True) == 1
+    with pytest.raises(datos.CuentaSoltada):
+        datos.guardar_objetos("otro", HF[0]["id"], [{"nivel": "anuncio", "objeto_id": "a1"}], exigir_cuenta=True)
+    with pytest.raises(datos.CuentaSoltada):
+        datos.guardar_alcance("acme", "act_9", [{"nivel": "cuenta", "objeto_id": "act_9", "ventana": 7}],
+                              exigir_cuenta=True)
+    with pytest.raises(datos.CuentaSoltada):
+        datos.reemplazar_desgloses("acme", "act_9", 7, "pais", [{"clave": "NO"}], exigir_cuenta=True)
+    assert _filas_de("otro", HF[0]["id"]) == 0 and _filas_de("acme", "act_9") == 0
 
 
 def test_actualizar_extra_no_pierde_la_escritura_de_otro_hilo(base_temporal):
