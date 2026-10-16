@@ -413,8 +413,12 @@ def _buscar_lanzamiento(cliente, cf_id, entry, duracion, calidad):
         if not lanzamiento.get("avisado"):
             _anotar_posible_cobro(cliente, cf_id, entry, lanzamiento, duracion, calidad)
             _avisar_dudoso(cliente, cf_id, lanzamiento, ids)
+        # Las candidatas quedan para la alerta del admin (PND-345: el correo no llega, el VPS no tiene SMTP).
+        candidatas = [i for i in ids if wavespeed_common.ID_PREDICCION.match(str(i))][:10] or \
+            lanzamiento.get("candidatas") or []
         creative_flow.actualizar(cliente, cf_id, estado="error", error=error,
-                                 lanzamiento_incierto=dict(lanzamiento, estado=estado, avisado=True))
+                                 lanzamiento_incierto=dict(lanzamiento, estado=estado, avisado=True,
+                                                           candidatas=candidatas))
 
     if not (desde and hasta) or _hay_otro_incierto(cliente, cf_id, lanzamiento):
         resultado = {"resultado": "dudosa", "ids": []}
@@ -448,6 +452,95 @@ def _buscar_lanzamiento(cliente, cf_id, entry, duracion, calidad):
     _con_aviso("dudoso", dudoso, resultado.get("ids") or [])
     return None, gettext("No se puede saber cuál pedido de %(proveedor)s es el de esta pieza; avisamos al "
                          "administrador.", proveedor=proveedor)
+
+
+# --- PND-345: la salida de una pieza «dudosa», desde Alertas y solo para un admin -----------------------------------
+
+def es_dudosa(entry):
+    """True si la pieza tiene un lanzamiento incierto que la búsqueda no resolvió y ya se avisó al admin: «dudoso»
+    (el historial no dice cuál predicción es la suya) o «buscando» con el historial caído. Sin una persona, no tiene
+    salida (PND-345): ni «Reintentar» ni «Rearmar», y «Recuperar» vuelve a quedar dudosa."""
+    inc = (entry or {}).get("lanzamiento_incierto")
+    return (isinstance(inc, dict) and not ((entry or {}).get("prediccion") or {}).get("id")
+            and (inc.get("estado") == "dudoso" or (inc.get("estado") == "buscando" and inc.get("avisado"))))
+
+
+def _dudosa_o_motivo(cliente, cf_id):
+    """(entry, None) si la pieza es dudosa y nada la está tocando; (None, motivo en palabras) si no."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry:
+        return None, gettext("Esa pieza ya no existe.")
+    if not es_dudosa(entry) or entry.get("estado") != "error":
+        return None, gettext("Esa pieza ya no está esperando una decisión.")
+    if trabajos.en_curso(_job_id(cliente, cf_id)):
+        return None, gettext("Se está buscando el pedido de esa pieza ahora mismo: espera a que termine.")
+    return entry, None
+
+
+def resolver_sin_cobro(cliente, cf_id, usuario):
+    """«No se cobró» (PND-345, decisión 2026-10-15, lote 2): un admin revisó en el panel de WaveSpeed que el pedido no
+    se creó (o no se cobró). La línea de posible cobro vuelve a 0 y la pieza vuelve a ofrecer «Reintentar»
+    (`lanzamiento_incierto.estado = "no_creado"`, con quién y cuándo lo decidió). Devuelve (ok, mensaje para el admin)."""
+    entry, motivo = _dudosa_o_motivo(cliente, cf_id)
+    if entry is None:
+        return False, motivo
+    lanzamiento = dict(entry["lanzamiento_incierto"])
+    ref = lanzamiento.get("referencia_gasto")
+    tipo = "imagen" if (entry.get("tipo") or "video") == "imagen" else "video"
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        if ref:
+            gastos.registrar_seguro(cliente, tipo, 0.0, ref, entregado=False,
+                                    detalle=gettext("un administrador revisó el pedido: no se creó ni se cobró"))
+        error = gettext("Un administrador revisó el pedido en %(proveedor)s: no se creó ni se cobró. Ya puedes volver "
+                        "a generarlo.", proveedor=saldo.nombre_proveedor(lanzamiento.get("proveedor") or "wavespeed"))
+    creative_flow.actualizar(cliente, cf_id, error=error, lanzamiento_incierto=dict(
+        lanzamiento, estado="no_creado", resuelto={"por": usuario, "como": "no_se_cobro",
+                                                   "en": datetime.now().isoformat(timespec="seconds")}))
+    bitacora.registrar(cliente, cf_id, "generacion", "dudosa_no_se_cobro", usuario or "")
+    return True, gettext("Listo: la línea de posible cobro quedó en 0 y la pieza se puede volver a generar.")
+
+
+def asignar_prediccion(cliente, cf_id, pred_id, usuario):
+    """«Asignar la predicción» (PND-345): un admin encontró en el panel de WaveSpeed la predicción de esta pieza. Solo
+    se asigna si el id tiene forma de id, WaveSpeed la conoce, es de la MISMA ruta del modelo que se lanzó, no terminó
+    sin video y ninguna otra sesión (de ningún proyecto, también una descartada) la nombra
+    (`creative_flow.reclamar_prediccion`, `BEGIN IMMEDIATE`). Asignada, la pieza ofrece «Recuperar el video (se cobra
+    ≈ X)»: lo trae sin pagar de nuevo y ahí traslada el posible cobro a su entrega. Devuelve (ok, mensaje para el
+    admin). Nunca lanza otro pedido."""
+    pred_id = str(pred_id or "").strip()
+    if not wavespeed_common.ID_PREDICCION.fullmatch(pred_id):
+        return False, gettext("Ese no parece un id de predicción de WaveSpeed.")
+    entry, motivo = _dudosa_o_motivo(cliente, cf_id)
+    if entry is None:
+        return False, motivo
+    lanzamiento = dict(entry["lanzamiento_incierto"])
+    try:
+        data = wavespeed_common.consultar(pred_id)
+    except Exception:  # noqa: BLE001 — un id que WaveSpeed no conoce (404) o la red: no se asigna nada
+        return False, gettext("WaveSpeed no conoce esa predicción (o no respondió): no se asignó nada.")
+    modelo_ruta = data.get("model")
+    if not modelo_ruta:
+        return False, gettext("WaveSpeed no dijo de qué modelo es esa predicción: no se asignó nada.")
+    if not wavespeed_common._es_de_la_ruta(modelo_ruta, lanzamiento.get("path")):
+        return False, gettext("Esa predicción es de otro modelo (%(modelo)s), no de %(ruta)s: no se asignó nada.",
+                              modelo=modelo_ruta, ruta=lanzamiento.get("path"))
+    if str(data.get("status") or "").lower() in wavespeed_common.ESTADOS_SIN_VIDEO:
+        return False, gettext("Esa predicción terminó sin video (%(estado)s): no hay nada que traer.",
+                              estado=data.get("status"))
+    pred = {"id": pred_id, "modelo": lanzamiento.get("modelo") or entry.get("modelo"),
+            "en": lanzamiento.get("en") or datetime.now().isoformat(timespec="seconds")}
+    if lanzamiento.get("referencia_gasto"):
+        pred["referencia_gasto"] = lanzamiento["referencia_gasto"]
+    resuelto = {"por": usuario, "como": "asignada", "en": datetime.now().isoformat(timespec="seconds")}
+    if not creative_flow.reclamar_prediccion(cliente, cf_id, pred, dict(lanzamiento, estado="asignado",
+                                                                        resuelto=resuelto)):
+        return False, gettext("Otra pieza ya nombra esa predicción: no se asignó nada.")
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        error = gettext("Un administrador encontró el pedido de esta pieza en WaveSpeed: toca «Recuperar el video» "
+                        "para traerlo sin pagarlo de nuevo al proveedor.")
+    creative_flow.actualizar(cliente, cf_id, error=error)
+    bitacora.registrar(cliente, cf_id, "generacion", "dudosa_asignada", pred_id)
+    return True, gettext("Asignada: la pieza ya ofrece «Recuperar el video».")
 
 
 def _seguir_esperando(cliente, cf_id, pred_id, modelo, entry, pausa_s=PAUSA_RECUPERAR):

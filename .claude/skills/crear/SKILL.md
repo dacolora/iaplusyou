@@ -356,3 +356,14 @@ música, subtítulos, swaps de fal) lo mismo es `fal_client.EncoladoIncierto`, u
 sin `request_id`: quien llama lo anota sin cobrarlo como una espera agotada (PND-313). Riesgo que queda: Sprints y las
 derivaciones relanzan con `flowplus_lanzar.lanzar`, que no pide esa confirmación (como con la imagen incierta). Pruebas:
 `tests/test_lanzamiento_incierto_fal.py`.
+
+**La salida de una pieza «dudosa» (PND-345, decisión 2026-10-15, lote 2).** `es_dudosa(entry)`: lanzamiento incierto
+«dudoso», o «buscando» con `avisado` (historial caído), sin predicción. La búsqueda guarda sus candidatas
+(`lanzamiento_incierto.candidatas`) y la fuente `crear_dudosas` de Alertas (solo admin, skill `alertas`) ofrece dos
+acciones. «No se cobró» (`resolver_sin_cobro`): la línea de posible cobro vuelve a 0, `estado = "no_creado"` con
+`resuelto` {por, como, en} y vuelve «Reintentar». «Asignar la predicción» (`asignar_prediccion`): solo un id con forma
+de id que WaveSpeed conozca (`wavespeed_common.consultar`), de la MISMA ruta (`_es_de_la_ruta` con el `model` que
+devuelve), que no haya terminado sin video y que ninguna otra sesión nombre (`creative_flow.reclamar_prediccion`); queda
+`estado = "asignado"` y la predicción con la `referencia_gasto` del lanzamiento, así «Recuperar el video (se cobra ≈ X)»
+la trae y cobra el posible cobro una sola vez (PND-331). Ninguna de las dos lanza ni cobra nada, y no tocan una pieza que
+no esté en error o que se esté buscando ahora mismo. Pruebas: `tests/test_crear_dudosa_alertas.py`.

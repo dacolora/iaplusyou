@@ -395,6 +395,8 @@ def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monke
         raise RuntimeError("x")
     monkeypatch.setattr(al, "FUENTES", al.FUENTES + [("rota", rota)])
     _plan_sin_renovar("acme")
+    from tests.test_crear_dudosa_alertas import _dudosa
+    _dudosa()                                                  # PND-345: una pieza de Crear «dudosa»
     lista = al.calcular("acme")
     de_admin = [a["clave"] for a in lista if a["solo_admin"]]
     assert all(c.startswith(al.PREFIJOS_SOLO_ADMIN) for c in de_admin), de_admin

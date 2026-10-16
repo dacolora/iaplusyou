@@ -3420,6 +3420,9 @@ msgstr "Top"
 msgid "Arriba del embudo: la mayoría de las visitas son de gente que no conocía la tienda."
 msgstr "Top of the funnel: most visits come from people who didn't know the store."
 
+msgid "Asignada: la pieza ya ofrece «Recuperar el video»."
+msgstr "Assigned: the piece now offers “Recover the video”."
+
 msgid "Asignar"
 msgstr "Assign"
 
@@ -3428,6 +3431,9 @@ msgstr "Assign to color"
 
 msgid "Asignar a color…"
 msgstr "Assign to color…"
+
+msgid "Asignar la predicción"
+msgstr "Assign the prediction"
 
 msgid "Así le explicamos a Claude cómo escribir tus anuncios. Cada pieza que genera la app sigue estas reglas."
 msgstr "This is how we explain to Claude how to write your ads. Every piece the app generates follows these rules."
@@ -8015,6 +8021,9 @@ msgstr "That piece comes from an image session: it can't be derived or rescued (
 msgid "Esa pieza ya está publicada (o en cola) en %(nombre)s."
 msgstr "That piece is already published (or queued) on %(nombre)s."
 
+msgid "Esa pieza ya no está esperando una decisión."
+msgstr "That piece is no longer waiting for a decision."
+
 msgid "Esa pieza ya no existe."
 msgstr "That piece no longer exists."
 
@@ -8023,6 +8032,14 @@ msgstr "That piece already passed QA or is approved."
 
 msgid "Esa pieza ya se está regenerando."
 msgstr "That piece is already being regenerated."
+
+#, python-format
+msgid "Esa predicción es de otro modelo (%(modelo)s), no de %(ruta)s: no se asignó nada."
+msgstr "That prediction is from another model (%(modelo)s), not %(ruta)s: nothing was assigned."
+
+#, python-format
+msgid "Esa predicción terminó sin video (%(estado)s): no hay nada que traer."
+msgstr "That prediction ended without a video (%(estado)s): there's nothing to bring back."
 
 msgid "Esa propuesta no existe o ya estaba resuelta."
 msgstr "That proposal doesn't exist or was already resolved."
@@ -8491,6 +8508,9 @@ msgstr "That level doesn't exist."
 
 msgid "Ese no es el id de la transacción guardada para este pago"
 msgstr "That is not the transaction id saved for this payment"
+
+msgid "Ese no parece un id de predicción de WaveSpeed."
+msgstr "That doesn't look like a WaveSpeed prediction id."
 
 msgid "Ese nombre no genera un identificador de proyecto válido."
 msgstr "That name doesn't produce a valid project identifier."
@@ -10531,6 +10551,12 @@ msgstr "Your business portfolio's ID"
 msgid "IP"
 msgstr "IP"
 
+msgid "Id de la predicción"
+msgstr "Prediction id"
+
+msgid "Id de la predicción de WaveSpeed"
+msgstr "WaveSpeed prediction id"
+
 msgid "Id de la transacción en Wompi"
 msgstr "Wompi transaction id"
 
@@ -11925,6 +11951,9 @@ msgstr "Done: we saved your new payment method for the next plan charges."
 
 msgid "Listo: la biblioteca de copycoders ya aparece en Referentes."
 msgstr "Done: the copycoders library now shows up in References."
+
+msgid "Listo: la línea de posible cobro quedó en 0 y la pieza se puede volver a generar."
+msgstr "Done: the possible-charge line is back to 0 and the piece can be generated again."
 
 msgid "Listo: la versión de Claude es ahora el prompt vigente."
 msgstr "Done: Claude's version is now the current prompt."
@@ -14664,6 +14693,9 @@ msgstr "Original"
 msgid "Otra idea (%(precio)s)"
 msgstr "Another idea (%(precio)s)"
 
+msgid "Otra pieza ya nombra esa predicción: no se asignó nada."
+msgstr "Another piece already names that prediction: nothing was assigned."
+
 msgid "Otra tarea de este estudio está corriendo; reanuda la investigación cuando termine."
 msgstr "Another task for this study is running; resume the investigation once it finishes."
 
@@ -17323,6 +17355,9 @@ msgstr "The %(n)s proposals will run in order. The ones that scale, derive, resc
 msgid "Se eliminará «%(nombre)s» y sus %(fotos)s foto(s) de referencia."
 msgstr "“%(nombre)s” and its %(fotos)s reference photo(s) will be deleted."
 
+msgid "Se está buscando el pedido de esa pieza ahora mismo: espera a que termine."
+msgstr "That piece's request is being searched for right now: wait for it to finish."
+
 msgid "Se está cansando"
 msgstr "Fatiguing"
 
@@ -17382,6 +17417,10 @@ msgstr "Interrupted by a server restart. Try again."
 
 msgid "Se interrumpió; vuelve a intentarlo."
 msgstr "It was interrupted; try again."
+
+#, python-format
+msgid "Se lanzó en %(ruta)s entre %(desde)s y %(hasta)s (UTC) y WaveSpeed no respondió; su historial no dice cuál predicción es la de esta pieza. Posible cobro anotado sin cobrarlo: %(usd)s. Candidatas: %(ids)s. Búscala en el panel de WaveSpeed y asígnala, o marca «No se cobró» si no se creó."
+msgstr "It was launched on %(ruta)s between %(desde)s and %(hasta)s (UTC) and WaveSpeed didn't respond; its history doesn't say which prediction belongs to this piece. Possible charge recorded without charging it: %(usd)s. Candidates: %(ids)s. Find it in the WaveSpeed dashboard and assign it, or mark “Not charged” if it wasn't created."
 
 msgid "Se llevan buena parte del gasto de la última semana. Pausarlos libera presupuesto para los que venden: la lista está en el Diagnóstico de la pestaña Rendimiento."
 msgstr "They take a good share of last week’s spend. Pausing them frees budget for the ones that sell: the list is in the Diagnosis of the Performance tab."
@@ -19723,6 +19762,13 @@ msgstr "A Creatv admin chooses which Meta accounts are read."
 msgid "Un administrador de Creatv tiene que elegir las cuentas."
 msgstr "A Creatv administrator has to choose the accounts."
 
+msgid "Un administrador encontró el pedido de esta pieza en WaveSpeed: toca «Recuperar el video» para traerlo sin pagarlo de nuevo al proveedor."
+msgstr "An administrator found this piece's request in WaveSpeed: tap “Recover the video” to bring it back without paying the provider again."
+
+#, python-format
+msgid "Un administrador revisó el pedido en %(proveedor)s: no se creó ni se cobró. Ya puedes volver a generarlo."
+msgstr "An administrator checked the request in %(proveedor)s: it wasn't created or charged. You can generate it again now."
+
 msgid "Un ajuste necesita una nota."
 msgstr "An adjustment needs a note."
 
@@ -20630,8 +20676,14 @@ msgstr "Wan-2.2 Animate Replace"
 msgid "WaveSpeed (videos e imágenes de Crear)"
 msgstr "WaveSpeed (videos and images in Create)"
 
+msgid "WaveSpeed no conoce esa predicción (o no respondió): no se asignó nada."
+msgstr "WaveSpeed doesn't know that prediction (or didn't respond): nothing was assigned."
+
 msgid "WaveSpeed no creó el pedido: no se cobró"
 msgstr "WaveSpeed didn't create the request: nothing was charged"
+
+msgid "WaveSpeed no dijo de qué modelo es esa predicción: no se asignó nada."
+msgstr "WaveSpeed didn't say which model that prediction is from: nothing was assigned."
 
 msgid "WaveSpeed no respondió al lanzar el video: el pedido pudo crearse y cobrarse. Lo estamos buscando para traerlo sin pagar de nuevo."
 msgstr "WaveSpeed didn't respond when the video was launched: the request may have been created and charged. We're looking for it to bring it in without paying again."
@@ -24005,6 +24057,9 @@ msgstr "your Meta accounts"
 msgid "términos y condiciones de Wompi"
 msgstr "Wompi terms and conditions"
 
+msgid "un administrador revisó el pedido: no se creó ni se cobró"
+msgstr "an administrator checked the request: it wasn't created or charged"
+
 msgid "un anuncio de Meta"
 msgstr "a Meta ad"
 
@@ -24250,6 +24305,10 @@ msgid "«%(nombre)s» lleva %(horas)s h sin métricas nuevas de Meta."
 msgstr "“%(nombre)s” has gone %(horas)s h without new metrics from Meta."
 
 #, python-format
+msgid "«%(nombre)s» pudo cobrarse y no sabemos cuál pedido es"
+msgstr "“%(nombre)s” could be charged and we don't know which request it is"
+
+#, python-format
 msgid "«%(nombre)s» quedó creado; ya se estaba lanzando."
 msgstr "“%(nombre)s” was created; it was already launching."
 
@@ -24395,6 +24454,9 @@ msgstr "Cancel the research? The step that's running finishes (and gets charged)
 #, python-format
 msgid "¿Cerrar el sprint? %(aprobadas)s, %(rechazadas)s, %(sin_revisar)s sin revisar."
 msgstr "Close the sprint? %(aprobadas)s, %(rechazadas)s, %(sin_revisar)s unreviewed."
+
+msgid "¿Confirmas que en el panel de WaveSpeed este pedido no se creó ni se cobró? La línea de posible cobro vuelve a 0 y la pieza se podrá volver a generar."
+msgstr "Do you confirm that in the WaveSpeed dashboard this request wasn't created or charged? The possible-charge line goes back to 0 and the piece can be generated again."
 
 msgid "¿Cuánto y por cuánto tiempo?"
 msgstr "How much and for how long?"

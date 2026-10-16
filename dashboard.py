@@ -8692,6 +8692,34 @@ def cf_recuperar(cliente, cf_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/dudosa/no_se_cobro", methods=["POST"])
+def cf_dudosa_no_se_cobro(cliente, cf_id):
+    """PND-345, desde Alertas y solo para un admin: el pedido de una pieza «dudosa» no se creó (o no se cobró). La
+    línea de posible cobro vuelve a 0 y vuelve «Reintentar» (`tareas.flowplus.resolver_sin_cobro`)."""
+    from tareas import flowplus as tareas_flowplus  # noqa: PLC0415
+    if session.get("rol") != "admin":
+        abort(403)
+    ok, mensaje = tareas_flowplus.resolver_sin_cobro(cliente, cf_id, session.get("usuario"))
+    invalidar_alertas(cliente)
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/dudosa/asignar", methods=["POST"])
+def cf_dudosa_asignar(cliente, cf_id):
+    """PND-345, desde Alertas y solo para un admin: la predicción de WaveSpeed de una pieza «dudosa». Solo una de la
+    ruta del modelo de esa pieza que ninguna otra sesión nombre (`tareas.flowplus.asignar_prediccion`); después la
+    pieza ofrece «Recuperar el video» con su precio. No lanza nada ni cobra aquí."""
+    from tareas import flowplus as tareas_flowplus  # noqa: PLC0415
+    if session.get("rol") != "admin":
+        abort(403)
+    ok, mensaje = tareas_flowplus.asignar_prediccion(cliente, cf_id, request.form.get("prediccion"),
+                                                     session.get("usuario"))
+    invalidar_alertas(cliente)
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
+
+
 @app.route("/cliente/<cliente>/creative_flow/sugerir_sonido", methods=["POST"])
 def fp_sugerir_sonido(cliente):
     """Claude sugiere qué se oye en la escena (centavos). Solo texto: no genera nada."""
