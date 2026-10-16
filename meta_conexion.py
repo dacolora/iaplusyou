@@ -354,9 +354,6 @@ class Soltado:
     def __bool__(self):
         return self.hecho
 
-    def __repr__(self):
-        return f"Soltado(hecho={self.hecho}, fallo={self.fallo!r})"
-
 
 def soltar_copias(cliente):
     """Borra lo copiado de Meta del proyecto (métricas, análisis de fuente Meta, evaluaciones y sus copias en R2) y
