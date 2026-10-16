@@ -5127,7 +5127,8 @@ def _filtro_cobrado(ctx, costo, clave=None):
     cliente = g.get("cliente_precio")
     try:
         return vista_cobros.visto(cliente, clave, costo)
-    except Exception:  # noqa: BLE001 — falla cerrado: el costo solo a quien puede verlo
+    except Exception as e:  # noqa: BLE001 — falla cerrado: el costo solo a quien puede verlo
+        print(f"[aviso] cobros: no pude leer lo cobrado de {cliente}: {type(e).__name__}")   # PND-175
         return costo if vista_cobros.puede_ver_costo(cliente, session.get("rol") == "admin") else None
 
 
@@ -5137,7 +5138,8 @@ def _ver_cobrado():
     cliente = g.get("cliente_precio")
     try:
         return vista_cobros.ver_cobrado_aqui(cliente)
-    except Exception:  # noqa: BLE001 — falla cerrado
+    except Exception as e:  # noqa: BLE001 — falla cerrado
+        print(f"[aviso] cobros: no pude saber si {cliente} ve lo cobrado: {type(e).__name__}")   # PND-175
         return not vista_cobros.puede_ver_costo(cliente, session.get("rol") == "admin")
 
 
@@ -5399,11 +5401,21 @@ def gasto_csv(cliente):
     """CSV del gasto de generación del mes en curso (una fila por cobro,
     `;`, BOM) para abrir en Excel. Mismos headers que tab_descargar_csv."""
     ahora = db.ahora()
-    texto = vista_cobros.gasto_para(cliente, session.get("rol") == "admin")["csv_mes"](cliente, ahora)
+    fuente = _fuente_gasto(cliente)
+    if "csv_mes" not in fuente:
+        return _gasto_csv_no_disponible(cliente)
+    texto = fuente["csv_mes"](cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"gasto_{cliente}_{ahora[:7]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
+
+
+def _gasto_csv_no_disponible(cliente):
+    """PND-175: sin saber si el proyecto cobra, a quien no puede ver el costo no se le baja ninguna cifra (falla
+    cerrado, como la pantalla) y tampoco un 500: vuelve a Configuración › Gasto con el aviso."""
+    flash(gettext("No pudimos leer el gasto en este momento. Intenta de nuevo en unos minutos."), "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
 @app.route("/cliente/<cliente>/gasto/todo.csv")
@@ -5411,7 +5423,10 @@ def gasto_csv_todo(cliente):
     """CSV con TODOS los cobros de generación del proyecto desde el primero
     (misma forma que gasto_csv)."""
     ahora = db.ahora()
-    texto = vista_cobros.gasto_para(cliente, session.get("rol") == "admin")["csv_todo"](cliente, ahora)
+    fuente = _fuente_gasto(cliente)
+    if "csv_todo" not in fuente:
+        return _gasto_csv_no_disponible(cliente)
+    texto = fuente["csv_todo"](cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"gasto_{cliente}_todo_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'

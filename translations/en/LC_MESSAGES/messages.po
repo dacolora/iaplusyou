@@ -13756,6 +13756,9 @@ msgstr "We couldn't create the project. Please try again in a moment."
 msgid "No pudimos hablar con Nequi. Intenta de nuevo en un rato."
 msgstr "We could not reach Nequi. Try again in a while."
 
+msgid "No pudimos leer el gasto en este momento. Intenta de nuevo en unos minutos."
+msgstr "We couldn't read the spend right now. Try again in a few minutes."
+
 msgid "No pudimos leer la tasa de cambio; intenta en unos minutos"
 msgstr "We couldn't read the exchange rate; try again in a few minutes"
 
@@ -19862,6 +19865,10 @@ msgstr "A top-up for %(cliente)s shows as approved on the return page and its ev
 #, python-format
 msgid "Una recarga de %(cliente)s se acreditó sin su evento de Wompi"
 msgstr "A top-up of %(cliente)s was credited without its Wompi event"
+
+#, python-format
+msgid "Una recarga de %(monto)s con %(pasarela)s lleva más de una hora pendiente. Si ya pagaste, la seguimos revisando y la sumamos apenas %(pasarela)s lo confirme; si no, genera un link nuevo en Configuración › Saldo y recargas."
+msgstr "A %(monto)s top-up with %(pasarela)s has been pending for more than an hour. If you already paid, we keep checking and add it as soon as %(pasarela)s confirms it; if not, create a new link in Settings › Balance and top-ups."
 
 #, python-format
 msgid "Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."

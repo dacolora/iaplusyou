@@ -114,7 +114,9 @@ def margen_global():
 def _validar_margen(valor):
     valor = round(float(valor), 2)
     if not MARGEN_MIN <= valor <= MARGEN_MAX:
-        raise ValueError(gettext("El margen va de %(min)s a %(max)s.", min=MARGEN_MIN, max=MARGEN_MAX))
+        import idiomas  # noqa: PLC0415 — el rango con el separador de quien lee («1,00 a 5,00»), PND-175
+        raise ValueError(gettext("El margen va de %(min)s a %(max)s.", min=idiomas.numero(MARGEN_MIN, 2),
+                                 max=idiomas.numero(MARGEN_MAX, 2)))
     return valor
 
 

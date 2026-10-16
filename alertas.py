@@ -60,6 +60,7 @@ MINUTOS_PROMPT_LISTO = 60                            # un prompt listo más nuev
 DIAS_FALLOS = 30                                     # un fallo más viejo que esto es historia, no una alerta
 DIAS_NO_COBRADO = 7                                  # una pieza que no se cobró avisa esta cantidad de días
 MINUTOS_RECARGA_PENDIENTE = 15                       # una recarga de Bold o Wompi pendiente más vieja que esto avisa
+MINUTOS_SE_ACREDITA_SOLA = 60                        # hasta aquí dice «se acredita sola en unos minutos» (PND-175)
 DIAS_AVISO_RENOVACION = 3                            # el plan avisa que se renueva (o termina) con esta anticipación
 PORCENTAJE_BOLSA_PLAN = 80                           # la bolsa del plan avisa al usarse este porcentaje del periodo
 DIAS_AVISO_ACCESO_META = 14                          # el acceso a los datos de Meta avisa estos días antes de vencer (PND-058)
@@ -773,7 +774,7 @@ def _fuente_cobros(cliente, ahora):
                 m.c.creado_en >= _hace(ahora, days=DIAS_NO_COBRADO))
          .order_by(m.c.id.desc()).limit(TOPE_COBROS))
     r = db.recarga
-    qr = (sa.select(r.c.id, r.c.milesimas, r.c.medio)
+    qr = (sa.select(r.c.id, r.c.milesimas, r.c.medio, r.c.creada_en)
           .where(r.c.cliente == cliente, r.c.medio.in_(("bold", "wompi")), r.c.estado == "pendiente",
                  r.c.creada_en <= _hace(ahora, minutes=MINUTOS_RECARGA_PENDIENTE))
           .order_by(r.c.id.desc()).limit(TOPE_COBROS))
@@ -788,12 +789,22 @@ def _fuente_cobros(cliente, ahora):
                            gettext("Algo de «%(concepto)s» no llegó. No descontamos %(monto)s de tu saldo.",
                                    concepto=vista.nombre_concepto(f.concepto), monto=monto(milesimas)),
                            "settings", ancla="config-ap-saldo", entidad=f.id))
+    reciente = _hace(ahora, minutes=MINUTOS_SE_ACREDITA_SOLA)
     for f in recargas:
+        pasarela = "Wompi" if f.medio == "wompi" else "Bold"
+        # «Se acredita sola en unos minutos» solo los primeros minutos (PND-175): una de horas ya no es «unos
+        # minutos». La huella sigue siendo el id: el texto cambia, el descarte no.
+        if str(f.creada_en or "") > reciente:
+            detalle = gettext("Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita "
+                              "sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas.",
+                              monto=monto(f.milesimas), pasarela=pasarela)
+        else:
+            detalle = gettext("Una recarga de %(monto)s con %(pasarela)s lleva más de una hora pendiente. Si ya "
+                              "pagaste, la seguimos revisando y la sumamos apenas %(pasarela)s lo confirme; si no, "
+                              "genera un link nuevo en Configuración › Saldo y recargas.",
+                              monto=monto(f.milesimas), pasarela=pasarela)
         out.append(_alerta(f"cobros:recarga_pendiente:{f.id}", huella(f.id), "info", "decision",
-                           gettext("Tienes una recarga sin terminar"),
-                           gettext("Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita "
-                                   "sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas.",
-                                   monto=monto(f.milesimas), pasarela="Wompi" if f.medio == "wompi" else "Bold"),
+                           gettext("Tienes una recarga sin terminar"), detalle,
                            "settings", ancla="config-ap-saldo", entidad=f.id))
     out.extend(_alertas_plan(cliente, ahora, monto))
     return out

@@ -74,6 +74,35 @@
     return envuelto;
   }
 
+  // Lo mismo para XMLHttpRequest (PND-175): las subidas con barra de progreso (Audios, el compositor de Crear,
+  // la voz y la biblioteca del editor) no pasan por fetch. Lee la respuesta sin consumirla: `responseText` se
+  // puede leer las veces que haga falta y un `responseType` que no es texto ni json no se toca.
+  function datosDeXhr(xhr) {
+    if (!xhr || xhr.status !== 402 || !mismoOrigen(xhr.responseURL)) return null;
+    var tipo = (xhr.getResponseHeader && xhr.getResponseHeader('content-type')) || '';
+    if (tipo.indexOf('json') < 0) return null;
+    var d = null;
+    try {
+      if (xhr.responseType === 'json') d = xhr.response;
+      else if (!xhr.responseType || xhr.responseType === 'text') d = JSON.parse(xhr.responseText);
+    } catch (e) { return null; }
+    return d && d.saldo_insuficiente === true ? d : null;
+  }
+
+  function envolverXhr(Xhr, avisar) {
+    if (!Xhr || !Xhr.prototype || typeof Xhr.prototype.send !== 'function' || Xhr.prototype.send.cobros) return;
+    var enviar = Xhr.prototype.send;
+    var envuelto = function () {
+      var xhr = this;
+      try {
+        xhr.addEventListener('load', function () { var d = datosDeXhr(xhr); if (d) avisar(d); });
+      } catch (e) { /* sin addEventListener: la petición sigue igual */ }
+      return enviar.apply(this, arguments);
+    };
+    envuelto.cobros = true;
+    Xhr.prototype.send = envuelto;
+  }
+
   function pintarAviso(d) {
     var viejo = doc.getElementById('aviso-sin-saldo');
     if (viejo) viejo.parentNode.removeChild(viejo);
@@ -239,10 +268,15 @@
     sondear();
   }
 
-  raiz.CobrosSaldo = { urlSegura: urlSegura, datosDe402: datosDe402, envolver: envolver, pasoSondeo: pasoSondeo, avisar: pintarAviso,
-                       debePedirPanel: debePedirPanel,
-                       LIMITE_MS: LIMITE_MS, CADA_MS: CADA_MS };
+  // Las piezas sueltas solo se exponen sin página (las pruebas de node corren el script sin `document`): en el
+  // navegador no queda ningún global (PND-175).
+  if (!doc) {
+    raiz.CobrosSaldo = { urlSegura: urlSegura, datosDe402: datosDe402, envolver: envolver, pasoSondeo: pasoSondeo,
+                         avisar: pintarAviso, debePedirPanel: debePedirPanel, datosDeXhr: datosDeXhr,
+                         envolverXhr: envolverXhr, LIMITE_MS: LIMITE_MS, CADA_MS: CADA_MS };
+  }
   if (typeof raiz.fetch === 'function' && !raiz.fetch.cobros) raiz.fetch = envolver(raiz.fetch, pintarAviso);
+  envolverXhr(raiz.XMLHttpRequest, pintarAviso);
   if (doc && doc.querySelector) {
     iniciarPanel();
     iniciarVuelta();
