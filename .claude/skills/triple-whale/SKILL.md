@@ -586,8 +586,9 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-230). The `|precio` filter
   keeps showing the cost when the margin read fails in ~25 other templates (PND-231). preparar's own failure path does
   not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch
-  compare the price seen since 2026-10-15 (PND-236, below). `doctrina.verificar_cifras` does not check
-  single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-237). When `SaldoInsuficiente` hits a clip, its
+  compare the price seen since 2026-10-15 (PND-236, below). Since 2026-10-16 `doctrina.verificar_cifras` checks a
+  single digit with an offer or scarcity word («en 2 días» after «llega», «Garantía de 5 años») and reads decimals as
+  decimals (PND-237, PND-227; skill `doctrina`). When `SaldoInsuficiente` hits a clip, its
   Crear session, already created, stays orphan in error (PND-238; no money). The 20 000 cap was measured in real
   (end_turn, 13 013 output tokens, US$ 0,1696; PND-232 closed).
 - **Final review fixes (2026-10-09, guardian-gasto and auditor-seguridad, commits db605232..4e4a77a4, plus F and G
@@ -604,7 +605,11 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   «2 for 1» even when «gratis» is in the data; scarcity with a number (`_ESCASEZ`: «últimas/last/siste/sista N»); and a
   trial with its days (`_PRUEBA_DIAS`: «prøv i N dager», «prova i N dagar», «try for N days»; never a bare «prøv»: the
   real hook «Prøv denne – aldri kalde føtter igjen» offers nothing). A sentence-ending period after the offer is read
-  («Promo 3x2.»); a decimal is not («3x2,5 m»).
+  («Promo 3x2.»); a decimal is not («3x2,5 m»). Since 2026-10-16 (PND-228) it also adds urgency or scarcity without a
+  number that the data do not show (`doctrina.urgencias_sin_dato`: «tømmes», «nesten utsolgt», «solo por hoy»…), and
+  `PROMPT` asks the hooks' text and the new copy not to claim scarcity, urgency or social proof that the ad text, the
+  voice or the data do not show. `_cifras_y_ofertas` joins the figures and the offers without saying one inside another
+  twice («Garantía de 5 años», not also «garantía»).
   Checked free against the 4 real eval answers: no hook newly blocked. `ofertas_sin_dato(texto, verificable)` adds the
   terms and offers that are not in the data to the
   hook's `cifras_sin_dato` (only its `texto`, what goes in the video: the hook is not generated) and to the new copy's

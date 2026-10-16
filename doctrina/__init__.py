@@ -196,23 +196,134 @@ _RE_CIFRAS = re.compile(
 _RE_NUMERO = re.compile(r"\d+(?:[.,]\d+)*")
 _RE_VARIAS_FRASES = re.compile(r"[.!?]\s+\S")
 
+# Un solo dígito sí se verifica cuando va con una palabra de oferta o de escasez (PND-237, decisión 2026-10-13, lote 2):
+# «Últimas 3 unidades», «Garantía de 5 años», «Prøv i 7 dager», «llega en 2 días» pasaban aunque los datos no los
+# trajeran. Lo que no se toca: un dígito suelto («3 pasos», «en 3 días lo notas») sigue sin verificarse (spec §4.3), y
+# una frase de tiempo («los últimos 3 inviernos», «last 2 years») no es escasez.
+_UNIDAD_TIEMPO = (r"(?:d[ií]as?|days?|dager|dagers|dag|dagar|dage|horas?|hours?|hrs?|timer|timmar|semanas?|weeks?|"
+                  r"uker|uke|veckor|vecka|mes|meses|months?|måneder|måned|månader|månad|años?|anos?|years?|år|års)")
+_OFERTA_CERCA = (r"(?:garant\w*|warrant\w*|guarant\w*|prueba|pru[eé]bal[oa]s?|trial|prøv\w*|prova\w*|provperiod\w*|try|"
+                 r"devoluci[oó]n\w*|devolu[cç][aã]o|reembols\w*|refund\w*|returns?|retur\w*|env[ií]os?|shipping|"
+                 r"deliver\w*|entrega\w*|llega\w*|arriv\w*|levering\w*|leverans\w*|frakt\w*|frete|gratis|grátis|"
+                 r"gratuit\w*|free)")
+_ESCASEZ_ANTES = r"(?:[uú]ltim[ao]s|quedan|restan|last|siste|sista|restam)"
+_ESCASEZ_DESPUES = r"(?:left|igjen|kvar|restantes|disponibles|in stock|en stock|på lager|i lager)"
+_NO_ES_ESCASEZ = r"(?:inviernos?|veranos?|temporadas?|winters?|summers?|seasons?|vintre|vintrar|somre|somrar|" \
+                 r"años?|anos?|years?|år|meses|months?|måneder|månader)"
+_DIGITO = r"(?<![\d.,])(\d)(?![\d]|[.,]\d)"
+_RE_DIGITO_OFERTA = re.compile(
+    r"\b" + _OFERTA_CERCA + r"\b[^.!?\n]{0,30}?" + _DIGITO + r"\s*-?\s*" + _UNIDAD_TIEMPO + r"\b"
+    r"|" + _DIGITO + r"\s*-?\s*" + _UNIDAD_TIEMPO + r"\b[^.!?\n]{0,30}?\b" + _OFERTA_CERCA + r"\b"
+    r"|\b" + _ESCASEZ_ANTES + r"\s+" + _DIGITO + r"(?!\s*-?\s*" + _NO_ES_ESCASEZ + r"\b)"
+    r"|" + _DIGITO + r"\s+(?:[\w-]+\s+)?" + _ESCASEZ_DESPUES + r"\b",
+    re.IGNORECASE)
+
+# Urgencia o escasez sin número (PND-228): «Lageret tømmes raskt denne vinteren» (eval de los ganchos del 2026-10-09)
+# afirma algo que los datos no muestran y `verificar_cifras` solo veía números. Es una HEURÍSTICA, como las ofertas
+# en palabras de los ganchos de Triple Whale: frases explícitas de stock que se acaba o de tiempo limitado, en los
+# idiomas de las piezas (es, en, no, sv, pt), que se buscan como frase entera y valen si los datos las traen. Quedan
+# fuera a propósito el «aprovecha» o «no te quedes sin» de un cierre y la temporada («antes de que llegue el frío»):
+# la doctrina del guion acepta la urgencia real de temporada. Agregar una frase cambia qué se marca (y en el guion,
+# qué pide corrección): se mira antes con respuestas reales, sin pagar nada.
+URGENCIAS = (
+    # español
+    "se agota", "se agotan", "se está agotando", "se están agotando", "agotándose", "casi agotado", "casi agotados",
+    "últimas unidades", "pocas unidades", "quedan pocas", "quedan pocos", "stock limitado", "existencias limitadas",
+    "unidades limitadas", "edición limitada", "por tiempo limitado", "tiempo limitado", "solo por hoy", "solo hoy",
+    "última oportunidad", "hasta agotar existencias", "antes de que se agote", "antes de que se agoten",
+    "antes de que se acabe", "antes de que se acaben", "la oferta termina", "termina hoy", "se acaba hoy",
+    # inglés
+    "selling fast", "selling out", "sells out", "sold out", "almost gone", "running out", "low stock", "limited stock",
+    "limited supply", "limited edition", "limited time", "while supplies last", "while stocks last", "today only",
+    "only today", "last chance", "ends today", "ends tonight", "ends soon", "going fast", "few left",
+    # noruego
+    "tømmes", "utsolgt", "nesten utsolgt", "snart utsolgt", "begrenset lager", "begrenset antall", "begrenset tid",
+    "kun i dag", "bare i dag", "siste sjanse", "få igjen", "går fort", "selges fort", "mens lageret rekker",
+    # sueco
+    "slutsåld", "nästan slutsåld", "snart slut", "begränsat lager", "begränsat antal", "begränsad tid", "bara idag",
+    "endast idag", "sista chansen", "få kvar", "går åt snabbt", "medan lagret räcker",
+    # portugués
+    "esgotando", "quase esgotado", "estoque limitado", "últimas peças", "por tempo limitado", "só hoje", "apenas hoje",
+    "última chance", "enquanto durarem os estoques",
+)
+
+
+def _patron_frase(frase):
+    """La frase entera, sin distinguir mayúsculas y con cualquier espacio entre palabras."""
+    cuerpo = r"\s+".join(re.escape(p) for p in frase.split())
+    return re.compile(r"(?<![\w-])" + cuerpo + r"(?![\w-])", re.IGNORECASE)
+
+
+_PATRONES_URGENCIA = tuple((f, _patron_frase(f)) for f in URGENCIAS)
+
+
+def urgencias_sin_dato(texto, datos_texto):
+    """Las frases de `URGENCIAS` que dice `texto` y `datos_texto` no (PND-228). Una que va dentro de otra marcada no se
+    repite («utsolgt» dentro de «nesten utsolgt»)."""
+    texto, datos_texto = str(texto or ""), str(datos_texto or "")
+    faltan = [f for f, p in _PATRONES_URGENCIA if p.search(texto) and not p.search(datos_texto)]
+    return [f for f in faltan if not any(f != otra and f in otra for otra in faltan)]
+
+
+def _valores(numero):
+    """Lo que puede valer un número escrito, como textos canónicos (PND-227): un decimal se lee como decimal («4,0» y
+    «4.00» valen 4, «2,5» vale 2,5) y nunca se juntan sus dígitos (antes «4,0» era 40 y «5.00» era 500). Un separador
+    seguido de exactamente tres cifras puede ser de miles o decimal («89.900» vale 89 900 u 89,9; «1,200», 1 200 o
+    1,2): valen las dos. Con los dos separadores, el último es el decimal («1.234,56»); un separador repetido es de
+    miles («1.234.567»)."""
+    from decimal import Decimal, InvalidOperation
+
+    def canon(t):
+        try:
+            return format(Decimal(t).normalize(), "f")
+        except InvalidOperation:
+            return re.sub(r"\D", "", t)
+
+    partes = re.split(r"([.,])", numero)
+    cifras, seps = partes[0::2], partes[1::2]
+    if not seps:
+        return {canon(numero)}
+    if len(set(seps)) == 2:
+        return {canon("".join(cifras[:-1]) + "." + cifras[-1])}
+    if len(seps) > 1:
+        return {canon("".join(cifras))}
+    decimal = canon(f"{cifras[0]}.{cifras[1]}")
+    return {canon(cifras[0] + cifras[1]), decimal} if len(cifras[1]) == 3 else {decimal}
+
 
 def _numeros(texto):
-    """Cada número del texto normalizado a solo dígitos («89.900» → «89900»)."""
-    return [re.sub(r"\D", "", m.group(0)) for m in _RE_NUMERO.finditer(texto or "")]
+    """Los valores de cada número del texto (`_valores`), juntos: «89.900» → «89900» y «89.9»; «4,0» → «4»."""
+    salida = []
+    for m in _RE_NUMERO.finditer(texto or ""):
+        salida += sorted(_valores(m.group(0)))
+    return salida
 
 
 def verificar_cifras(texto, datos_texto):
     """Cifras fuertes de `texto` con algún número que NO aparece como número
-    en `datos_texto` (se comparan números completos sin separadores, nunca
-    subcadenas: «28» no se verifica con un «289900»). Devuelve los fragmentos
-    tal como aparecen en `texto`, sin repetir."""
+    en `datos_texto` (se comparan valores completos, nunca subcadenas: «28» no
+    se verifica con un «289900», y un decimal se lee como decimal, PND-227), más
+    las cifras de un solo dígito con palabra de oferta o de escasez
+    (`_RE_DIGITO_OFERTA`, PND-237). Devuelve los fragmentos tal como aparecen en
+    `texto`, sin repetir; ningún fragmento va dentro de otro ya marcado. La
+    urgencia sin número (PND-228) es aparte (`urgencias_sin_dato`): se mira solo
+    en el texto que se publica, no en las explicaciones que también pasan por
+    aquí."""
     conocidos = set(_numeros(datos_texto))
-    salida = []
-    for m in _RE_CIFRAS.finditer(texto or ""):
-        frag = m.group(0).strip()
-        if any(n not in conocidos for n in _numeros(frag)) and frag not in salida:
-            salida.append(frag)
+    texto = texto or ""
+
+    def falta(frag):
+        return any(_valores(m.group(0)).isdisjoint(conocidos) for m in _RE_NUMERO.finditer(frag))
+
+    salida, rangos = [], []
+    for patron in (_RE_CIFRAS, _RE_DIGITO_OFERTA):
+        for m in patron.finditer(texto):
+            frag = m.group(0).strip()
+            if any(a <= m.start() and m.end() <= b for a, b in rangos):
+                continue
+            if falta(frag) and frag not in salida:
+                salida.append(frag)
+                rangos.append(m.span())
     return salida
 
 

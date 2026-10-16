@@ -34,7 +34,7 @@
         <strong>«{{ x.texto }}»</strong>
         {% if x.escena %}<p class="tw-escena">{{ x.escena }}</p>{% endif %}
         {% if x.por_que %}<small class="vacio">{{ x.por_que }}</small>{% endif %}
-        {% if x.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('No se genera: cita cifras que no están en los datos (%(cifras)s).', cifras=x.cifras_sin_dato | join(', ')) }}</p>{% endif %}
+        {% if x.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('No se genera: dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s).', cifras=x.cifras_sin_dato | join(', ')) }}</p>{% endif %}
         <details><summary>{{ _('Prompt del clip') }}</summary><p class="tw-prompt">{{ x.prompt }}</p></details>
       </li>{% endfor %}
     </ol>
@@ -98,7 +98,7 @@
   {% if cn %}
   <h5>{{ _('Copy nuevo para Meta') }}</h5>
   <div class="tw-copy-nuevo">
-    {% if cn.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('Cita cifras que no están en los datos (%(cifras)s): revisa antes de publicar.', cifras=cn.cifras_sin_dato | join(', ')) }}</p>{% endif %}
+    {% if cn.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('Dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s): revisa antes de publicar.', cifras=cn.cifras_sin_dato | join(', ')) }}</p>{% endif %}
     {% if cn.titulo %}<p class="tw-copy-campo"><strong>{{ cn.titulo }}</strong>
       <button type="button" class="btn-xs" data-copiar="{{ cn.titulo }}" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.copiar)">{{ _('Copiar el título') }}</button></p>{% endif %}
     <p class="tw-copy-texto">{{ cn.texto }}</p>
@@ -122,7 +122,7 @@
     {% if v.escena %}<p class="tw-escena">{{ v.escena }}</p>{% endif %}
     {#- Un anuncio de imagen fija se mejora como imagen (2026-10-13): su prompt edita esa imagen, que va a la bandeja. -#}
     {% if v.tipo == 'imagen' %}
-    {% if v.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('El texto de la imagen cita cifras u ofertas que no están en los datos (%(cifras)s): revisa antes de generar.', cifras=v.cifras_sin_dato | join(', ')) }}</p>{% endif %}
+    {% if v.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('El texto de la imagen dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s): revisa antes de generar.', cifras=v.cifras_sin_dato | join(', ')) }}</p>{% endif %}
     <details><summary>{{ _('Prompt para la imagen') }}</summary><p class="tw-prompt">{{ v.prompt }}</p></details>
     <form method="post" action="{{ url_for('triple_whale.analisis_crear', cliente=cliente, aid=fila.id) }}">
       <button type="submit" class="btn-generar btn-sm">{{ _('Llevar a Crear →') }}</button>

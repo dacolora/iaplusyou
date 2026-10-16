@@ -24,7 +24,15 @@ corte antes que un faltante de Claude: nunca se pierde lo pagado). Vive en `camp
 (ideas) → `concepto.extra.angulo` (sesión; `duplicar` lo copia; «Adaptar» y el guion lo crean solo si la sesión no
 tiene, y el guion solo si trae promesa y gancho) → director, guion, captions; las variantes guardan
 `capas.guion.parametros.angulo` (`lead` y `gancho` nuevos). `doctrina.verificar_cifras`: ninguna cifra fuerte (2+
-dígitos, %, moneda, «3x», «N de cada M») que no esté en los datos que Claude recibió; del ángulo solo cuenta como dato
+dígitos, %, moneda, «3x», «N de cada M») que no esté en los datos que Claude recibió, comparando VALORES (`_valores`,
+PND-227, 2026-10-16: «4,0» y «5.00» valen 4 y 5, ya no 40 y 500; «89.900» vale 89 900 u 89,9), más un solo dígito con
+palabra de oferta o de escasez (`_RE_DIGITO_OFERTA`, PND-237: «Últimas 3», «Garantía de 5 años», «Prøv i 7 dager»,
+«llega en 2 días», «3 pairs left»; nunca «3 pasos», «en 3 días lo notas» ni una frase de tiempo como «los últimos 3
+inviernos»). La urgencia o escasez SIN número es aparte, `doctrina.urgencias_sin_dato` (PND-228, lista `URGENCIAS` en
+es/en/no/sv/pt: «se agota», «últimas unidades», «solo por hoy», «tømmes», «nesten utsolgt», «slutsåld»…; la temporada no
+cuenta): solo la usan los textos que se publican de Triple Whale (`mejorar.ofertas_sin_dato`: ganchos, copy nuevo y
+versión de imagen), no las explicaciones ni el guion. Medido gratis contra las respuestas reales guardadas y con Claude en
+«Cómo mejorarlo» (`docs/superpowers/evals/2026-10-16-cifras-inventadas.md`). Del ángulo solo cuenta como dato
 `doctrina.texto_verificable` (las pruebas, y el resto solo si ningún `faltantes` es un «error: …»; nunca
 `faltantes`). En el guion base y las variantes es bloqueante (va a la corrección y, si persiste, `GuionInvalido`);
 localizar no verifica cifras (convierte unidades y precio y el base ya se verificó); en ideas y «Adaptar» queda en

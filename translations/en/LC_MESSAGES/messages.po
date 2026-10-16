@@ -4342,10 +4342,6 @@ msgstr "Five minutes. You don't create anything on Meta."
 msgid "Cinta"
 msgstr "Ribbon"
 
-#, python-format
-msgid "Cita cifras que no están en los datos (%(cifras)s): revisa antes de publicar."
-msgstr "It cites figures that aren't in the data (%(cifras)s): check before publishing."
-
 msgid "Citas textuales"
 msgstr "Verbatim quotes"
 
@@ -6062,6 +6058,10 @@ msgstr "Diagnosis"
 msgid "Diagnóstico: %(causas)s — siguiente: %(que)s"
 msgstr "Diagnosis: %(causas)s — next: %(que)s"
 
+#, python-format
+msgid "Dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s): revisa antes de publicar."
+msgstr "It states figures, offers or urgency that aren't in the data (%(cifras)s): check before publishing."
+
 msgid "Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"
 msgstr "Tell Claude what’s wrong, for example: &quot;clip 3 is 16 seconds long&quot;"
 
@@ -7116,8 +7116,8 @@ msgid "El texto '{rol}' no tiene valor en {idioma}."
 msgstr "The text “{rol}” has no value in {idioma}."
 
 #, python-format
-msgid "El texto de la imagen cita cifras u ofertas que no están en los datos (%(cifras)s): revisa antes de generar."
-msgstr "The text in the image cites figures or offers that aren't in the data (%(cifras)s): check before generating."
+msgid "El texto de la imagen dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s): revisa antes de generar."
+msgstr "The text in the image states figures, offers or urgency that aren't in the data (%(cifras)s): check before generating."
 
 msgid "El texto de la publicación no puede estar vacío."
 msgstr "The post's text can't be empty."
@@ -13823,8 +13823,8 @@ msgid "No se encontró. Puede que ya no exista."
 msgstr "Not found. It may no longer exist."
 
 #, python-format
-msgid "No se genera: cita cifras que no están en los datos (%(cifras)s)."
-msgstr "Not generated: it cites figures that aren't in the data (%(cifras)s)."
+msgid "No se genera: dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s)."
+msgstr "Not generated: it states figures, offers or urgency that aren't in the data (%(cifras)s)."
 
 #, python-format
 msgid "No se guardó el guion: %(errores)s"

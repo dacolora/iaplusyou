@@ -89,7 +89,7 @@ def test_un_gancho_con_cifras_no_se_genera_ni_entra_al_precio(app):  # noqa: F81
     lista = [GANCHOS[0], dict(GANCHOS[1], texto="50 % menos dolor"), GANCHOS[2]]
     aid = _analisis(lista_ganchos=lista)
     html = _detalle(app, aid)
-    assert "No se genera: cita cifras que no están en los datos (50 %)." in html
+    assert "No se genera: dice cifras, ofertas o urgencias que no están en los datos (50 %)." in html
     assert "Probar los 2 ganchos · US$ 0,67" in html
     r = _probar(app, aid, precio="0.672")
     assert r.status_code == 200 and r.get_json()["ok"]
