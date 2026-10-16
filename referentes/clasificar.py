@@ -12,6 +12,7 @@ import re
 import anthropic
 from flask_babel import gettext
 
+import datos_prompt
 import doctrina
 import idiomas
 from generador_prompts import MODEL, _api_key
@@ -55,7 +56,7 @@ class ClasificacionInvalida(RuntimeError):
 
 
 def _sin_cierre(texto, etiqueta):
-    return (texto or "").replace(f"</{etiqueta}>", "")
+    return datos_prompt.sin_cierre(texto, etiqueta)      # auditoría de seguridad, 2026-10-16
 
 
 # Tope de salida: Claude Sonnet 5 piensa antes de responder aunque no se le

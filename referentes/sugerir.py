@@ -9,6 +9,7 @@ import json
 import anthropic
 from flask_babel import gettext
 
+import datos_prompt
 import db
 import doctrina
 import idiomas
@@ -56,7 +57,7 @@ Sin texto antes ni después."""
 
 
 def _sin_cierre(texto, etiqueta):
-    return (texto or "").replace(f"</{etiqueta}>", "")
+    return datos_prompt.sin_cierre(texto, etiqueta)      # auditoría de seguridad, 2026-10-16
 
 
 def candidatos(cliente, etapa, excluir_ids=None, limite=200, consciencia=None, familia=None, marcas_nombres=None,

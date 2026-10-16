@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import catalogo_productos
+import datos_prompt
 import db
 import doctrina
 from doctrina import producto as doctrina_producto
@@ -259,8 +260,8 @@ def lanzar_animacion(cliente, cf_id, imagen_url):
 def _sin_cierre(texto, etiqueta):
     """Antes de meter texto ajeno dentro de <etiqueta>...</etiqueta>, le quita su
     propio cierre de esa etiqueta para que no pueda cortar el bloque delimitador
-    (mismo patrón que generador_prompts.regla_fidelidad)."""
-    return (texto or "").replace(f"</{etiqueta}>", "")
+    (`datos_prompt.sin_cierre`: sin distinguir mayúsculas y hasta que no quede ninguno, auditoría 2026-10-16)."""
+    return datos_prompt.sin_cierre(texto, etiqueta)
 
 
 PROMPT_ADAPTAR = """Eres director creativo de anuncios estáticos para redes. Vas a adaptar la ESTRUCTURA de un \

@@ -110,7 +110,8 @@ sí mismo** en `/admin/cuentas/desbloquear` (ni su usuario ni su IP). Una acció
 buscan la `pieza` con el `cliente` de la URL (`dashboard._pieza_del_proyecto`) y responden 404 si no es suya, antes de
 reservar saldo, crear filas o encolar; la vuelta a Crear solo lleva un `cf` con forma de id (`_RE_CF_VOLVER`). Detalle en
 la skill `meta-y-publicacion`. Texto ajeno entre etiquetas de un prompt a Claude: quitar su cierre con
-`generador_prompts._sin_cierre` (sin distinguir mayúsculas ni espacios, repetido hasta que no cambie), nunca con un
-`replace` único: «</desc</descripcion>ripcion>» se rearma al quitar el de adentro (auditoría 2026-10-16; otros módulos
-tienen su propio `_sin_cierre` de un solo `replace`: `referentes/recrear.py`, `clasificar.py`, `sugerir.py`,
-`doctrina/diagnostico.py`).
+`datos_prompt.sin_cierre` (sin distinguir mayúsculas ni espacios, repetido hasta que no cambie), nunca con un
+`replace` único: «</desc</descripcion>ripcion>» se rearma al quitar el de adentro (auditoría 2026-10-16). Desde ese día
+la usan todos los que ya tenían su `_sin_cierre`: `generador_prompts`, `referentes/recrear.py`, `clasificar.py`,
+`sugerir.py`, `doctrina/diagnostico.py` y los ganchos usados de `final_edition/guion.py`. Pruebas:
+`tests/test_datos_prompt.py`.

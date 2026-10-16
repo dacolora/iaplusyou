@@ -5,6 +5,8 @@ import contextvars
 import json
 import os
 import re
+
+import datos_prompt
 from contextlib import contextmanager
 
 import anthropic
@@ -334,17 +336,8 @@ class RespuestaInvalida(ValueError):
 
 
 def _sin_cierre(texto, etiqueta):
-    """Texto ajeno (tienda, catálogo, guion, ángulo) que va dentro de <etiqueta>…</etiqueta>: sin NINGÚN cierre de esa
-    etiqueta, sin distinguir mayúsculas ni espacios y repitiendo hasta que no quede ninguno. Auditoría de seguridad de
-    PND-037 (2026-10-16): un solo `replace` sensible a la caja dejaba pasar «</DESCRIPCION>» y
-    «</desc</descripcion>ripcion>» (al quitar el de adentro se rearma el de afuera) y el dato cerraba su bloque."""
-    patron = re.compile(r"<\s*/\s*" + re.escape(etiqueta) + r"\s*>", re.IGNORECASE)
-    t = str(texto or "")
-    while True:
-        nuevo = patron.sub("", t)
-        if nuevo == t:
-            return t
-        t = nuevo
+    """`datos_prompt.sin_cierre` (auditoría de PND-037, 2026-10-16)."""
+    return datos_prompt.sin_cierre(texto, etiqueta)
 
 
 def caption_organico(contexto, plataformas):

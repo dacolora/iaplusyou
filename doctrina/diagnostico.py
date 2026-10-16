@@ -10,6 +10,7 @@ import json
 
 from flask_babel import gettext
 
+import datos_prompt
 import doctrina
 import idiomas
 
@@ -126,7 +127,7 @@ def parsear(texto):
 
 
 def _sin_cierre(texto):
-    return str(texto or "").replace("</datos>", "")
+    return datos_prompt.sin_cierre(texto, "datos")      # auditoría de seguridad, 2026-10-16
 
 
 def texto_para_diagnostico(pz, veredicto, pistas_, extras):
