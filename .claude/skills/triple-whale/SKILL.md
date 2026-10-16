@@ -586,8 +586,9 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   The scene chain still closes a recoverable clip as an error (PND-229; the hooks no longer do, fix C below). The
   originals count toward the 2 GB quota and, since PND-230 (2026-10-15), «Medios» deletes them like an upload when no
   edition uses them (armar downloads the original again if its material is gone). The `|precio` filter
-  keeps showing the cost when the margin read fails in ~25 other templates (PND-231). preparar's own failure path does
-  not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch
+  keeps showing the cost when the margin read fails in ~25 other templates (PND-231). Since PND-234 (2026-10-15) preparar's own
+  failure path, like the vigilante, gives a row whose clip ran and failed its Crear session's error (`_error_ajeno`)
+  instead of «Algo falló al preparar el gancho…»; small robustness items in PND-235. «Cómo mejorarlo» and its batch
   compare the price seen since 2026-10-15 (PND-236, below). `doctrina.verificar_cifras` does not check
   single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-237). When `SaldoInsuficiente` hits a clip, its
   Crear session, already created, stays orphan in error (PND-238; no money). The 20 000 cap was measured in real

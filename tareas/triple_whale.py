@@ -743,7 +743,10 @@ def tw_ganchos_preparar(tarea):
                 # pagándose) sigue su camino con el vigilante.
                 datos.mover(g["id"], "preparando", "generando", job_id=flowplus_lanzar.job_id(cliente, g["cf_id"]))
             else:
-                datos.mover(g["id"], "preparando", "error", error=mensaje)
+                # PND-234: como en el vigilante, si su clip corrió y falló, la sesión de Crear dice por qué.
+                sesion = (sesiones.get(g["cf_id"]) if g["cf_id"] else None) or {}
+                propio = _error_ajeno(sesion.get("error")) if sesion.get("estado") == "error" else None
+                datos.mover(g["id"], "preparando", "error", error=propio or mensaje)
         raise RuntimeError(mensaje) from None
     finally:
         # El material ya guardó su copia en R2 (spec §4.4.4).
