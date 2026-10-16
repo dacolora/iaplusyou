@@ -31,6 +31,11 @@ def _memo():
 
 
 def _panel(app, q=""):  # noqa: F811
+    """El panel en frío: sin la caché del Tablero ni la de alertas del proceso (la primera petición las llena y las
+    siguientes leen menos haya o no precálculo: así la comparación no se engaña)."""
+    d = app["dashboard"]
+    d._TABLERO_CACHE.clear()
+    d.invalidar_alertas("acme")
     r = app["c"].get("/cliente/acme/rendimiento/panel" + q)
     assert r.status_code == 200
     return r.data.decode()
@@ -130,3 +135,69 @@ def test_encolar_la_historia_pide_una_copia_por_tienda_con_su_desde(base_tempora
     for tid in (se, no):
         tarea = cola.consultar_por_job(t.job_id_sync("acme", tid))
         assert tarea["payload"]["desde"] == desde and tarea["tipo"] == t.TIPO_SYNC
+
+
+# ------------------------------------------------------- revisión final (2026-10-15): que no se pierda ---
+
+def test_si_una_copia_termina_en_medio_el_precalculo_se_vuelve_a_pedir(app, monkeypatch):  # noqa: F811
+    from triple_whale import memo
+    tid = _tienda()
+    _sembrar_anuncios(tid, n=3)
+    real = memo._version
+    llamadas = []
+
+    def version_que_cambia(cliente):
+        llamadas.append(cliente)
+        return real(cliente) + ("x" if len(llamadas) % 2 == 0 else "")
+    monkeypatch.setattr(memo, "_version", version_que_cambia)
+    r = t.tw_precalcular({"payload": {"cliente": "acme"}, "job_id": t.job_id_precalcular("acme")})
+    assert isinstance(r, tareas.Continuar) and r.tipo == t.TIPO_PRECALCULAR
+    assert r.payload == {"cliente": "acme", "vueltas": 1}
+    final = t.tw_precalcular({"payload": {"cliente": "acme", "vueltas": t.VUELTAS_PRECALCULO},
+                              "job_id": t.job_id_precalcular("acme")})
+    assert isinstance(final, str)
+
+
+def test_la_copia_en_linea_de_probar_anuncios_tambien_pide_el_precalculo(base_temporal, monkeypatch):
+    import triple_whale_tiendas as tt
+    from triple_whale import sync
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test_secret_key_12345678")
+    se = tt.agregar("acme", "llave-se", "acme-se.myshopify.com", pais="SE")  # llave-de-prueba
+    monkeypatch.setattr(sync, "sincronizar", lambda *a, **k: {"anuncios": 1})
+    sync.sincronizar_si_hace_falta("acme", se)
+    assert cola.consultar_por_job(t.job_id_precalcular("acme"))["tipo"] == t.TIPO_PRECALCULAR
+
+
+def _faltas_en_lo_guardado(app, monkeypatch, q):  # noqa: F811
+    """(html, cuántas sumas pesadas de esa vista NO estaban en lo guardado)."""
+    from triple_whale import memo
+    faltas = []
+    leer = memo._leer
+
+    def contar(*args):
+        r = leer(*args)
+        if r is memo._NADA:
+            faltas.append(args[1])
+        return r
+    monkeypatch.setattr(memo, "_leer", contar)
+    try:
+        return _panel(app, q), len(faltas)
+    finally:
+        monkeypatch.setattr(memo, "_leer", leer)
+
+
+def test_con_dos_tiendas_cada_pais_y_cada_periodo_quedan_precalculados(app, monkeypatch):  # noqa: F811
+    import triple_whale_tiendas as tt
+    no = _tienda()
+    se = tt.agregar("acme", "tw_llave_se", "acme-se.myshopify.com", "SE", moneda="USD")  # llave-de-prueba
+    _sembrar_anuncios(no, n=3)
+    _sembrar_anuncios(se, n=4)
+    vistas = [f"?entrada={e}&dias={d}" for e in ("", "NO", "SE") for d in (0, 15, 365)]
+    antes = {}
+    for q in vistas:
+        antes[q], faltas = _faltas_en_lo_guardado(app, monkeypatch, q)
+        assert faltas > 0, q                                   # sin precálculo, todo se calcula en vivo
+    t.tw_precalcular({"payload": {"cliente": "acme"}, "job_id": t.job_id_precalcular("acme")})
+    for q in vistas:
+        html, faltas = _faltas_en_lo_guardado(app, monkeypatch, q)
+        assert html == antes[q] and faltas == 0, (q, faltas)

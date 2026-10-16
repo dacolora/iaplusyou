@@ -55,7 +55,7 @@ from meta_rendimiento import creativo as meta_creativo
 from meta_rendimiento import tasas
 from nicho.avatares import costo_real
 from storage import r2_uploader
-from tareas import al_interrumpir, ref_sufijo, registrar
+from tareas import Continuar, al_interrumpir, ref_sufijo, registrar
 from tareas import edicion as tareas_edicion
 from tareas.cadena import VIVOS_CREAR
 from triple_whale import analisis, avisos, datos, ganchos, mejorar, paises, sync
@@ -72,6 +72,8 @@ ETAPAS_EVALUAR = [(idiomas.N_("Buscando miniaturas"), 10), (idiomas.N_("Sacando 
                   (idiomas.N_("Analizando con Claude"), 75)]
 MAX_INTENTOS_SYNC = 2
 DIAS_HISTORIA_MAX = 730    # un `desde` más viejo que dos años en el pedido de una copia se ignora
+VUELTAS_PRECALCULO = 3     # si una copia termina en medio, el precálculo se repite hasta 3 veces (revisión 2026-10-15)
+ESPERA_PRECALCULO = timedelta(minutes=2)
 
 
 def job_id_sync(cliente, tienda_id):
@@ -457,6 +459,13 @@ def tw_precalcular(tarea):
             trabajos.reportar(job_id, etapa=idiomas.N_("Preparando tu rendimiento"),
                               progreso=i * 100.0 / max(1, len(vistas)))
             rpanel.contexto(cliente, dias, entrada=entrada)
+    vueltas = int(tarea["payload"].get("vueltas") or 0)
+    if grabacion["version_cambio"] and vueltas < VUELTAS_PRECALCULO:
+        # Una copia terminó en medio y su propio pedido no entró (esta tarea seguía viva con el mismo job_id): se
+        # repite en un rato con los datos nuevos, en vez de esperar la próxima copia (hasta 2 h; revisión 2026-10-15).
+        return Continuar(TIPO_PRECALCULAR, {"cliente": cliente, "vueltas": vueltas + 1},
+                         mensaje=gettext("Una copia de Triple Whale terminó mientras se preparaba: se repite."),
+                         ejecutar_desde=datetime.now() + ESPERA_PRECALCULO)
     if not grabacion["guardadas"]:
         return gettext("Una copia de Triple Whale terminó mientras se preparaba: se prepara en la próxima vuelta.")
     return gettext("Rendimiento listo: %(n)s vistas preparadas.", n=len(vistas))

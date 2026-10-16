@@ -51,3 +51,12 @@ def test_el_selector_dice_cada_periodo_en_palabras(app):  # noqa: F811
         assert texto in selector, texto
     assert '<option value="180" selected>' in selector
     assert "Últimos 14 días" not in selector
+
+
+def test_en_ingles_los_periodos_dicen_dias_y_meses_no_el_mes_calendario():
+    """«Last month» se lee como el mes calendario anterior; el periodo son los últimos 30 días (revisión 2026-10-15)."""
+    import idiomas
+    from flask_babel import gettext
+    with idiomas.en_idioma("en"):
+        assert gettext("Último mes") == "Last 30 days"
+        assert gettext("Último año") == "Last 12 months"

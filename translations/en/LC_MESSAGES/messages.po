@@ -19492,6 +19492,9 @@ msgstr "A campaign needs at least one video or image."
 msgid "Una copia de Triple Whale terminó mientras se preparaba: se prepara en la próxima vuelta."
 msgstr "A Triple Whale copy finished while preparing: it will be prepared on the next round."
 
+msgid "Una copia de Triple Whale terminó mientras se preparaba: se repite."
+msgstr "A Triple Whale copy finished while preparing: it will run again."
+
 msgid "Una de las piezas no está disponible (o no está lista)."
 msgstr "One of the pieces is not available (or not ready)."
 
@@ -24166,7 +24169,7 @@ msgid "Últimas sincronizaciones"
 msgstr "Latest syncs"
 
 msgid "Último año"
-msgstr "Last year"
+msgstr "Last 12 months"
 
 #, python-format
 msgid "Último cambio: %(fecha)s"
@@ -24177,7 +24180,7 @@ msgid "Último error: %(error)s"
 msgstr "Last error: %(error)s"
 
 msgid "Último mes"
-msgstr "Last month"
+msgstr "Last 30 days"
 
 msgid "Último respaldo"
 msgstr "Last backup"

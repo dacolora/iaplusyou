@@ -19,6 +19,7 @@ sincronización sigue sin esa parte y lo avisa: los anuncios nunca se pierden
 por eso. Llave, tienda, límite y red sí cortan la
 sincronización (la tarea marca la conexión en error y la cola reintenta).
 """
+import logging
 import re
 from datetime import date, datetime, timedelta
 
@@ -28,6 +29,8 @@ import db
 import triple_whale
 import triple_whale_tiendas
 from triple_whale import datos
+
+log = logging.getLogger("creatv.triple_whale.sync")
 
 DIAS_BACKFILL = 90
 DIAS_RECIENTES = 7
@@ -369,4 +372,12 @@ def sincronizar_si_hace_falta(cliente, tienda_id, minutos=MINUTOS_FRESCO):
     tienda = triple_whale_tiendas.tienda(cliente, tienda_id)
     if not tienda or esta_fresca(tienda, minutos):
         return None
-    return sincronizar(cliente, tienda_id)
+    resumen = sincronizar(cliente, tienda_id)
+    # La copia cambió los datos: las sumas de la pestaña Rendimiento se vuelven a preparar (revisión 2026-10-15: la
+    # copia en línea de Probar anuncios no lo pedía y la pestaña calculaba en vivo hasta la próxima copia periódica).
+    try:
+        from tareas import triple_whale as tareas_tw
+        tareas_tw.encolar_precalculo(cliente)
+    except Exception as e:  # noqa: BLE001 — la copia ya salió bien; sin el precálculo la pestaña calcula en vivo
+        log.warning("precálculo de Rendimiento de %s: %s", cliente, type(e).__name__)
+    return resumen

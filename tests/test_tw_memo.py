@@ -137,3 +137,51 @@ def test_si_los_datos_cambian_mientras_se_graba_no_se_guarda_nada(dos):
         datos.totales_por_anuncio("acme", se, _hace(3), _hace(0))
         tt.actualizar_tienda("acme", se, ultima_sincronizacion="2099-01-01T00:00:00")   # una copia terminó en medio
     assert _filas_memo() == []
+
+
+# ------------------------------------------------------------- revisión final (2026-10-15): plata y memoria ---
+
+def test_grabar_comprime_al_capturar_y_escribe_en_tandas_cortas(dos):
+    """El candado de escritura de SQLite no se toma mientras se arma el JSON ni se comprime (con un año eran ~3 s:
+    un gasto ya pagado que se anota en ese momento recibía «database is locked» pasado el busy_timeout de 5 s)."""
+    se, no, _ = dos
+    with memo.grabando("acme") as g:
+        for t in (None, se, no):
+            for _, llamar in LLAMADAS:
+                llamar(t)
+        assert g["filas"] and all(isinstance(datos_, bytes) for _, datos_ in g["filas"].values())
+    por_conexion, orden = {}, []
+
+    def mirar(conn, _cur, sql, *_a):
+        if "tw_memo" in sql and sql.lstrip().upper().startswith(("INSERT", "DELETE")):
+            por_conexion[id(conn)] = por_conexion.get(id(conn), 0) + 1
+            orden.append(sql.lstrip().split()[0].upper())
+    tt.actualizar_tienda("acme", se, ultima_sincronizacion="2099-01-01T00:00:00")
+    event.listen(sa.engine.Engine, "before_cursor_execute", mirar)
+    try:
+        with memo.grabando("acme"):
+            for t in (None, se, no):
+                for _, llamar in LLAMADAS:
+                    llamar(t)
+    finally:
+        event.remove(sa.engine.Engine, "before_cursor_execute", mirar)
+    assert max(por_conexion.values()) <= memo.TANDA * 2, por_conexion
+    assert orden[-1] == "DELETE" and "INSERT" in orden
+
+
+def test_cambiar_lo_que_devolvio_al_grabar_no_cambia_lo_grabado(dos):
+    se = dos[0]
+    with memo.grabando("acme"):
+        filas = datos.totales_por_anuncio("acme", se, _hace(3), _hace(0))
+        filas[0]["gasto"] = -1
+        filas.append({"ad_id": "inventado"})
+    leidas = datos.totales_por_anuncio("acme", se, _hace(3), _hace(0))
+    assert leidas == datos.totales_por_anuncio.sin_memo("acme", se, _hace(3), _hace(0))
+
+
+def test_grabar_dice_si_la_version_cambio_en_medio(dos):
+    se = dos[0]
+    with memo.grabando("acme") as g:
+        datos.canales("acme", se, _hace(3), _hace(0))
+        tt.actualizar_tienda("acme", se, ultima_sincronizacion="2099-01-01T00:00:00")
+    assert g["version_cambio"] is True and g["guardadas"] == 0
