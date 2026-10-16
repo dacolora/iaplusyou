@@ -311,6 +311,10 @@ msgid "%(error)s (si Claude alcanzó a responder, este intento sí se cobró)"
 msgstr "%(error)s (if Claude managed to respond, this attempt was charged)"
 
 #, python-format
+msgid "%(error)s Antes de esto ya se habían movido los topes del reparto: %(topes)s."
+msgstr "%(error)s Before this, the caps of the split had already been moved: %(topes)s."
+
+#, python-format
 msgid "%(error)s No se publicó nada."
 msgstr "%(error)s Nothing was published."
 
@@ -6152,6 +6156,12 @@ msgstr "Store domain"
 msgid "Dominio de la tienda (el shop-id de Triple Whale)"
 msgstr "Store domain (the Triple Whale shop-id)"
 
+msgid "Dos cambios de presupuesto se cruzaron y la suma de los topes en Meta pasó el tope del experimento, y NO se pudieron pausar todas sus campañas: páusalas en Meta ya."
+msgstr "Two budget changes crossed and the sum of the caps in Meta went over the experiment's cap, and NOT all its campaigns could be paused: pause them in Meta now."
+
+msgid "Dos cambios de presupuesto se cruzaron y la suma de los topes en Meta pasó el tope del experimento: se pausaron todas sus campañas. Revisa los diarios y actívalo de nuevo."
+msgstr "Two budget changes crossed and the sum of the caps in Meta went over the experiment's cap: all its campaigns were paused. Check the daily budgets and activate it again."
+
 #, python-brace-format
 msgid "Dos voces suenan al mismo tiempo en {tiempo}: muévelas o borra una."
 msgstr "Two voices play at the same time at {tiempo}: move them or delete one."
@@ -6630,12 +6640,20 @@ msgid "El diagnóstico no se pudo hacer: %(error)s"
 msgstr "The diagnosis couldn't be made: %(error)s"
 
 #, python-format
+msgid "El diario de %(pais)s bajó a %(presupuesto)s, pero %(error)s"
+msgstr "The daily budget for %(pais)s went down to %(presupuesto)s, but %(error)s"
+
+#, python-format
 msgid "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: %(motivo)s."
 msgstr "The daily budget for %(pais)s went down, but the split of the cap among the accounts was left as it was: %(motivo)s."
 
 #, python-format
 msgid "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: con lo que ya gastó cada una no alcanza para repartirlo otra vez."
 msgstr "The daily budget for %(pais)s went down, but the split of the cap among the accounts was left as it was: what each one has already spent doesn't allow splitting it again."
+
+#, python-format
+msgid "El diario de %(pais)s bajó; del reparto del tope entre las cuentas solo cambiaron %(topes)s y lo demás quedó como estaba: %(motivo)s."
+msgstr "The daily budget for %(pais)s went down; of the split of the cap among the accounts only %(topes)s changed and the rest stayed as it was: %(motivo)s."
 
 msgid "El documento no tiene la forma esperada."
 msgstr "The document doesn't have the expected shape."
@@ -6713,6 +6731,16 @@ msgid ""
 "%(mensaje)s"
 msgstr ""
 "The experiment “%(experimento)s” (#%(id)s) was created on Meta but couldn't be activated.\n"
+"\n"
+"%(mensaje)s"
+
+#, python-format
+msgid ""
+"El experimento «%(experimento)s» (#%(id)s) tiene una campaña con un tope de gasto distinto al que mandó Creatv y no se pudo pausar.\n"
+"\n"
+"%(mensaje)s"
+msgstr ""
+"The experiment «%(experimento)s» (#%(id)s) has a campaign with a spend cap different from the one Creatv sent and it couldn't be paused.\n"
 "\n"
 "%(mensaje)s"
 
@@ -11160,12 +11188,12 @@ msgid "La cuenta publicitaria %(cuenta)s no está entre las que ve el Business d
 msgstr "The ad account %(cuenta)s isn't among the ones the agency's Business can see."
 
 #, python-format
-msgid "La cuenta publicitaria %(cuenta)s no puede anunciar la app %(app)s: autoriza esa cuenta en Meta for Developers (Configuración › Avanzada › Cuentas publicitarias autorizadas) o asígnale la app en Meta Business, y vuelve a lanzar. No se creó nada en Meta."
-msgstr "The ad account %(cuenta)s can't advertise the app %(app)s: authorize that account in Meta for Developers (Settings › Advanced › Authorized ad accounts) or assign the app to it in Meta Business, then launch again. Nothing was created on Meta."
+msgid "La cuenta publicitaria %(cuenta)s no puede anunciar la app %(app)s: autoriza esa cuenta en Meta for Developers (Configuración › Avanzada › Cuentas publicitarias autorizadas) o asígnale la app en Meta Business, y vuelve a lanzar."
+msgstr "The ad account %(cuenta)s can't advertise the app %(app)s: authorize that account in Meta for Developers (Settings › Advanced › Authorized ad accounts) or assign the app to it in Meta Business, then launch again."
 
 #, python-format
-msgid "La cuenta publicitaria %(cuenta)s no tiene acceso al Pixel %(pixel)s: compártelo con esa cuenta en Meta Business (Configuración del negocio › Orígenes de datos › Píxeles › Asignar cuentas publicitarias) y vuelve a lanzar. No se creó nada en Meta."
-msgstr "The ad account %(cuenta)s has no access to the Pixel %(pixel)s: share it with that account in Meta Business (Business settings › Data sources › Pixels › Assign ad accounts), then launch again. Nothing was created on Meta."
+msgid "La cuenta publicitaria %(cuenta)s no tiene acceso al Pixel %(pixel)s: compártelo con esa cuenta en Meta Business (Configuración del negocio › Orígenes de datos › Píxeles › Asignar cuentas publicitarias) y vuelve a lanzar."
+msgstr "The ad account %(cuenta)s has no access to the Pixel %(pixel)s: share it with that account in Meta Business (Business settings › Data sources › Pixels › Assign ad accounts), then launch again."
 
 #, python-format
 msgid "La cuenta publicitaria %(cuentas)s ya no se puede usar en este proyecto (salió de sus cuentas de Meta, perdió el permiso para anunciar o factura en otra moneda): no se manda nada a Meta."
@@ -12143,6 +12171,9 @@ msgstr "What must never change in this asset"
 
 msgid "Lo que sale:"
 msgstr "What's coming out:"
+
+msgid "Lo que se creó en Meta en un intento anterior sigue en pausa."
+msgstr "What was created on Meta in an earlier attempt is still paused."
 
 msgid ""
 "Lo que se descontó de tu saldo por todo lo que este proyecto generó desde el inicio: cada video,\n"
@@ -13863,6 +13894,9 @@ msgstr "The original photo of this generation wasn't kept."
 #, python-format
 msgid "No se creó la publicación en %(plataformas)s: %(error)s"
 msgstr "The post on %(plataformas)s was not created: %(error)s"
+
+msgid "No se creó nada en Meta."
+msgstr "Nothing was created on Meta."
 
 msgid "No se encontraron palabras en ese audio."
 msgstr "No words were found in that audio."
@@ -17032,6 +17066,10 @@ msgid "Revisa en Meta por qué la desactivó y pide una revisión si no correspo
 msgstr "Check in Meta why it was disabled and request a review if it shouldn’t be."
 
 #, python-format
+msgid "Revisa en Meta una campaña de «%(experimento)s»"
+msgstr "Check a campaign of «%(experimento)s» in Meta"
+
+#, python-format
 msgid "Revisa estos valores, deben ser números: %(nombres)s. No se guardó nada."
 msgstr "Check these values, they must be numbers: %(nombres)s. Nothing was saved."
 
@@ -17272,6 +17310,9 @@ msgstr "“{nombre}” was deleted."
 
 msgid "Se cobra por resultado (aprox.: Apify suma cómputo). Cada clic es una corrida y no se reintenta sola. Usar estos datos es responsabilidad de quien pone el token."
 msgstr "Charged per result (approx.: Apify adds compute). Each click is one run and doesn't retry on its own. Using this data is the responsibility of whoever provides the token."
+
+msgid "Se cortó el reparto del tope entre las cuentas: otro cambio de presupuesto de este experimento lo tomó mientras Meta tardaba en contestar. No se mandó ningún tope más."
+msgstr "The split of the cap among the accounts was cut short: another budget change for this experiment took it over while Meta was slow to answer. No more caps were sent."
 
 msgid "Se cortó la descarga de Shopify. Intenta de nuevo."
 msgstr "The Shopify download was interrupted. Try again."

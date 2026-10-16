@@ -1158,3 +1158,150 @@ def test_el_detalle_junta_los_errores_de_las_dos_campanas(monkeypatch, base_temp
     r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 16))
     assert "cmp_1" in r["errores"]["diario"] and "cmp_2" in r["errores"]["diario"]
     assert set(r["errores"]) == {"diario"}
+
+
+# ---------- ronda 3 de guardian-gasto: la marca se vuelve a mirar antes de cada tope; nada grave se traga ----------
+# Reproducciones de guardian-gasto (scratchpad g148_head_r2/tests/test_g148_repro.py), cambiadas para exigir lo bueno.
+
+def test_r1_otro_reparto_que_toma_la_marca_corta_el_primero_antes_de_su_siguiente_tope(dos):
+    """La web sube SE a 200; entre su primer tope (Noruega baja) y el segundo (Suecia sube) pasa más que la ventana y el
+    worker, en OTRO proceso (su propio candado), toma la marca y escala NO a 400. La web vuelve a mirar la marca antes
+    de mandar su segundo tope, ve que ya no es suya y corta: la suma de los topes en Meta nunca pasa el total."""
+    import threading
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    dos["monkeypatch"].setattr(lz, "_LOCK", threading.RLock())   # otro proceso = otro candado: aquí, reentrante
+    real = lz._renovar_marca_reparto
+    llamadas = []
+
+    def renovar(cliente, experimento_id, token):
+        llamadas.append(token)
+        if len(llamadas) == 3:                     # la web, justo antes de mandar su segundo tope
+            ventana = lz._VENTANA_REPARTO_S
+            lz._VENTANA_REPARTO_S = -1             # su marca venció (Meta tardó más que la ventana)
+            try:
+                lz.cambiar_presupuesto_pais("acme", eid, "NO", 400.0)   # el worker (escalar) en su proceso
+            finally:
+                lz._VENTANA_REPARTO_S = ventana
+        return real(cliente, experimento_id, token)
+    dos["monkeypatch"].setattr(lz, "_renovar_marca_reparto", renovar)
+    with pytest.raises(lz.RepartoCortado, match="Se cortó"):
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)   # la web
+    assert meta.topes[c_no] + meta.topes[c_se] <= lz.centavos(4200.0, "SEK")
+    assert (c_se, 168000) not in _topes_mandados(meta)
+    p = _por_pais(ex, eid)
+    assert p["SE"]["presupuesto_dia"] == 100.0 and p["NO"]["presupuesto_dia"] == 400.0
+    assert "repartiendo" not in (ex.obtener("acme", eid)["extra"] or {})
+
+
+def test_r1_si_una_llamada_dura_mas_que_la_ventana_y_los_topes_pasan_el_total_se_pausa_todo(dos, monkeypatch):
+    """La reproducción exacta de guardian-gasto: el worker entra EN MEDIO del POST del segundo tope de la web (una
+    llamada más larga que la ventana, que no debería pasar). La web lo nota al volver a mirar la marca después del
+    envío, lee los topes en Meta (3 360 + 1 680 > 4 200) y pausa todas las campañas: nada gasta por encima del tope."""
+    import threading
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    avisos = []
+    monkeypatch.setattr(lz.notificaciones, "avisar", lambda c, tipo, a, b: avisos.append(tipo))
+    monkeypatch.setattr(lz.notificaciones, "avisar_admin", lambda tipo, a, b, cliente="": avisos.append(tipo))
+    dos["monkeypatch"].setattr(lz, "_LOCK", threading.RLock())
+    original = meta._llamar
+    hecho = []
+
+    def llamar(metodo, edge, payload=None, params=None, dry_run=False):
+        if metodo == "POST" and edge == c_se and (payload or {}).get("spend_cap") == 168000 and not hecho:
+            hecho.append(1)
+            ventana = lz._VENTANA_REPARTO_S
+            lz._VENTANA_REPARTO_S = -1
+            try:
+                lz.cambiar_presupuesto_pais("acme", eid, "NO", 400.0)
+            finally:
+                lz._VENTANA_REPARTO_S = ventana
+        return original(metodo, edge, payload, params, dry_run)
+    meta._llamar = llamar
+    _parchar(lz, meta, dos["monkeypatch"])
+    meta.llamadas.clear()
+    with pytest.raises(lz.RepartoCortado, match="se pausaron todas sus campañas"):
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    pausados = [kw["oid"] for t, kw in meta.llamadas if t == "estado" and kw["status"] == "PAUSED"]
+    assert c_no in pausados and c_se in pausados
+    assert ex.obtener("acme", eid)["estado"] == "pausado" and "tope" in avisos
+
+
+def test_r1_la_ventana_de_la_marca_es_mayor_que_el_peor_caso_entre_dos_renovaciones():
+    import lanzador as lz
+    # del plan al primer tope: 3 lecturas por cuenta (7 cuentas, 30 s cada una); entre topes: un POST (60 s) + su lectura
+    assert lz._VENTANA_REPARTO_S > 7 * 3 * 30 and lz._VENTANA_REPARTO_S > 60 + 30
+
+
+def _sin_pausa_en(dos, cid):
+    meta = dos["meta"]
+    original = meta._id
+
+    def no_pausa(tipo, **kw):
+        if tipo == "estado" and kw.get("oid") == cid:
+            raise RuntimeError("Meta no contestó")
+        return original(tipo, **kw)
+    meta._id = no_pausa
+    _parchar(dos["lz"], meta, dos["monkeypatch"])
+
+
+def test_r2_bajar_con_un_tope_distinto_que_no_se_pudo_pausar_llega_a_la_persona(dos, monkeypatch):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    avisos = []
+    monkeypatch.setattr(lz.notificaciones, "avisar", lambda c, tipo, a, b: avisos.append(("proyecto", tipo)))
+    monkeypatch.setattr(lz.notificaciones, "avisar_admin", lambda tipo, a, b, cliente="": avisos.append(("admin", tipo)))
+    meta.tope_distinto = {c_se}
+    _sin_pausa_en(dos, c_se)
+    with pytest.raises(lz.PresupuestoNoCoincide) as e:
+        lz.cambiar_presupuesto_pais("acme", eid, "NO", 250.0)
+    assert "NO se pudo pausar" in str(e.value) and "bajó" in str(e.value)
+    assert _por_pais(ex, eid)["NO"]["presupuesto_dia"] == 250.0      # bajar el diario sí se hizo
+    assert ("proyecto", "tope") in avisos and ("admin", "tope") in avisos
+    eventos = [m["mensaje"] for m in ex.eventos("acme", eid)]
+    assert not any("se dejó como estaba" in m for m in eventos)
+    assert any("solo cambiaron" in m and "HappyFlops Norway" in m for m in eventos)
+
+
+def test_r2b_bajar_que_si_movio_un_tope_dice_cuales(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    original = meta._llamar
+
+    def llamar(metodo, edge, payload=None, params=None, dry_run=False):
+        if metodo == "POST" and edge == c_se and "spend_cap" in (payload or {}):
+            raise RuntimeError("Meta Ads (c_se) respondió 400: algo")
+        return original(metodo, edge, payload, params, dry_run)
+    meta._llamar = llamar
+    _parchar(lz, meta, dos["monkeypatch"])
+    lz.cambiar_presupuesto_pais("acme", eid, "NO", 250.0)
+    eventos = [e["mensaje"] for e in ex.eventos("acme", eid)]
+    assert meta.topes[c_no] != 315000
+    assert not any("se dejó como estaba" in m for m in eventos)
+    assert any("solo cambiaron" in m and "HappyFlops Norway" in m for m in eventos)
+    assert _por_pais(ex, eid)["NO"]["presupuesto_dia"] == 250.0
+
+
+def test_subir_con_topes_movidos_y_el_diario_rechazado_lo_dice(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    meta.fallar_en = "presupuesto"
+    with pytest.raises(RuntimeError) as e:
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    assert "ya se habían movido" in str(e.value) and "HappyFlops Norway" in str(e.value)
+    assert _por_pais(ex, eid)["SE"]["presupuesto_dia"] == 100.0
+
+
+def test_un_reintento_que_ya_creo_cosas_no_dice_que_no_se_creo_nada(dos, monkeypatch):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid = _ventas(dos, monkeypatch)
+    meta.pixeles = {DEF: ["px_9"], SUECIA: ["px_9"]}
+    meta.fallar_en = "ad"
+    with pytest.raises(RuntimeError):
+        lz.lanzar("acme", eid)
+    meta.fallar_en = None
+    meta.pixeles[SUECIA] = []          # entre un intento y otro dejaron de compartirle el Pixel
+    with pytest.raises(ValueError) as e:
+        lz.lanzar("acme", eid)
+    assert "No se creó nada" not in str(e.value) and "sigue en pausa" in str(e.value)

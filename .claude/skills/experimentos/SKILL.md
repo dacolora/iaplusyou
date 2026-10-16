@@ -185,10 +185,19 @@ suma nunca pasa el tope; `_aplicar_reparto` manda primero los que bajan, despué
 suben (en cada paso la suma no pasa el total), cada uno leído de vuelta (`_confirmar_tope`, que dice «NO se pudo
 pausar» si la pausa falla; si pausó, los países de esa campaña quedan «pausado» y hay evento) y anotado en la bitácora
 aunque uno de después falle. Un reparto a la vez por experimento, también entre la web y el worker: marca
-`extra.repartiendo` (5 min, `_tomar_marca_reparto`), y el plan se arma con el experimento releído ya con la marca. Si no
-cabe o hay otro cambio en curso: subir se niega en palabras sin tocar nada; bajar sigue siempre (un fallo del reparto,
-una cuenta que salió, una lectura que falla) y los topes quedan como estaban (evento con el motivo). Una sola campaña:
-como antes.
+`extra.repartiendo` (`_tomar_marca_reparto`), que se renueva y se vuelve a mirar (con el candado de la base tomado antes
+de leer, `_renovar_marca_reparto`) al empezar el reparto y ANTES y DESPUÉS de cada tope; si ya no es la propia, se
+corta sin mandar más (`RepartoCortado`). La ventana (`_VENTANA_REPARTO_S`, 900 s) es mayor que el peor caso entre dos
+renovaciones (las lecturas del plan con 7 cuentas, o un POST de 60 s más su lectura): otro proceso no puede entrar en
+medio de una llamada; si aun así se nota después de un envío, `_topes_pasan_el_total` lee los topes en Meta y, si suman
+más que el tope, pausa todas las campañas y avisa (ronda 3 de guardian-gasto). El plan se arma con el experimento
+releído ya con la marca. Si no cabe o hay otro cambio en curso: subir se niega en palabras sin tocar nada; bajar sigue
+siempre (un fallo del reparto, una cuenta que salió, una lectura que falla) y el evento dice «se dejó como estaba» solo
+si no se movió ningún tope (si alguno ya cambió, dice cuáles). Un tope que Meta guardó distinto y NO se pudo pausar
+llega a la persona también al bajar (la excepción, con el diario ya bajado) y avisa al proyecto y a los admins (aviso
+`tope`). Si Meta rechaza el diario después de mover los topes, el mensaje nombra los topes movidos. El error del Pixel o
+la app por cuenta dice «No se creó nada en Meta» solo si de verdad no había nada; en un reintento, que lo creado antes
+sigue en pausa. Una sola campaña: como antes.
 **Pixel y app por cuenta:** antes de crear nada, si el experimento usa otra cuenta además de la de la conexión,
 `_comprobar_activos_por_cuenta` mira que el Pixel (compras) salga en `act_…/adspixels` y la app (instalaciones) en
 `act_…/advertisable_applications` de CADA cuenta; si no, no se lanza nada y el error dice la cuenta y qué compartir en
