@@ -94,9 +94,14 @@ camino nuevo que deje una cuenta verificada usa esa función, no `usuarios.actua
 Pruebas: `tests/test_swap_video_precio.py` (cabecera falsa, lista blanca, topes, 403). El precio de los videos de referencia de Wan 3.0 en Crear (`dashboard._duracion_video`, PND-319, 2026-10-13) usa la misma medida: ya no confía en la cabecera (skill `crear`).
 
 **La clave otra vez para mover plata (PND-347, 2026-10-15).** `cuentas.clave_reciente(session)` y
-`cuentas.confirmar_clave(session, clave, ip)`: antes de una recarga manual, un ajuste o un cambio de un control de
-plata en /admin/cobros se pide la clave de quien tiene la sesión; vale `REAUTH_S` (10 min) en la sesión firmada
-(`clave_confirmada_en`; un login nuevo o un cambio de clave la borran). Un fallo cuenta contra los MISMOS topes del
-login (`login:u:<usuario>`, `login:ip:<ip>`): ese formulario no sirve para adivinar la clave; con el tope lleno ni se
-mira. Una acción de plata nueva del admin que cree saldo o mueva un control usa `rutas._clave_para_mover_plata` y
-avisa a todos los admins. Pruebas: `tests/test_cobros_controles_plata.py`.
+`cuentas.confirmar_clave(session, clave, ip)`: antes de una recarga manual, un ajuste, «Activar a mano» un plan, el
+tope de lo sumado a mano, la tasa de referencia de la TRM o «Aceptar la tasa de hoy» en /admin/cobros se pide la clave
+de quien tiene la sesión; vale `REAUTH_S` (10 min) en la sesión firmada (`clave_confirmada_en`; un login nuevo la
+borra; cambiar la clave cierra las DEMÁS sesiones y la que la cambió la conserva). **Todo formulario que pide la clave
+de quien ya tiene sesión pasa por `cuentas.verificar_con_tope`** (también Configuración › Cuenta: cambiar el correo o
+la clave, `dashboard._clave_actual_ok`): un fallo cuenta contra los MISMOS topes del login (`login:u:<usuario>`,
+`login:ip:<ip>`) y con el tope lleno ni se mira; antes, una sesión robada adivinaba la clave ahí sin límite y con ella
+pasaba la confirmación (auditoría de seguridad de la revisión, 2026-10-15). Por lo mismo, **un admin no se desbloquea a
+sí mismo** en `/admin/cuentas/desbloquear` (ni su usuario ni su IP). Una acción nueva del admin que cree saldo usa
+`rutas._clave_para_mover_plata` y avisa a todos los admins. Lo que todavía no pide clave está en la skill `cobros`
+(«Los controles de plata del admin»). Pruebas: `tests/test_cobros_controles_plata.py`, `tests/test_rutas_cuentas.py`.

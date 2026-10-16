@@ -58,7 +58,10 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    0,0464). Con tan pocas muestras la regla es el MÁXIMO real × 1,2,
 #    redondeado hacia arriba a 2 decimales (no el promedio: el precio a la vista
 #    no puede quedarse corto) → 0,0702 × 1,2 = 0,084 → US$ 0,09. Recalibrar con
-#    la misma regla cuando haya más filas.
+#    la misma regla cuando haya más filas. OJO (guardian-gasto, 2026-10-15): con
+#    la vuelta de corrección (2 de 4 casos en la prueba del 2026-10-10) lo real
+#    ronda 0,11–0,12 y queda POR ENCIMA de 0,09: el precio a la vista puede
+#    quedarse corto. Pendiente de que Daniel decida (0,13 cubre las dos llamadas).
 #  - fal.ai: ElevenLabs multilingual-v2 ~US$ 0,05 por pieza de 15-20 s de
 #    voz (por carácter); Stable Audio ~US$ 0,02 por pista (cacheada por
 #    estilo+duración, así que suele salir 0); whisper ~US$ 0,01 por clip.

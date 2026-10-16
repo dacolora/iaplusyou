@@ -781,7 +781,10 @@ def test_pnd076_admin_desbloquea_con_bitacora_y_guardias(app, monkeypatch):
     filas = bitacora.leer()
     assert len(filas) == 1 and filas[0]['etapa'] == 'desbloqueo_login'
     assert 'ana' in filas[0]['detalle'] and 'admin' in filas[0]['detalle']
+    # Desde su propia IP (la del bloqueo) no se desbloquea a sí mismo (auditoría de PND-347); desde otra, sí.
     admin.post(post, data={'clave': 'limite:login:ip:127.0.0.1'})
+    assert len(cuentas.bloqueos_login()) == 1
+    admin.post(post, data={'clave': 'limite:login:ip:127.0.0.1'}, environ_base={'REMOTE_ADDR': '10.1.1.1'})
     assert cuentas.bloqueos_login() == []
     monkeypatch.setattr(cuentas.time, 'time', lambda: 2000)
     assert cuentas.bloqueos_login() == []

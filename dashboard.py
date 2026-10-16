@@ -1599,6 +1599,12 @@ def admin_desbloquear_login():
     clave = request.form.get("clave") or ""
     if not cuentas._limite_login(clave):
         abort(400)
+    # Auditoría de seguridad de PND-347 (2026-10-15): un admin no se desbloquea a sí mismo (ni su usuario ni su IP);
+    # si no, con una sesión robada se adivinaba la clave sin fin: 10 intentos, desbloquear, otros 10…
+    if clave.lower() in (f"limite:login:u:{str(session.get('usuario') or '').lower()[:200]}",
+                         f"limite:login:ip:{_ip_cliente() or 'desconocida'}".lower()):
+        flash(gettext("Tu propio acceso lo desbloquea otro administrador, o espera unos minutos."), "error")
+        return redirect(url_for("admin_bloqueos_login"))
     ok = cuentas.desbloquear_login(clave, session["usuario"])
     flash(gettext("Acceso desbloqueado.") if ok else gettext("Ese acceso ya no está bloqueado."), "ok")
     return redirect(url_for("admin_bloqueos_login"))
@@ -1850,6 +1856,18 @@ def restablecer(token):
     return redirect(url_for("login"))
 
 
+def _clave_actual_ok(usuario, clave):
+    """La contraseña actual de quien tiene la sesión, con los topes de intentos del login (`cuentas.verificar_con_tope`;
+    auditoría de seguridad de PND-347, 2026-10-15: sin tope, una sesión robada adivinaba la clave aquí y con ella
+    pasaba la confirmación de las acciones de plata). Si no sirve, deja el aviso y devuelve False."""
+    resultado = cuentas.verificar_con_tope(usuario, clave, ip=_ip_cliente())
+    if resultado == "ok":
+        return True
+    flash(gettext("Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.") if resultado == "bloqueado"
+          else gettext("La contraseña actual no es correcta."), "error")
+    return False
+
+
 @app.route("/cuenta/correo", methods=["POST"])
 def cuenta_correo():
     """Pone o cambia el correo de la cuenta (pide la contraseña actual). El
@@ -1859,8 +1877,7 @@ def cuenta_correo():
         flash(gettext("Inicia sesión para cambiar tu correo."), "error")
         return redirect(url_for("login"))
     usuario = sesion["usuario"]
-    if not usuarios.verificar(usuario, request.form.get("password") or ""):
-        flash(gettext("La contraseña actual no es correcta."), "error")
+    if not _clave_actual_ok(usuario, request.form.get("password") or ""):
         return _volver_cuenta()
     correo = usuarios.validar_correo(request.form.get("correo") or "")
     if not correo:
@@ -1902,8 +1919,7 @@ def cuenta_password():
         flash(gettext("Inicia sesión para cambiar tu contraseña."), "error")
         return redirect(url_for("login"))
     usuario = sesion["usuario"]
-    if not usuarios.verificar(usuario, request.form.get("password_actual") or ""):
-        flash(gettext("La contraseña actual no es correcta."), "error")
+    if not _clave_actual_ok(usuario, request.form.get("password_actual") or ""):
         return _volver_cuenta()
     nueva = request.form.get("password") or ""
     error = usuarios.validar_password(nueva)

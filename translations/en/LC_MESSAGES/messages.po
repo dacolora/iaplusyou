@@ -1973,12 +1973,16 @@ msgid "%(usuario)s aceptó la TRM de hoy (%(valor)s COP por dólar): es la refer
 msgstr "%(usuario)s accepted today's TRM (%(valor)s COP per dollar): it is the new reference for the band. If it wasn't you or another admin, change the password."
 
 #, python-format
-msgid "%(usuario)s anotó un ajuste de %(monto)s en %(proyecto)s. Nota: %(nota)s. Hoy van %(hoy)s sumados a mano, con un tope diario de %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
-msgstr "%(usuario)s recorded an adjustment of %(monto)s in %(proyecto)s. Note: %(nota)s. Today %(hoy)s has been added by hand, with a daily cap of %(tope)s. If it wasn't you or another admin, change the password."
+msgid "%(usuario)s activó a mano un plan de %(monto)s en %(proyecto)s (sin cobro de Wompi). Nota: %(nota)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s activated a %(monto)s plan by hand in %(proyecto)s (no Wompi charge). Note: %(nota)s. If it wasn't you or another admin, change the password."
 
 #, python-format
-msgid "%(usuario)s anotó una recarga manual de %(monto)s en %(proyecto)s. Nota: %(nota)s. Hoy van %(hoy)s sumados a mano, con un tope diario de %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
-msgstr "%(usuario)s recorded a manual top-up of %(monto)s in %(proyecto)s. Note: %(nota)s. Today %(hoy)s has been added by hand, with a daily cap of %(tope)s. If it wasn't you or another admin, change the password."
+msgid "%(usuario)s anotó un ajuste de %(monto)s en %(proyecto)s. Nota: %(nota)s. En las últimas 24 horas van %(hoy)s sumados a mano, con un tope de %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s recorded an adjustment of %(monto)s in %(proyecto)s. Note: %(nota)s. In the last 24 hours %(hoy)s has been added by hand, with a cap of %(tope)s. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s anotó una recarga manual de %(monto)s en %(proyecto)s. Nota: %(nota)s. En las últimas 24 horas van %(hoy)s sumados a mano, con un tope de %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s recorded a manual top-up of %(monto)s in %(proyecto)s. Note: %(nota)s. In the last 24 hours %(hoy)s has been added by hand, with a cap of %(tope)s. If it wasn't you or another admin, change the password."
 
 #, python-format
 msgid "%(usuario)s fijó la tasa de referencia de la TRM en %(valor)s COP por dólar. Si no fuiste tú ni otro admin, cambia la clave."
@@ -4862,8 +4866,8 @@ msgid "Con esto se publican los anuncios (cuenta publicitaria) y el contenido or
 msgstr "This is what publishes the ads (ad account) and the organic content (Page and its Instagram). You can change it later with “Disconnect”."
 
 #, python-format
-msgid "Con esto, lo sumado a mano hoy llegaría a %(total)s y el tope diario es %(tope)s. Súbelo en /admin/cobros (te pedimos la clave) o espera a mañana."
-msgstr "With this, what was added by hand today would reach %(total)s and the daily cap is %(tope)s. Raise it in /admin/cobros (we ask for your password) or wait until tomorrow."
+msgid "Con esto, lo sumado a mano en las últimas 24 horas llegaría a %(total)s y el tope es %(tope)s. Súbelo en /admin/cobros (te pedimos la clave) o espera unas horas."
+msgstr "With this, what was added by hand in the last 24 hours would reach %(total)s and the cap is %(tope)s. Raise it in /admin/cobros (we ask for your password) or wait a few hours."
 
 msgid "Con imagen"
 msgstr "With an image"
@@ -6260,8 +6264,8 @@ msgstr "Days of its daily budget it must have spent"
 msgid "Dólares (hasta %(max)s)"
 msgstr "Dollars (up to %(max)s)"
 
-msgid "Dólares por día"
-msgstr "Dollars per day"
+msgid "Dólares cada 24 horas"
+msgstr "Dollars per 24 hours"
 
 msgid "Dónde"
 msgstr "Where"
@@ -19619,6 +19623,9 @@ msgstr "Your plan ended"
 msgid "Tu plan terminó. Tu saldo propio sigue disponible y tus generaciones se cobran a la carta. Puedes volver a suscribirte en Configuración › Plan."
 msgstr "Your plan ended. Your own balance is still available and your generations are charged pay-as-you-go. You can subscribe again in Settings › Plan."
 
+msgid "Tu propio acceso lo desbloquea otro administrador, o espera unos minutos."
+msgstr "Another administrator has to unlock your own access, or wait a few minutes."
+
 #, python-format
 msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar tus piezas como anuncios en «Probar anuncios» y publicar contenido."
 msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · Page %(pagina)s. You can now test your pieces as ads in “Test ads” and publish content."
@@ -20746,6 +20753,12 @@ msgstr "Wompi opens its own window for the card details: the number never goes t
 msgid "Wompi anuló el pago de la recarga %(ref)s de %(cliente)s (%(monto)s) antes de que lo acreditáramos: su saldo no cambió. Revisa en el panel de Wompi si hay otra transacción aprobada con esa referencia (otra pestaña); la periódica la busca durante 26 horas y te avisa si la encuentra."
 msgstr "Wompi voided the payment for top-up %(ref)s for %(cliente)s (%(monto)s) before we credited it: its balance did not change. Check in the Wompi dashboard whether there is another approved transaction with that reference (another tab); the periodic check looks for it for 26 hours and lets you know if it finds one."
 
+msgid "Wompi anuló esa transacción antes de que la aplicáramos: el pago quedó anulado, no se acreditó nada y la renovación automática quedó detenida."
+msgstr "Wompi voided that transaction before we applied it: the payment is voided, nothing was credited and automatic renewal is stopped."
+
+msgid "Wompi anuló ese pago: lo que quedaba de su bolsa venció y la renovación automática quedó detenida."
+msgstr "Wompi voided that payment: what was left of its plan balance expired and automatic renewal is stopped."
+
 msgid "Wompi anuló este pago antes de que lo sumáramos: tu saldo no cambió."
 msgstr "Wompi voided this payment before we added it: your balance did not change."
 
@@ -20881,6 +20894,9 @@ msgstr "Wompi has not confirmed the payment yet; we will let you know when it ar
 
 msgid "Wompi todavía no resuelve esa transacción: guardamos su id y se aplica cuando responda."
 msgstr "Wompi has not resolved that transaction yet: we saved its id and it is applied when Wompi answers."
+
+msgid "Wompi ya había anulado ese pago: no se acreditó nada."
+msgstr "Wompi had already voided that payment: nothing was credited."
 
 msgid "WooCommerce"
 msgstr "WooCommerce"
@@ -22824,8 +22840,8 @@ msgid "lo grave primero"
 msgstr "most serious first"
 
 #, python-format
-msgid "lo que se puede sumar a mano en un día, entre recargas manuales y ajustes positivos de todos los proyectos. Hoy van %(hoy)s de %(tope)s."
-msgstr "what can be added by hand in a day, counting manual top-ups and positive adjustments across all projects. Today: %(hoy)s of %(tope)s."
+msgid "lo que se puede sumar a mano en 24 horas, entre recargas manuales y ajustes positivos de todos los proyectos. En las últimas 24 horas van %(hoy)s de %(tope)s."
+msgstr "what can be added by hand in 24 hours, counting manual top-ups and positive adjustments across all projects. In the last 24 hours: %(hoy)s of %(tope)s."
 
 #, python-format
 msgid "lo que se vende cada mes; el margen de miembro reemplaza al margen a la carta (%(margen)s) mientras el plan está pagado"

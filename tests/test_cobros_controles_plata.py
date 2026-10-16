@@ -128,7 +128,7 @@ def test_cada_recarga_y_ajuste_avisa_a_todos_los_admins_con_quien_lo_hizo(http, 
     assert len(avisos) == 2 and all(a[1] == "acme" for a in avisos)
     assert "admin" in avisos[0][3] and "recarga manual" in avisos[0][3] and "transferencia de abril" in avisos[0][3]
     assert "ajuste" in avisos[1][3] and "corrección" in avisos[1][3]
-    assert "Hoy van US$ 25,00" in avisos[1][3] and "US$ 2.000,00" in avisos[1][3]
+    assert "En las últimas 24 horas van US$ 25,00" in avisos[1][3] and "US$ 2.000,00" in avisos[1][3]
     # Sin la clave no se anota nada y no hay aviso de saldo movido.
     _recargar(http, "-3", tipo="ajuste", nota="x", cliente="otro")
     with http.session_transaction() as s:
@@ -150,9 +150,9 @@ def test_lo_sumado_a_mano_en_un_dia_tiene_tope(entorno):
     from cobros import libro, recargas
     assert recargas.tope_manual() == (0, recargas.TOPE_MANUAL_DIA_DEFECTO * 1000)
     recargas.manual("acme", 1500, "admin", "transferencia")
-    with pytest.raises(ValueError, match="tope diario"):
+    with pytest.raises(ValueError, match="el tope"):
         recargas.manual("otro", 600, "admin", "transferencia")         # todos los proyectos juntos
-    with pytest.raises(ValueError, match="tope diario"):
+    with pytest.raises(ValueError, match="el tope"):
         recargas.manual("acme", 600, "admin", "regalo", tipo="ajuste")   # un ajuste positivo también suma
     assert libro.saldo("otro") == 0 and libro.saldo("acme") == 1_500_000
     recargas.manual("acme", -600, "admin", "devolución", tipo="ajuste")  # restar no tiene tope
@@ -179,12 +179,19 @@ def db_conectar():
     return db.conectar()
 
 
-def test_lo_de_ayer_no_cuenta(entorno):
+def test_cuentan_las_ultimas_24_horas_corridas(entorno):
+    """Revisión de seguridad: con un tope por día de calendario, a las 23:59 y a las 00:01 pasaban dos topes."""
     from cobros import recargas
     recargas.manual("acme", 2000, "admin", "transferencia")
-    ayer = (dt.datetime.now() - dt.timedelta(days=1)).isoformat(timespec="seconds")
+    hace_23h = (dt.datetime.now() - dt.timedelta(hours=23)).isoformat(timespec="seconds")
     with entorno.conectar() as con:
-        con.execute(entorno.movimiento_saldo.update().values(creado_en=ayer))
+        con.execute(entorno.movimiento_saldo.update().values(creado_en=hace_23h))
+    assert recargas.tope_manual()[0] == 2_000_000                      # ayer a esta hora +1: sigue contando
+    with pytest.raises(ValueError, match="24 horas"):
+        recargas.manual("acme", 1, "admin", "uno más")
+    hace_25h = (dt.datetime.now() - dt.timedelta(hours=25)).isoformat(timespec="seconds")
+    with entorno.conectar() as con:
+        con.execute(entorno.movimiento_saldo.update().values(creado_en=hace_25h))
     assert recargas.tope_manual()[0] == 0
     recargas.manual("acme", 2000, "admin", "otra transferencia")
 
@@ -203,7 +210,7 @@ def test_el_tope_se_cambia_con_la_clave_y_avisa(http, entorno):
     http.post("/admin/cobros/tope-manual", data={"tope": "0"}, headers=MISMO)      # 0: nada a mano
     assert recargas.tope_manual()[1] == 0
     _recargar(http, "1")
-    assert _saldo() == 0 and any("tope diario" in m for m in _flashes(http))
+    assert _saldo() == 0 and any("el tope es US$ 0,00" in m for m in _flashes(http))
 
 
 def test_quien_no_es_admin_no_cambia_ningun_control(entorno):
@@ -223,11 +230,11 @@ def test_quien_no_es_admin_no_cambia_ningun_control(entorno):
 def test_la_pagina_muestra_los_controles_y_no_pide_la_clave_si_esta_vigente(http, entorno):
     html = http.get("/admin/cobros").get_data(as_text=True)
     assert 'id="cobros-tope-manual"' in html and 'id="cobros-trm-ancla"' in html
-    assert "Hoy van US$ 0,00 de US$ 2.000,00" in html
+    assert "En las últimas 24 horas van US$ 0,00 de US$ 2.000,00" in html
     assert html.count('name="clave"') >= 3                                         # tope, ancla y la recarga
     _recargar(http, "1", clave=PASSWORD_PRUEBA)
     html = http.get("/admin/cobros").get_data(as_text=True)
-    assert 'name="clave"' not in html and "Hoy van US$ 1,00 de US$ 2.000,00" in html
+    assert 'name="clave"' not in html and "En las últimas 24 horas van US$ 1,00 de US$ 2.000,00" in html
 
 
 # ---------------------------------------------------------------------- PND-348: el ancla de la TRM ---
@@ -302,3 +309,51 @@ def test_las_rutas_de_la_trm_piden_la_clave_y_avisan(http, entorno, trm):  # noq
     assert trm.rechazada() is not None and trm.ancla()["valor"] == 3300.0
     http.post("/admin/cobros/trm/aceptar", data={"valor": "3800.0", "clave": PASSWORD_PRUEBA}, headers=MISMO)
     assert trm.rechazada() is None and trm.ancla()["valor"] == 3800.0
+
+
+# ------------------------------------------------- revisión de seguridad y de plata (2026-10-15) ---
+
+def test_activar_un_plan_a_mano_pide_la_clave_y_avisa(http, entorno):
+    """Activar a mano acredita la bolsa del plan sin cobro de Wompi: como una recarga manual."""
+    from cobros import libro, planes
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    pid = planes.crear_plan("Pro", 1000, 1.25, 25, usuario="admin")
+    ruta = "/admin/cobros/acme/plan/activar"
+    http.post(ruta, data={"plan_id": pid, "ciclo": "mensual", "nota": "transferencia"}, headers=MISMO)
+    assert planes.suscripcion("acme") is None and _saldo() == 0
+    assert any("escribe tu clave otra vez" in m for m in _flashes(http))
+    http.post(ruta, data={"plan_id": pid, "ciclo": "mensual", "nota": "transferencia", "clave": PASSWORD_PRUEBA},
+              headers=MISMO)
+    assert planes.suscripcion("acme") is not None and _saldo() == 1_000_000
+    (aviso,) = [a for a in entorno.admins if a[0] == "saldo_manual"]
+    assert aviso[1] == "acme" and "activó a mano un plan de US$ 1.000" in aviso[3] and "transferencia" in aviso[3]
+
+
+def test_cambiar_la_clave_o_el_correo_cuenta_contra_el_tope_del_login(http, entorno, monkeypatch):
+    """Sin tope, una sesión robada adivinaba la clave en Configuración › Cuenta y con ella pasaba la confirmación."""
+    import cuentas
+    import usuarios
+    for _ in range(cuentas.LOGIN_MAX_POR_USUARIO):
+        http.post("/cuenta/password", data={"password_actual": "mala", "password": "otra-clave-9", "confirmacion":
+                                            "otra-clave-9"}, headers=MISMO)
+    assert _intentos_login(entorno) == cuentas.LOGIN_MAX_POR_USUARIO
+    _flashes(http)
+    llamadas = []
+    original = usuarios.verificar
+    monkeypatch.setattr(usuarios, "verificar", lambda u, p: llamadas.append(u) or original(u, p))
+    http.post("/cuenta/correo", data={"password": PASSWORD_PRUEBA, "correo": "nuevo@prueba.local"}, headers=MISMO)
+    assert llamadas == [] and any("Demasiados intentos fallidos" in m for m in _flashes(http))
+    assert usuarios.obtener("admin")["correo"] == "admin@prueba.local"
+
+
+def test_fijar_el_ancla_invalida_la_tasa_guardada_fuera_de_la_banda(trm):  # noqa: F811
+    """Guardian-gasto: el admin fija 4 200 y la guardada es 3 218,75 (−23 %): ya no sirve ni de caché ni de respaldo."""
+    import requests as requests_real
+    assert trm.actual() == 3218.75
+    trm.fijar_ancla("4200", "admin")
+    trm.respuesta["r"] = requests_real.ConnectionError("caído")
+    with pytest.raises(trm.SinTasa):                      # dentro de las 6 h de caché: no devuelve la vieja
+        trm.actual()
+    trm.respuesta["r"] = _Respuesta(200, _fila("4180.00"))
+    assert trm.actual() == 4180.0
+

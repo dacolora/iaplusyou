@@ -251,7 +251,8 @@ def test_activar_a_mano_abre_el_periodo_y_acredita(http, pro):
     _cobrar()
     c = http.como("admin")
     r = c.post("/admin/cobros/acme/plan/activar", data={"plan_id": str(pro), "ciclo": "mensual",
-                                                       "nota": "transferencia 123"}, headers=MISMO)
+                                                       "nota": "transferencia 123", "clave": PASSWORD_PRUEBA},
+               headers=MISMO)
     assert r.status_code == 302 and "#suscripcion-acme" in r.headers["Location"]
     (sus,) = _filas("suscripcion")
     assert (sus.estado, sus.renovar, sus.plan_id) == ("activa", False, pro)
@@ -281,7 +282,8 @@ def test_activar_a_mano_en_un_proyecto_que_no_cobra_avisa_y_no_escribe(http, pro
 def test_activar_a_mano_invalido_avisa(http, pro, datos, frase):
     _cobrar()
     c = http.como("admin")
-    c.post("/admin/cobros/acme/plan/activar", data={k: v.format(pro=pro) for k, v in datos.items()}, headers=MISMO)
+    c.post("/admin/cobros/acme/plan/activar", data={**{k: v.format(pro=pro) for k, v in datos.items()},
+                                                   "clave": PASSWORD_PRUEBA}, headers=MISMO)
     assert _filas("suscripcion") == []
     assert any(frase in m for m in _flashes(c))
 

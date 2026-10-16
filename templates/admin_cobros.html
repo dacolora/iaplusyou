@@ -173,10 +173,10 @@
   {# PND-347 y PND-348: los dos controles de plata piden la clave (vale 10 minutos) y avisan a todos los admins. #}
   <div class="admin-cabecera" id="cobros-tope-manual">
     <h2>{{ _('Tope diario de recargas manuales') }}</h2>
-    <span class="vacio">{{ _('lo que se puede sumar a mano en un día, entre recargas manuales y ajustes positivos de todos los proyectos. Hoy van %(hoy)s de %(tope)s.', hoy=tope_manual_hoy_texto, tope=tope_manual_texto) }}</span>
+    <span class="vacio">{{ _('lo que se puede sumar a mano en 24 horas, entre recargas manuales y ajustes positivos de todos los proyectos. En las últimas 24 horas van %(hoy)s de %(tope)s.', hoy=tope_manual_hoy_texto, tope=tope_manual_texto) }}</span>
   </div>
   <form method="post" action="{{ url_for('cobros.admin_tope_manual') }}" class="cobros-admin-linea">
-    <label>{{ _('Dólares por día') }}
+    <label>{{ _('Dólares cada 24 horas') }}
       <input type="text" inputmode="decimal" name="tope" value="{{ tope_manual_campo }}" required></label>
     {% if not clave_reciente %}<label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
     <button type="submit" class="btn-generar">{{ _('Guardar tope diario') }}</button>
@@ -453,6 +453,8 @@
                   </select></label>
                 <label>{{ _('Nota del pago (solo la ven los admins)') }}
                   <input type="text" name="nota" maxlength="300"></label>
+                {% if not clave_reciente %}<label>{{ _('Tu clave (la pedimos otra vez para mover saldo a mano; vale 10 minutos)') }}
+                  <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
                 <button type="submit" class="btn-generar"{% if not planes %} disabled{% endif %}>{{ _('Activar a mano') }}</button>
               </form>
               {% endif %}

@@ -115,6 +115,17 @@ def usuarios_tmp(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def bitacora_tmp(tmp_path, monkeypatch):
+    """La bitácora (`registro_generaciones.csv`) temporal por test: ningún test escribe en la del checkout. Hasta el
+    2026-10-15 los avisos que se mandaban de verdad en las pruebas (saldo bajo, los avisos a los admins de
+    /admin/cobros) se iban sumando a la del repo, y «Avisos de plata» de /admin/cobros los leía en las pruebas de
+    después (test_i18n_app_entera veía «Saldo movido a mano» en español). Un test que quiera su propia bitácora la
+    repunta con monkeypatch, como siempre."""
+    import bitacora
+    monkeypatch.setattr(bitacora, "LOG_FILE", str(tmp_path / "registro_generaciones.csv"))
+
+
+@pytest.fixture(autouse=True)
 def _sin_cache_meta():
     """Los cachés por proceso de meta_conexion (estado y Pixel) no deben
     filtrarse entre tests: un `error` cacheado para "acme" en una suite

@@ -300,6 +300,11 @@ def actual():
     """La TRM (COP por USD) para cobrar ahora. Lanza `SinTasa`."""
     guardada = _leer_guardada()
     ahora = _ahora()
+    # PND-348 (guardian-gasto): una guardada que quedó fuera de la banda del ancla (el admin fijó otra referencia)
+    # no sirve ni de caché ni de respaldo: se vuelve a leer y, si datos.gov.co falla, no se cobra.
+    a = ancla()
+    if guardada and a and abs(guardada["valor"] / a["valor"] - 1) > BANDA:
+        guardada = None
     if guardada and 0 <= ahora - guardada["leida_en"] < CACHE_S and _vigente(guardada["vigencia_hasta"]):
         return guardada["valor"]
     reciente = bool(guardada and 0 <= ahora - guardada["leida_en"] <= RESPALDO_S)
@@ -320,7 +325,7 @@ def actual():
             return guardada["valor"]
         log.warning("TRM: datos.gov.co falló (%s) y no hay una guardada de ≤ 3 días", e)
         raise _sin_tasa(str(e)) from None
-    referencia = _referencia(guardada)
+    referencia = a["valor"] if a else _referencia(guardada)
     if referencia and abs(valor / referencia - 1) > BANDA:
         # Ni la nueva ni la vieja: una de las dos está mal por más de 8 % y eso lo decide una persona (N3: nunca se
         # acepta sola). PND-348: frente a la referencia que fijó una persona, no frente a la última lectura buena.

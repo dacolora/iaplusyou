@@ -1547,7 +1547,7 @@ def _milesimas_manual(usd):
 
 
 # PND-347 (auditoría de seguridad de pagos 2026-10-12, decisión 2026-10-15): la cuenta de admin no tiene segundo factor
-# y con una sesión robada se creaba saldo a mano sin límite. Lo que se SUMA a mano en un día (recargas manuales y
+# y con una sesión robada se creaba saldo a mano sin límite. Lo que se SUMA a mano en 24 horas (recargas manuales y
 # ajustes positivos, todos los proyectos juntos) tiene un tope que el admin cambia en /admin/cobros pidiendo su clave
 # (`cuentas.confirmar_clave`). Los ajustes negativos y el saldo de bienvenida no cuentan.
 CLAVE_TOPE_MANUAL = "cobros:tope_manual_dia"   # kv, dólares (único escritor: este módulo)
@@ -1566,9 +1566,10 @@ def _tope_manual_milesimas(con):
 
 
 def _manual_de_hoy(con):
-    """Milésimas sumadas a mano desde las 00:00 de hoy (hora del servidor, la de `db.ahora`)."""
+    """Milésimas sumadas a mano en las últimas 24 horas corridas (no desde las 00:00: a las 23:59 y a las 00:01 no
+    pasan dos topes seguidos; auditoría de seguridad de la revisión, 2026-10-15)."""
     m = db.movimiento_saldo
-    hoy = datetime.now().strftime("%Y-%m-%dT00:00:00")
+    hoy = (datetime.now() - timedelta(hours=24)).isoformat(timespec="seconds")
     return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(m.c.milesimas), 0)).where(
         m.c.creado_en >= hoy, m.c.milesimas > 0,
         sa.or_(sa.and_(m.c.tipo == "recarga", m.c.concepto == "recarga_manual"),
@@ -1610,8 +1611,8 @@ def _dentro_del_tope(con, milesimas):
     libro._candado(con)
     hoy, tope = _manual_de_hoy(con), _tope_manual_milesimas(con)
     if hoy + milesimas > tope:
-        raise ValueError(gettext("Con esto, lo sumado a mano hoy llegaría a %(total)s y el tope diario es %(tope)s. "
-                                 "Súbelo en /admin/cobros (te pedimos la clave) o espera a mañana.",
+        raise ValueError(gettext("Con esto, lo sumado a mano en las últimas 24 horas llegaría a %(total)s y el tope "
+                                 "es %(tope)s. Súbelo en /admin/cobros (te pedimos la clave) o espera unas horas.",
                                  total=_monto(hoy + milesimas), tope=_monto(tope)))
 
 
