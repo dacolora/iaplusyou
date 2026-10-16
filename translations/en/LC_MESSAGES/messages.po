@@ -21629,6 +21629,9 @@ msgstr "created in Sprints"
 msgid "creativos al mes, si los necesitas"
 msgstr "ad creatives a month, if you need them"
 
+msgid "creativos de los anuncios"
+msgstr "ad creatives"
+
 msgid "cta"
 msgstr "CTA"
 
@@ -23240,6 +23243,9 @@ msgstr "product %(id)s: doesn't exist."
 msgid "productos"
 msgstr "products"
 
+msgid "productos vendidos"
+msgstr "products sold"
+
 msgid "productos:"
 msgstr "products:"
 
@@ -23929,6 +23935,9 @@ msgstr "cap"
 msgid "tope alcanzado (%(gasto)s de %(tope)s %(moneda)s); %(motivo)s"
 msgstr "cap reached (%(gasto)s of %(tope)s %(moneda)s); %(motivo)s"
 
+msgid "totales de la tienda"
+msgstr "store totals"
+
 msgid "traducción de firmas copycoders"
 msgstr "copycoders “why it works” translation"
 
@@ -24011,6 +24020,9 @@ msgstr "expired"
 msgid "vendió %(valor)s de %(gasto)s gastados"
 msgstr "sold %(valor)s on %(gasto)s spent"
 
+msgid "ventas atribuidas (Pixel)"
+msgstr "attributed sales (Pixel)"
+
 #, python-format
 msgid "ventas por tienda: %(n)s pedido(s)"
 msgstr "sales by store: %(n)s order(s)"
@@ -24058,6 +24070,9 @@ msgstr "videos"
 
 msgid "videos, imágenes y finales listos"
 msgstr "videos, images and final cuts ready"
+
+msgid "visitantes nuevos (NVP)"
+msgstr "new visitors (NVP)"
 
 msgid "voz"
 msgstr "voice"

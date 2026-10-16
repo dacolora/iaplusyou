@@ -787,3 +787,15 @@ def test_alerta_de_mer_no_compara_contra_un_periodo_fuera_de_la_copia(app):  # n
         ctx = panel.contexto("acme", 7)
     assert ctx["resultados"]["datos"]["comparar"] is False
     assert not any("MER de la tienda" in a["texto"] for a in ctx["alertas"])
+
+
+def test_el_aviso_de_consultas_rechazadas_nombra_las_partes_en_palabras(app):  # noqa: F811
+    """PND-219: «Triple Whale no aceptó la consulta de: pixel, tienda» pintaba las claves internas."""
+    _conectar()
+    _sembrar()
+    triple_whale_tiendas.actualizar_extra_tienda("acme", _tienda(), {"ultimo_resumen": {
+        "fallos": {"tienda": "Unknown identifier", "pixel": "x", "visitantes": "web_analytics_table"}}})
+    html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
+    assert ("Triple Whale no aceptó la consulta de: ventas atribuidas (Pixel), totales de la tienda, "
+            "visitantes nuevos (NVP).") in html
+    assert "consulta de: pixel" not in html and "consulta de: tienda" not in html

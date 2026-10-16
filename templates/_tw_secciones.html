@@ -20,7 +20,7 @@
 {% endif %}
 {% set resumen_sync = (t.extra or {}).get('ultimo_resumen') or {} %}
 {% if resumen_sync.get('fallos') %}
-<p class="tag-advertencia tw-aviso">{% if tw.varias_tiendas %}{{ _('Triple Whale no aceptó la consulta de %(partes)s en %(tienda)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', '), tienda=t.nombre) }}{% else %}{{ _('Triple Whale no aceptó la consulta de: %(partes)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', ')) }}{% endif %}</p>
+<p class="tag-advertencia tw-aviso">{% if tw.varias_tiendas %}{{ _('Triple Whale no aceptó la consulta de %(partes)s en %(tienda)s. El resto de las métricas sí llegó.', partes=tw_partes_copia(resumen_sync.fallos.keys()), tienda=t.nombre) }}{% else %}{{ _('Triple Whale no aceptó la consulta de: %(partes)s. El resto de las métricas sí llegó.', partes=tw_partes_copia(resumen_sync.fallos.keys())) }}{% endif %}</p>
 {% endif %}
 {% endfor %}
 {%- endmacro %}

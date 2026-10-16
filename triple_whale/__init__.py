@@ -33,6 +33,8 @@ from urllib.parse import unquote, urlsplit
 import requests
 from flask_babel import gettext
 
+from idiomas import N_
+
 API_BASE = "https://api.triplewhale.com/api/v2"
 TIMEOUT_SEGUNDOS = 60
 REINTENTOS_MAX = 3
@@ -57,6 +59,21 @@ CANAL_META = "facebook-ads"
 # blueprint) para que `mejorar`, que corre en el worker, no importe `rutas`.
 NOMBRES_CANAL = {"facebook-ads": "Meta", "google-ads": "Google Ads", "tiktok-ads": "TikTok", "bing": "Microsoft Ads",
                  "pinterest-ads": "Pinterest", "snapchat-ads": "Snapchat", "twitter-ads": "X"}
+# Las partes de una copia (`sync.sincronizar`, claves de `extra.ultimo_resumen.fallos`) en palabras (PND-219: el aviso
+# «Triple Whale no aceptó la consulta de: …» pintaba `pixel`, `tienda`… tal cual, también en inglés). En el orden en que
+# se nombran; viven aquí para que el worker (`tareas.triple_whale`) no importe el blueprint.
+PARTES_COPIA = {"pixel": N_("ventas atribuidas (Pixel)"), "tienda": N_("totales de la tienda"),
+                "visitantes": N_("visitantes nuevos (NVP)"), "productos": N_("productos vendidos"),
+                "creativos": N_("creativos de los anuncios")}
+
+
+def nombres_partes(claves):
+    """Las partes de una copia, en palabras del idioma activo y separadas por coma (una clave desconocida, tal cual)."""
+    claves = list(claves or ())
+    orden = [k for k in PARTES_COPIA if k in claves] + sorted(k for k in claves if k not in PARTES_COPIA)
+    return ", ".join(gettext(PARTES_COPIA[k]) if k in PARTES_COPIA else str(k) for k in orden)
+
+
 # «REQUIRED TRACKING PARAMETERS» de la KB de Meta en Triple Whale: van en los
 # Parámetros de URL del anuncio (url_tags del AdCreative), donde Meta resuelve
 # {{site_source_name}} y {{ad.id}}. Sin ellos Triple Whale igual ve el gasto,

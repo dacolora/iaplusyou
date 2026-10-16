@@ -385,7 +385,7 @@ def tw_sincronizar(tarea):
                     desde=r["desde"], hasta=r["hasta"])
     if r["fallos"]:
         texto += " " + gettext("Sin %(partes)s: Triple Whale no aceptó esa consulta.",
-                               partes=", ".join(sorted(r["fallos"])))
+                               partes=triple_whale.nombres_partes(r["fallos"]))
     _asegurar_tasas(cliente)   # la copia ya salió bien; las tasas son un extra que nunca la tumba
     # Los avisos miran «Todas las tiendas»: solo corren cuando no queda otra
     # copia del proyecto en cola o en curso, así la última que termina avisa
