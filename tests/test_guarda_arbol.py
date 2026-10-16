@@ -100,3 +100,21 @@ def test_la_bitacora_y_la_bandeja_de_crear_van_a_la_carpeta_temporal(tmp_path):
     assert referencias_flowplus._path("acme").startswith(str(tmp_path) + os.sep)
     assert os.path.exists(referencias_flowplus._path("acme"))
     assert not bitacora.LOG_FILE.startswith(raiz + os.sep)
+
+
+def test_la_cola_de_aprobacion_va_a_la_carpeta_temporal(tmp_path):
+    """Un video de Crear que termina por el worker toca `estado.modificar`, que abre `estado_videos.json.lock`
+    (lo dejaban test_i18n_guardado, test_lanzamiento_incierto, test_lote6_costos y test_seedance_referencias_fal)."""
+    import estado
+    estado.modificar("acme", lambda e: {**e, "cf_1": {"estado": "pendiente"}})
+    assert estado._path("acme").startswith(str(tmp_path) + os.sep)
+    assert os.path.exists(estado._path("acme") + ".lock")
+
+
+def test_sin_base_temporal_la_base_tampoco_es_la_del_checkout():
+    """Sin `CREATV_DB_URL`, db.url() es data/creatv.db del checkout (la base real en el principal); una prueba que
+    toca la base sin `base_temporal` la creaba (test_lote3_seguridad::test_el_plazo_corre_desde_que_se_tiene_el_candado)."""
+    import db
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    assert os.path.join(raiz, "data", "creatv.db") not in db.url()
+    assert db.url().startswith("sqlite:///") and conftest._BASE_SESION in db.url()

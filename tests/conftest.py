@@ -10,6 +10,12 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if RAIZ not in sys.path:
     sys.path.insert(0, RAIZ)
 
+# PND-269: sin `CREATV_DB_URL`, db.url() es data/creatv.db del checkout, la base REAL en el checkout principal.
+# Una prueba que toca la base sin pedir `base_temporal` la creaba (o escribía en ella). Toda la sesión apunta a
+# una base temporal; `base_temporal` sigue dando una nueva por prueba encima de esta.
+_BASE_SESION = tempfile.mkdtemp(prefix="creatv_sesion_")
+os.environ["CREATV_DB_URL"] = f"sqlite:///{os.path.join(_BASE_SESION, 'creatv.db')}"
+
 
 @pytest.fixture()
 def base_temporal(monkeypatch):
@@ -139,16 +145,21 @@ def _sin_cache_meta():
 
 @pytest.fixture(autouse=True)
 def registros_en_tmp(tmp_path, monkeypatch):
-    """PND-269 (decisión 2026-10-13): la bitácora (`registro_generaciones.csv` en la raíz) y la bandeja de
-    referencias de Crear (`clientes/<c>/referencias_pendientes.json`) se escriben en la carpeta temporal del
-    test, nunca en el árbol de trabajo: en el checkout principal se mezclaban con los datos reales. Un test que
+    """PND-269 (decisión 2026-10-13): la bitácora (`registro_generaciones.csv` en la raíz), la bandeja de
+    referencias de Crear (`clientes/<c>/referencias_pendientes.json`) y la cola de aprobación
+    (`clientes/<c>/estado_videos.json` y su `.lock`) se escriben en la carpeta temporal del test, nunca en el árbol
+    de trabajo: en el checkout principal se mezclaban con los datos reales. Un test que
     necesita otra carpeta la repunta con su propio monkeypatch (gana el último). Ojo con el nombre: pytest arma
     los autouse por orden alfabético, y uno que pida `monkeypatch` antes de `_sin_cache_meta` hace que este limpie
     con los parches del test todavía puestos (test_rutas_alertas::test_invalidar_tras_escribir… fallaba al cerrar)."""
     import bitacora
+    import estado
     import referencias_flowplus
     monkeypatch.setattr(bitacora, "LOG_FILE", str(tmp_path / "registro_generaciones.csv"))
     monkeypatch.setattr(referencias_flowplus, "BASE_DIR", str(tmp_path))
+    # La cola de aprobación (`clientes/<c>/estado_videos.json` y su `.lock`): un video de Crear que termina por el
+    # worker la toca con `estado.modificar`, que abre el candado aunque el test haya fingido cargar/guardar.
+    monkeypatch.setattr(estado, "BASE_DIR", str(tmp_path))
 
 
 # ---- PND-269: guarda del árbol de trabajo ----
@@ -185,6 +196,10 @@ def pytest_configure(config):
     if os.environ.get("CREATV_SIN_GUARDA_ARBOL") or hasattr(config, "_creatv_arbol"):
         return
     config._creatv_arbol = (RAIZ, foto_arbol(RAIZ))
+
+
+def pytest_unconfigure(config):
+    shutil.rmtree(_BASE_SESION, ignore_errors=True)
 
 
 def pytest_sessionfinish(session, exitstatus):

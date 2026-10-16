@@ -203,9 +203,12 @@ próxima que lo reuse lo encuentra. `pendientes_por_clave(cliente, prefijos, cla
 `_escribir(con, …)` para poder escribir varias filas en una transacción. Pruebas: `tests/test_gastos_traslado.py`.
 
 **Las pruebas no escriben en el checkout (PND-269, decisión 2026-10-13; 2026-10-15).** La suite dejaba
-`registro_generaciones.csv` (la bitácora, `bitacora.LOG_FILE`) y `clientes/acme/referencias_pendientes.json` (la bandeja
-de Crear, `referencias_flowplus.BASE_DIR`) en el árbol; en el checkout principal se mezclaban con los datos reales. El
-autouse `registros_en_tmp` de `tests/conftest.py` los manda a `tmp_path` (su nombre importa: pytest arma los autouse por
+`registro_generaciones.csv` (la bitácora, `bitacora.LOG_FILE`), `clientes/acme/referencias_pendientes.json` (la bandeja
+de Crear, `referencias_flowplus.BASE_DIR`), `clientes/acme/estado_videos.json.lock` (la cola de aprobación,
+`estado.BASE_DIR`: `estado.modificar` abre el candado aunque el test finja cargar/guardar) y `data/creatv.db` (una prueba
+sin `base_temporal` usaba la base por defecto, la REAL en el checkout principal) en el árbol. El conftest fija
+`CREATV_DB_URL` a una base temporal de la sesión al importarse y el autouse `registros_en_tmp` manda los otros tres a
+`tmp_path` (su nombre importa: pytest arma los autouse por
 orden alfabético y uno que pida `monkeypatch` antes de `_sin_cache_meta` rompe la limpieza de este). La guarda del
 árbol (`foto_arbol` en `pytest_configure` y `pytest_sessionfinish`) compara `git status --porcelain --ignored
 --untracked-files=all` antes y después de la corrida (sin venv, worktrees, el submódulo ni `__pycache__`) y, si
