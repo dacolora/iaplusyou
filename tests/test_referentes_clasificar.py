@@ -121,7 +121,7 @@ def test_clasificar_llamada_completa(monkeypatch):
                 assert any(b.get("type") == "image" for b in kw["messages"][0]["content"])
                 return respuesta
 
-    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key, max_retries=None: _ClienteFalso())
     monkeypatch.setattr("referentes.clasificar._api_key", lambda: "sk-test")
     referente = {"marca": "WholeSupp", "titular": "T", "cuerpo": "C", "idioma": "en",
                 "imagen_url": "https://cdn.example/x.jpg"}
@@ -139,7 +139,7 @@ def test_clasificar_json_invalido_lanza_con_tokens(monkeypatch):
             def create(**kw):
                 return respuesta
 
-    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key, max_retries=None: _ClienteFalso())
     monkeypatch.setattr("referentes.clasificar._api_key", lambda: "sk-test")
     referente = {"marca": "M", "titular": "T", "cuerpo": "C", "idioma": "en", "imagen_url": "https://cdn.example/x.jpg"}
     with pytest.raises(clasificar.ClasificacionInvalida) as exc:
@@ -166,7 +166,7 @@ def _con_cliente(monkeypatch, respuesta, pedidos=None):
                 if pedidos is not None:
                     pedidos.append(kw)
                 return respuesta
-    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key, max_retries=None: _ClienteFalso())
     monkeypatch.setattr("referentes.clasificar._api_key", lambda: "sk-test")
 
 
@@ -219,7 +219,7 @@ def test_clasificar_manda_la_doctrina_de_clasificar_y_pide_el_lead(monkeypatch):
                 vistos.append(kw)
                 return respuesta
 
-    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key, max_retries=None: _ClienteFalso())
     monkeypatch.setattr("referentes.clasificar._api_key", lambda: "sk-test")
     r, _, _ = clasificar.clasificar({"marca": "M", "titular": "T", "cuerpo": "", "idioma": "en",
                                      "imagen_url": "https://r2/x.jpg"}, [])

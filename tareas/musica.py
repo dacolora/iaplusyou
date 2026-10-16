@@ -9,9 +9,10 @@ from flask_babel import gettext
 
 import gastos
 import mi_musica
+import saldo
 import trabajos
 from idiomas import N_
-from providers import fal_audio
+from providers import fal_audio, wavespeed_common
 from tareas import ref_sufijo, registrar
 
 DURACION_S = 60
@@ -32,6 +33,9 @@ def ejecutar(tarea):
     detalle = f"ElevenLabs · {DURACION_S} s · {prompt[:80]}"
     try:
         generado = fal_audio.musica_elevenlabs(prompt, DURACION_S, instrumental=instrumental)
+    except wavespeed_common.SinSaldo as e:
+        # PND-215: fal sin saldo no cobró nada; se dice en palabras (el aviso y la alerta los dejó fal_client).
+        raise RuntimeError(saldo.mensaje_audio(e.proveedor)) from e
     except Exception as e:
         # PND-313: la espera se agotó (o volvió sin audio) y fal la cobra igual: se anota, sin cobrarla.
         if getattr(e, "costo_usd", 0):

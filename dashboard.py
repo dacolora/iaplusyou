@@ -3239,7 +3239,7 @@ def _contexto_organico(cliente):
 def _mis_voces_fe(cliente):
     """Las voces propias del proyecto para el selector «Voz» de Final edition:
     solo valor y nombre (el voice_id de MiniMax no sale a la página)."""
-    return [{"valor": v["valor"], "nombre": v["nombre"]} for v in voces_propias.listar(cliente)]
+    return [{"valor": v["valor"], "nombre": v["nombre"]} for v in voces_propias.listar(cliente, usables=True)]
 
 
 def _contexto_final_edition(cliente):
@@ -7633,11 +7633,12 @@ def fe_descartar(cliente, cf_id, final_id):
     return _volver_final(cliente)
 
 
-def _lanzar_video_cf(cliente, cf_id, entry):
+def _lanzar_video_cf(cliente, cf_id, entry, confirmado=False):
     """Encola la generación de una sesión de FlowPlus (video o imagen). Lo usan
     cf_crear_video y cf_generar_video. El cuerpo vive en flowplus_lanzar.py
-    (compartido con los lotes de Sprints)."""
-    return flowplus_lanzar.lanzar(cliente, cf_id, entry)
+    (compartido con los lotes de Sprints). `confirmado`: la persona aceptó
+    volver a pagar un pedido anterior que pudo cobrarse (PND-346)."""
+    return flowplus_lanzar.lanzar(cliente, cf_id, entry, confirmado=confirmado)
 
 
 def _consumir_bandeja(cliente, usadas):
@@ -8030,7 +8031,9 @@ def _contexto_mis_voces(cliente):
 def _respuesta_mis_voces(cliente, error=None, mensaje=None, job_id=None):
     ctx = _contexto_mis_voces(cliente)
     html = render_template("_audios_mis_voces.html", cliente=cliente, **ctx)
-    return jsonify({"ok": error is None, "html": html, "voces": ctx["voces_propias"], "trabajo": ctx["trabajo_voz"],
+    # PND-339: una voz «pagada y sin cobrar» se ve en Mis voces pero no se elige hasta «Usar esta voz».
+    usables = [v for v in ctx["voces_propias"] if not v.get("por_cobrar")]
+    return jsonify({"ok": error is None, "html": html, "voces": usables, "trabajo": ctx["trabajo_voz"],
                     "error": error, "mensaje": mensaje, "job_id": job_id}), (400 if error else 200)
 
 
@@ -8123,6 +8126,25 @@ def vp_borrar(cliente, vid):
         bitacora.registrar(cliente, str(vid), "voces_propias", "error", str(e))
         return _respuesta_mis_voces(cliente, error=gettext("No pude borrarla (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__))
     return _respuesta_mis_voces(cliente)
+
+
+@app.route("/cliente/<cliente>/audios/voces/<int:vid>/cobrar", methods=["POST"])
+def vp_cobrar(cliente, vid):
+    """«Usar esta voz (se cobra ≈ X)» (PND-339): cobra una voz propia recuperada sin cobrar y la libera. Sin saldo,
+    `SaldoInsuficiente` sigue al manejador de siempre (402 con el enlace de recarga) y la voz queda como estaba."""
+    if not _mismo_origen():
+        abort(403)
+    try:
+        voces_propias.cobrar_recuperada(cliente, vid)
+    except SaldoInsuficiente:
+        raise
+    except voces_propias.EntradaInvalida as e:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(str(e)))
+    except Exception as e:
+        bitacora.registrar(cliente, str(vid), "voces_propias", "error", str(e))
+        return _respuesta_mis_voces(cliente, error=gettext("No pude cobrarla (%(tipo)s); intenta de nuevo.",
+                                                           tipo=type(e).__name__))
+    return _respuesta_mis_voces(cliente, mensaje=gettext("Listo: la voz ya se puede usar."))
 
 
 @app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
@@ -8669,9 +8691,13 @@ def cf_recuperar(cliente, cf_id):
     # PND-214: también un lanzamiento incierto (el pedido salió sin respuesta):
     # la tarea lo busca en el historial de WaveSpeed.
     recuperable = pred.get("id") or lanzamiento_pendiente(entry)
-    if not entry or entry.get("estado") != "error" or not recuperable or (entry.get("tipo") or "video") == "imagen":
+    # PND-332: también una imagen con su predicción guardada (la espera se agotó o la descarga falló).
+    if not entry or entry.get("estado") != "error" or not recuperable:
         flash(gettext("Esa pieza no tiene nada que recuperar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # PND-331: lo que el proveedor cobró y no se le cobró se cobra al llegar (gastos.registrar_trasladando), con el
+    # precio en el botón y el freno de saldo ANTES de tocar la pieza, como «Recuperar el resultado» de un swap.
+    libro_cobros.exigir(cliente, flowplus_lanzar.costo_estimado(entry), job_id=_job_id_creative_flow(cliente, cf_id))
     # Mismo orden que flowplus_lanzar.lanzar: el estado va ANTES de encolar.
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
     encolado = trabajos.encolar(
@@ -8682,11 +8708,43 @@ def cf_recuperar(cliente, cf_id):
     if encolado:
         proveedor = saldo.nombre_proveedor(flowplus_modelos.proveedor_de((entry.get("prediccion") or {}).get("modelo")
                                                                         or entry.get("modelo")))
-        flash(gettext("Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo.",
-                      proveedor=proveedor), "ok")
+        if (entry.get("tipo") or "video") == "imagen":
+            flash(gettext("Preguntando a %(proveedor)s por la imagen… si ya terminó, aparece aquí sin pagar de nuevo.",
+                          proveedor=proveedor), "ok")
+        else:
+            flash(gettext("Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo.",
+                          proveedor=proveedor), "ok")
     else:
         flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/dudosa/no_se_cobro", methods=["POST"])
+def cf_dudosa_no_se_cobro(cliente, cf_id):
+    """PND-345, desde Alertas y solo para un admin: el pedido de una pieza «dudosa» no se creó (o no se cobró). La
+    línea de posible cobro vuelve a 0 y vuelve «Reintentar» (`tareas.flowplus.resolver_sin_cobro`)."""
+    from tareas import flowplus as tareas_flowplus  # noqa: PLC0415
+    if session.get("rol") != "admin":
+        abort(403)
+    ok, mensaje = tareas_flowplus.resolver_sin_cobro(cliente, cf_id, session.get("usuario"))
+    invalidar_alertas(cliente)
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/dudosa/asignar", methods=["POST"])
+def cf_dudosa_asignar(cliente, cf_id):
+    """PND-345, desde Alertas y solo para un admin: la predicción de WaveSpeed de una pieza «dudosa». Solo una de la
+    ruta del modelo de esa pieza que ninguna otra sesión nombre (`tareas.flowplus.asignar_prediccion`); después la
+    pieza ofrece «Recuperar el video» con su precio. No lanza nada ni cobra aquí."""
+    from tareas import flowplus as tareas_flowplus  # noqa: PLC0415
+    if session.get("rol") != "admin":
+        abort(403)
+    ok, mensaje = tareas_flowplus.asignar_prediccion(cliente, cf_id, request.form.get("prediccion"),
+                                                     session.get("usuario"))
+    invalidar_alertas(cliente)
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
 
 
 @app.route("/cliente/<cliente>/creative_flow/sugerir_sonido", methods=["POST"])
@@ -8732,13 +8790,21 @@ def cf_generar_video(cliente, cf_id):
         flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
                       "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    incierto_imagen = (entry.get("lanzamiento_incierto") or {}).get("estado") == "imagen"
-    if incierto_imagen and request.form.get("confirmo_posible_cobro") != "1":
+    from tareas.flowplus import REINTENTO_CON_CONFIRMACION  # noqa: PLC0415
+    incierto = entry.get("lanzamiento_incierto") or {}
+    incierto_confirmar = incierto.get("estado") in REINTENTO_CON_CONFIRMACION
+    if incierto_confirmar and request.form.get("confirmo_posible_cobro") != "1":
         # R5 (revisión del guardián de gasto): una imagen no se recupera; reintentar
-        # paga otra vez, y se dice con el precio antes de hacerlo.
+        # paga otra vez, y se dice con el precio antes de hacerlo. PND-346: un video de
+        # fal tampoco (fal no tiene historial donde buscarlo).
         precio = gastos.texto_precio(flowplus_lanzar.costo_estimado(entry))
-        flash(gettext("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta "
-                      "%(precio)s más: confírmalo en «Reintentar».", precio=precio), "error")
+        if incierto.get("estado") == "imagen":
+            flash(gettext("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta "
+                          "%(precio)s más: confírmalo en «Reintentar».", precio=precio), "error")
+        else:
+            flash(gettext("El video anterior pudo cobrarse aunque %(proveedor)s no respondió. Generarlo otra vez "
+                          "cuesta %(precio)s más: confírmalo en «Reintentar».", precio=precio,
+                          proveedor=saldo.nombre_proveedor(incierto.get("proveedor") or "fal")), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")
@@ -8770,13 +8836,14 @@ def cf_generar_video(cliente, cf_id):
         except Exception as e:
             flash(gettext("No se pudo crear la versión B: %(error)s. No se generó nada.", error=e), "error")
             return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    if not _lanzar_video_cf(cliente, cf_id, entry):
+    if not _lanzar_video_cf(cliente, cf_id, entry, confirmado=incierto_confirmar):
         flash(gettext("Ya se está generando %(que)s — espera a que termine.", que=que), "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    if incierto_imagen:
+    if incierto_confirmar:
         # Ya se avisó y se aceptó el precio: el aviso no se repite en un fallo siguiente.
         creative_flow.actualizar(cliente, cf_id, lanzamiento_incierto=dict(
-            entry["lanzamiento_incierto"], estado="imagen_reintentada"))
+            entry["lanzamiento_incierto"],
+            estado="imagen_reintentada" if incierto.get("estado") == "imagen" else "reintentada"))
     if hija:
         _lanzar_video_cf(cliente, hija, creative_flow.cargar(cliente)[hija])
         flash(gettext("Generando las versiones A y B con %(modelo)s…", modelo=nombre_modelo), "ok")

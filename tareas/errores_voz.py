@@ -13,7 +13,9 @@ from flask_babel import gettext
 
 import audios
 import cola
+import saldo
 import voces_propias
+from providers import wavespeed_common
 
 log = logging.getLogger(__name__)
 
@@ -29,5 +31,8 @@ def publico(e, tarea, tipo, mensaje):
     para que el log lleve la traza."""
     if isinstance(e, ValueError) and str(e) in MSGIDS_FIJOS:
         return ValueError(gettext(str(e)))
+    if isinstance(e, wavespeed_common.SinSaldo):
+        # PND-215: fal sin saldo, en palabras (el aviso y la alerta ya los dejó `fal_client`).
+        return RuntimeError(saldo.mensaje_audio(getattr(e, "proveedor", None) or "fal"))
     log.exception("%s (tarea %s) falló: %s", tipo, tarea.get("id"), cola.sin_token(e))
     return RuntimeError(gettext(mensaje, tipo=type(e).__name__))

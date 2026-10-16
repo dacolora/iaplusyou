@@ -55,6 +55,29 @@ class PedidoRechazado(wavespeed_common.PedidoRechazado):
         RuntimeError.__init__(self, f"fal.ai ({ruta}) respondió {status}: {texto[:500]}")
 
 
+class LanzamientoIncierto(wavespeed_common.LanzamientoIncierto):
+    """PND-346 (decisión 2026-10-15, lote 2): el pedido salió y la respuesta de fal no llegó (lectura agotada,
+    conexión cortada a mitad), llegó un 5xx o un 2xx sin `request_id`: fal pudo encolarlo y cobrarlo sin que sepamos su
+    id. Antes contaba como su 5xx (`PedidoRechazado`) y no anotaba nada. fal no tiene un historial que consultar:
+    quien lo atrape anota el posible cobro y pide confirmar antes de volver a pagar."""
+
+    proveedor = "fal"
+
+    def __init__(self, path, causa, desde, hasta):
+        self.path, self.causa, self.desde, self.hasta = path, causa, desde, hasta
+        RuntimeError.__init__(self, f"fal.ai ({path}) no respondió al encolar ({causa}): el pedido pudo crearse")
+
+
+class SinConexion(wavespeed_common.SinConexion):
+    """No se pudo ni conectar con fal al encolar: el pedido no salió y no se cobró nada (PND-346)."""
+
+    proveedor = "fal"
+
+    def __init__(self, path, causa):
+        self.path, self.causa = path, causa
+        RuntimeError.__init__(self, f"fal.ai ({path}): no se pudo conectar para encolar ({causa}); el pedido no salió")
+
+
 def _mensaje(resp):
     """Lo que dijo fal en palabras: `detail` como texto, o los `msg` de una
     lista de validación unidos; vacío si no hay nada legible."""
@@ -107,17 +130,27 @@ def _base(ruta, request_id):
 def lanzar(ruta, payload, nombre, on_progreso=None, timeout_seconds=1200):
     """Encola `payload` en `ruta`, avisa el id y espera el video. Devuelve la
     URL pública del video."""
+    desde = wavespeed_common._ahora_utc()
     try:
         resp = requests.post(f"{COLA}/{ruta}", json=payload, headers=fal_client._headers(), timeout=60)
-    except (requests.Timeout, requests.ConnectionError) as e:
-        # Sin respuesta: fal pudo haber encolado (y cobrar) sin que sepamos el id.
-        # Se cuenta como una falla de su lado (5xx), que NO promete que no se cobró.
-        raise PedidoRechazado(ruta, 504, "", f"sin respuesta al encolar ({type(e).__name__}): {e}") from e
+    except requests.RequestException as e:
+        # PND-346, como WaveSpeed (PND-214): si no se pudo ni conectar, no salió; si salió y la respuesta no
+        # llegó, fal pudo encolarlo (y cobrarlo) sin que sepamos el id.
+        if wavespeed_common._no_salio(e):
+            raise SinConexion(ruta, type(e).__name__) from e
+        raise LanzamientoIncierto(ruta, type(e).__name__, desde, wavespeed_common._ahora_utc()) from e
     if not resp.ok:
+        if resp.status_code >= 500:
+            # Un 5xx (de fal o de su pasarela) pudo llegar después de encolar el pedido.
+            raise LanzamientoIncierto(ruta, f"HTTP {resp.status_code}", desde, wavespeed_common._ahora_utc())
         raise error_de_respuesta(resp, ruta)
-    request_id = (resp.json() or {}).get("request_id")
+    try:
+        request_id = (resp.json() or {}).get("request_id")
+    except (ValueError, AttributeError):
+        request_id = None
     if not request_id:
-        raise RuntimeError(f"fal.ai ({ruta}) no devolvió un id de pedido: {resp.text[:500]}")
+        # fal aceptó (2xx) pero no dijo qué encoló: pudo cobrarse.
+        raise LanzamientoIncierto(ruta, "sin_id", desde, wavespeed_common._ahora_utc())
     wavespeed_common.avisar_lanzada(on_progreso, request_id)
     return esperar(ruta, request_id, nombre, timeout_seconds=timeout_seconds, on_progreso=on_progreso)
 

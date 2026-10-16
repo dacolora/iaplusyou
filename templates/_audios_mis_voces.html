@@ -13,7 +13,7 @@
   <div class="progreso-texto">{{ _('Creando la voz…') }}</div>
   {% endif %}
   <div class="au-voces au-vp-voces" role="radiogroup" aria-label="{{ _('Mis voces') }}">
-    {% for v in voces_propias %}{{ voz_propia_item(v, borrar_url=url_for('vp_borrar', cliente=cliente, vid=v.id)) }}{% endfor %}
+    {% for v in voces_propias %}{{ voz_propia_item(v, borrar_url=url_for('vp_borrar', cliente=cliente, vid=v.id), cobrar_url=url_for('vp_cobrar', cliente=cliente, vid=v.id)) }}{% endfor %}
     <button type="button" class="au-vp-crear" id="au-vp-crear" aria-expanded="false" aria-controls="au-vp-panel">{{ _('+ Crear voz propia') }}</button>
   </div>
   {% if not voces_propias %}

@@ -261,7 +261,7 @@ def sugerir_ia(candidatos_, persona_texto, producto_texto, temporada_texto, obje
         enfoque=_sin_cierre(enfoque_texto or "(sin enfoque definido)", "enfoque"),
         objetivo=max(1, int(objetivo)), idioma=idiomas.nombre_para_claude(idioma),
     )
-    cliente_ia = anthropic.Anthropic(api_key=_api_key())
+    cliente_ia = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     # Claude Sonnet 5 piensa antes de responder y eso sale del mismo
     # max_tokens. Medido en producción (2026-09-25): 60 candidatos y objetivo 5
     # usaron ~1 700 tokens (casi todo pensamiento) con un tope viejo de 800 —
@@ -287,9 +287,20 @@ def sugerir_ia(candidatos_, persona_texto, producto_texto, temporada_texto, obje
         e = SugerenciaInvalida(gettext("Claude no devolvió una respuesta válida."))
         e.tokens_entrada, e.tokens_salida = ent, sal
         raise e
+    lista = data.get("elegidos") if isinstance(data, dict) else None
+    if lista is None:
+        lista = []
+    if not isinstance(lista, list):
+        # PND-336: `elegidos` que no es una lista (un objeto, un texto, un número) reventaba con un TypeError y los
+        # tokens ya cobrados se perdían; ahora es una respuesta inválida que el llamador anota.
+        e = SugerenciaInvalida(gettext("Claude no devolvió una respuesta válida."))
+        e.tokens_entrada, e.tokens_salida = ent, sal
+        raise e
     validos = {c["id"] for c in recortados}
     elegidos = []
-    for item in (data.get("elegidos") or [])[:max(1, int(objetivo))]:
+    for item in lista[:max(1, int(objetivo))]:
+        if not isinstance(item, dict):
+            continue        # un elegido que no es un objeto no se puede validar: se descarta, como un id ajeno
         try:
             rid = int(item.get("referente_id"))
         except (TypeError, ValueError):

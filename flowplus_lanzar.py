@@ -11,7 +11,7 @@ import gastos
 import trabajos
 from cobros import SaldoInsuficiente
 from providers import flowplus_modelos
-from tareas.flowplus import ETAPAS_CREATIVE_FLOW, lanzamiento_pendiente
+from tareas.flowplus import ETAPAS_CREATIVE_FLOW, REINTENTO_CON_CONFIRMACION, lanzamiento_pendiente
 
 PRIORIDAD_NORMAL = 5
 
@@ -44,7 +44,7 @@ def costo_estimado(entry):
         return None
 
 
-def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL, excluir_job=None):
+def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL, excluir_job=None, confirmado=False):
     """Devuelve True si encoló, False si ya había una tarea viva para esa sesión
     o si su lanzamiento anterior quedó incierto (PND-214: pudo cobrarse).
     Escribe estado="video_generando" ANTES de encolar: si el worker fallara
@@ -61,6 +61,11 @@ def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL, excluir_job=None):
     if lanzamiento_pendiente(entry):
         # PND-214: el pedido anterior salió sin respuesta y pudo cobrarse; hasta
         # saber qué pasó («Recuperar el video») no se vuelve a pagar.
+        return False
+    if (entry.get("lanzamiento_incierto") or {}).get("estado") in REINTENTO_CON_CONFIRMACION and not confirmado:
+        # Una imagen incierta o un video de fal sin respuesta (PND-346) pudo cobrarse y no se recupera: volver a
+        # pagarlo lo confirma una persona viendo el precio («Reintentar» de Crear pasa `confirmado`); Sprints o el
+        # director no lo relanzan solos (revisión de guardian-gasto, 2026-10-15).
         return False
     tipo = entry.get("tipo") or "video"
     previo = entry.get("estado")

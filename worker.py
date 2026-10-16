@@ -287,7 +287,8 @@ def _correr(tarea):
         monitoreo.registrar_excepcion(e, "worker", ruta=tarea["tipo"], cliente=tarea.get("cliente"))
         log.error("tarea %s falló: %s\n%s", tarea["id"], cola.sin_token(e), cola.sin_token(traceback.format_exc()),
                   extra={"sin_monitoreo": True})
-        if cola.fallar(tarea["id"], f"{type(e).__name__}: {e}") == "error":
+        # Una entrega parcial (PND-334) ya anotó sin cobrar lo que no llegó: lo entregado no se devuelve.
+        if cola.fallar(tarea["id"], f"{type(e).__name__}: {e}") == "error" and not isinstance(e, tareas.EntregaParcial):
             _revertir(tarea, MOTIVO_TAREA_FALLIDA)
 
 

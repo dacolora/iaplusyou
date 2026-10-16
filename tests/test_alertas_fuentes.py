@@ -664,8 +664,8 @@ def _sesion(cf_id, estado, creado_en, error=None, accion="Zapatillas bajo la llu
 
 def test_las_diez_fuentes_se_registran_en_su_orden():
     import alertas
-    assert [n for n, _ in alertas.FUENTES][:10] == ["llaves", "cuentas", "worker", "saldo", "tablero", "proyecto",
-                                                    "crear", "organico", "sprints", "nicho"]
+    assert [n for n, _ in alertas.FUENTES][:11] == ["llaves", "cuentas", "worker", "saldo", "tablero", "proyecto",
+                                                    "crear", "crear_dudosas", "organico", "sprints", "nicho"]
 
 
 def test_crear_un_prompt_listo_reciente_no_molesta_y_uno_de_2_horas_si(base_temporal):

@@ -145,7 +145,7 @@ def _llamar(texto, max_tokens=4000):
     """Una llamada de texto a Claude; devuelve (texto, tokens_entrada, tokens_salida)."""
     import anthropic
     from generador_prompts import MODEL, _api_key
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": texto}])
     uso = getattr(resp, "usage", None)

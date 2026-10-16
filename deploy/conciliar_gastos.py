@@ -14,6 +14,10 @@ Cómo se reparte:
 - Incluye `_creatv` (lo que paga Creatv también está en la factura). Las filas con `extra.estimado` o
   `conciliacion_pendiente` se cuentan aparte en «estimadas»: su monto es un estimado, no lo facturado.
 - El mes es el de `creado_en` (la hora del servidor).
+- Atria y TrendTrack no están en `gasto` (PND-335, decisión 2026-10-15, lote 3): son cupos de un plan de Creatv para la
+  biblioteca global de referentes (y TrendTrack, además, recargas de créditos), no trabajo de un proyecto, y no se
+  prorratean a los barridos. El informe los lista aparte como suscripciones fijas (`SUSCRIPCIONES_FIJAS`) para que su
+  factura no se lea como un faltante.
 """
 import argparse
 import csv
@@ -40,6 +44,11 @@ MODELOS = {
     "wan_animate_replace": "fal", "flux_kontext": "fal", "gemini_omni_edit": "fal",
 }
 CAPAS_ANTHROPIC = ("guion",)
+# PND-335: fuera de la tabla `gasto` a propósito (ver el docstring). Se comparan con su factura aparte.
+SUSCRIPCIONES_FIJAS = (
+    ("atria", "plan mensual de Atria (cupo de búsquedas de la biblioteca de referentes)"),
+    ("trendtrack", "plan mensual de TrendTrack y sus recargas de créditos"),
+)
 
 
 def empresa(proveedor):
@@ -113,6 +122,8 @@ def main(argv=None):
         w.writerow(["mes", "proveedor", "usd", "filas", "estimadas", "usd_estimado"])
         for (mes, emp), v in datos.items():
             w.writerow([mes, emp, f"{v['usd']:.4f}", v["filas"], v["estimadas"], f"{v['usd_estimado']:.4f}"])
+        for nombre, _ in SUSCRIPCIONES_FIJAS:
+            w.writerow(["suscripcion_fija", nombre, "", "", "", ""])
         return 0
     totales = defaultdict(float)
     mes_actual = None
@@ -129,6 +140,9 @@ def main(argv=None):
             print(f"  {emp:<16} US$ {usd:>10.2f}")
     else:
         print("Sin gastos en ese rango.")
+    print("\nSuscripciones fijas (no están en la tabla gasto: su factura se revisa aparte, no es un faltante)")
+    for nombre, que in SUSCRIPCIONES_FIJAS:
+        print(f"  {nombre:<16} {que}")
     return 0
 
 

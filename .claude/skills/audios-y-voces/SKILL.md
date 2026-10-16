@@ -127,8 +127,7 @@ constancia). Pruebas: `tests/test_fal_espera_agotada.py`.
 que pagó la voz falló después (el worker devolvió el cobro), Mis voces la recupera gratis al abrirse
 (`recuperar_pendientes`, como siempre) y ese GET nunca cobra. Solo cuando la recupera su propia tarea
 (`voces_propias.crear` con la ficha de la misma referencia), con el precio que la persona vio al lanzarla, se cobra con
-`gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`). Pendiente propuesto: un botón con su precio para
-cobrar la recuperada por el GET.
+`gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`).
 
 **El permiso del clon dice que la voz no se borra del proveedor (PND-041, decisión 2026-10-13).** La casilla de
 «Clonar una voz» (`_crear_audios.html`, `voces_propias.TEXTO_CONSENTIMIENTO`) dice además que la voz clonada queda en
@@ -136,3 +135,24 @@ la cuenta del proveedor (MiniMax, vía fal) y que de ahí no se puede borrar, au
 solo quita la fila, sus muestras y la grabación). Ese texto se guarda tal cual en `extra.consentimiento` y la tarea lo
 compara antes de pagar: cambiarlo hace que una tarea encolada con el texto viejo falle sin cobrar (el despliegue
 reinicia el worker con la cola vacía). Prueba: `test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas`.
+
+**«Pagada y sin cobrar» (PND-339, decisión 2026-10-15, lote 2).** La que recupera el GET de Mis voces en un proyecto que
+cobra (`libro.cobra_activo`) y a la que no se le cobró nada (`cobros.vista.cobrado_por_gasto` en 0: una voz entregada y
+cobrada cuya tarea solo falló al marcar `ficha_guardada` no se bloquea; revisión de guardian-gasto) se guarda igual (no se pierde) pero marcada `extra.por_cobrar` {referencia, usd} desde que
+nace (`_guardar_ficha(..., por_cobrar=True)`): `resolver` no la devuelve (nadie la usa), `listar(cliente, usables=True)`
+la saca de los selectores (Final edition, anuncio hablado, el `voces` del JSON de Mis voces) y la tarjeta
+(`voz_propia_item(..., cobrar_url=)`, sin `data-voz` ni `role=radio`) dice «pagada y sin cobrar» con el botón «Usar esta
+voz (se cobra ≈ X)» → `POST vp_cobrar` → `voces_propias.cobrar_recuperada`: `libro.pedido` (freno y reserva; sin saldo,
+402 y la voz sigue bloqueada) y `gastos.registrar_trasladando` a `<referencia>:recuperada` (una sola vez, aunque haya dos
+clics), y la libera (`por_cobrar=None`). Un proyecto que no cobra la recupera libre, como antes. Pruebas:
+`tests/test_voz_propia_por_cobrar.py`.
+
+**Sin saldo en fal por el lado del audio (PND-215, decisión 2026-10-13, lote 2).** `fal_client.llamar` (voces de Audios,
+del anuncio hablado y de las finales, Mi música, la música de fondo, Whisper de los subtítulos, las voces propias)
+reconoce al encolar que fal no tiene saldo (`fal_video.error_de_respuesta`: 402, «Exhausted balance», «top up»…),
+llama a `saldo.marcar("fal")` como Seedance (el aviso de Crear, la alerta `saldo:fal`/`saldo:fal_recarga` y el correo
+al admin, sin el proyecto: `fal_client` no lo conoce) y lanza `fal_video.SinSaldo`. Las tareas de voz
+(`errores_voz.publico`) y la canción de Mi música lo dicen en palabras (`saldo.mensaje_audio`); otro rechazo de fal sigue
+siendo el RuntimeError de siempre. Un audio que sale bien no limpia el aviso (lo limpia la próxima generación de
+Seedance que sale bien o vence a las 12 h): limpiarlo en cada llamada de fal tocaría la base en cada voz. Pruebas:
+`tests/test_saldo_fal_audio.py`.

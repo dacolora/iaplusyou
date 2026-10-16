@@ -80,7 +80,7 @@ def evaluar_contra_matriz(image_url, invariantes):
     Le muestra la imagen ya generada a Claude y le pide puntuar el cumplimiento de
     cada invariante por separado. Devuelve la misma lista con 'puntaje' (0-100) y
     'motivo' agregados a cada invariante."""
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     reglas_texto = "\n".join(
         f"{i + 1}. {inv.get('name')}: {inv.get('rule')}" for i, inv in enumerate(invariantes)
     )
@@ -143,7 +143,7 @@ def analizar_marca(image_urls, idioma="es", on_usage=None):
     if not urls:
         raise RuntimeError("No hay imágenes de referencia para analizar.")
 
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     content = [{"type": "text", "text": _con_orden(ANALISIS_MARCA_PROMPT, idioma)}]
     for url in urls:
         content.append({"type": "image", "source": {"type": "url", "url": url}})
@@ -190,7 +190,7 @@ def regla_fidelidad(nombre, descripcion="", categoria="", idioma="es"):
             partes.append(f"<descripcion>\n{limpia}\n</descripcion>")
         if (categoria or "").strip():
             partes.append(f"Categoría: {categoria.strip()}")
-        client = anthropic.Anthropic(api_key=_api_key())
+        client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
         resp = client.messages.create(
             model=MODEL,
             max_tokens=200,
@@ -266,7 +266,7 @@ def generar_prompt_creative_flow(personajes, productos, escenas, accion_central,
     modo: 'A' (bullet-time) o 'B' (narrativa lineal). `idioma`: idioma del
     proyecto (spec 2026-09-26 §B4). Devuelve el prompt final completo (las 11
     secciones), listo para editar y aprobar."""
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
 
     referencias_texto = []
     for i, p in enumerate(personajes, start=1):
@@ -383,7 +383,7 @@ def caption_organico(contexto, plataformas):
                       "razón para actuar.")
 
     extra = CAPTION_ORGANICO_PROMPT.replace("__LINK_BIO__", LINK_EN_BIO.get(idioma_pieza, LINK_EN_BIO["es"]))
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     resp = client.messages.create(
         model=MODEL,
         # Sonnet 5 piensa antes de responder y eso sale del mismo tope: con

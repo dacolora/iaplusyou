@@ -1,6 +1,6 @@
 ---
 name: alertas
-description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con catorce fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
+description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con quince fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
 ---
 
 # Alertas: lo que necesita la atención de la persona
@@ -30,7 +30,7 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 
 `calcular(cliente)` corre cada fuente de `FUENTES` en su propio `try/except` y ordena por grupo, luego nivel, y dentro de eso en el orden de las fuentes. Si una fuente revienta sale `revision:<fuente>` (`info`, `solo_admin`) con SOLO el nombre de la clase de la excepción, nunca el mensaje (podría arrastrar un token), y las demás se calculan igual. Los nombres de grupo, nivel y pestaña son constantes `idiomas.N_` (`NOMBRES_GRUPO`, `NOMBRES_NIVEL`, `NOMBRES_TAB`) que la plantilla traduce con `|traducir`.
 
-## Las catorce fuentes (en el orden de `FUENTES`)
+## Las quince fuentes (en el orden de `FUENTES`)
 
 | # | Fuente | Claves | Grupo · nivel | Huella |
 |---|---|---|---|---|
@@ -41,6 +41,7 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 | 5 | `tablero` | `tablero:<tipo>:<experimento o ->` | según el tipo: meta, tienda y píxel → puesta_a_punto; productos sin experimento → faltantes; propuestas, tope, ganador sin publicar → decision; error, rechazados, sin métricas → fallos | tipo + experimento + los números del texto |
 | 6 | `proyecto` | `proyecto:{guia_marca,producto,logo,personaje,tienda,correo_avisos,canal_organico}` | faltantes · `atencion` o `info` | vacía a propósito (un faltante descartado sigue descartado hasta que se resuelva) |
 | 7 | `crear` | `crear:prompt_listo` (una con el conteo), `crear:error:<cf_id>` | decision / fallos · `atencion` | ids ordenados / el error |
+| 7b | `crear_dudosas` | `crear_dudosa:<cf_id>` | decision · `atencion` · **solo_admin**, con dos acciones (ver abajo) | cf_id + `desde` + estado del lanzamiento |
 | 8 | `organico` | `organico:error:<pub_id>` | fallos · `atencion` | el error |
 | 9 | `sprints` | `sprint:{ideas,revision,fallos,referencias}:<sprint_id>` | decision / fallos | los ids (o el conteo) |
 | 10 | `nicho` | `nicho:avatares`, `nicho:error:<estudio_id>` | decision / fallos · `atencion` | el conteo / el error guardado |
@@ -58,6 +59,15 @@ Detalles que ya costaron una duda:
 - **Crear**: los prompts listos son UNA alerta con el conteo y solo cuentan los de hace más de `MINUTOS_PROMPT_LISTO` (60): los recién armados no molestan mientras la persona trabaja. Fallos de los últimos `DIAS_FALLOS` (30) días; una sesión con dos piezas cuenta una vez.
 - **Nicho**: una investigación `detenida` alerta si tiene motivo y no es `cancelada` (clic de la persona, 2026-10-02); una `interrumpida`, siempre; un estudio, una alerta (la investigación manda sobre el error de generación).
 - **Cobros** (2026-10-08, spec `2026-10-08-cobros-saldo-prepagado` §8): solo si `libro.estado(cliente)["cobrar"]`; un proyecto que no cobra sale tras leer la cuenta y no consulta nada más. `sin_saldo` mira el DISPONIBLE (saldo menos lo reservado) ≤ 0; `saldo_bajo` mira el saldo (0 < saldo < umbral) y no sale si ya hay `sin_saldo`; su huella lleva el saldo en dólares redondeados, así que un descarte no esconde un saldo que siguió bajando. `no_cobrado`: un `reverso` o `no_cobrado` de los últimos `DIAS_NO_COBRADO` (7) días (en el `no_cobrado` el monto es `extra.precio`); `recarga_pendiente`: una recarga de Bold **o de Wompi** pendiente de hace más de `MINUTOS_RECARGA_PENDIENTE` (15) min; el texto dice con cuál pasarela (planes 8/8, 2026-10-10). Dos consultas fijas (movimientos y recargas, tope `TOPE_COBROS` = 20 cada una) más las del plan (`_alertas_plan`, al final de `_fuente_cobros`): 1 consulta sin plan (buscar la suscripción) y a lo más 3 con plan, sin importar cuánto haya pasado (`tests/test_planes_alertas.py` las cuenta). El concepto sale de `cobros.vista.nombre_concepto`. Ninguna es `solo_admin` salvo `cobros:plan_sin_renovar` (una suscripción activa cuyo pagado terminó sin periodo abierto ni cobro en curso: la periódica no la renovó; es cosa de Creatv, revisión final de planes 2026-10-10). Los apartados `config-ap-saldo` y `config-ap-plan` solo existen en la página de un cliente que cobra (el admin siempre los ve): por eso `SOLO_SI_COBRA` en `tests/test_rutas_alertas.py`, y `tests/test_planes_alertas.py::test_el_ancla_del_plan_solo_existe_si_el_proyecto_cobra`. El detalle de cada alerta del plan (textos, huellas, bordes) vive en la skill `cobros`, sección «Alertas del plan».
+- **Crear dudosas** (PND-345, decisión 2026-10-15, lote 2; motivo: una pieza «dudosa» de Crear —lanzamiento incierto que
+  el historial de WaveSpeed no resolvió, o «buscando» con el historial caído y `avisado`— no tenía salida, y el aviso
+  `lanzamiento_dudoso` solo iba por correo, que el VPS no manda). UNA consulta sin límite de días (es plata sin
+  resolver), con la línea de posible cobro por LEFT JOIN a `gasto`. El detalle trae la ruta, la ventana, las candidatas
+  (`lanzamiento_incierto.candidatas`, que guarda la búsqueda) y el posible cobro. Es la única alerta con **acciones**:
+  `_alerta(..., acciones=)` acepta solo nombres de `ACCIONES` y la plantilla pinta su formulario: «Asignar la predicción»
+  (`cf_dudosa_asignar`, un campo con el id) y «No se cobró» (`cf_dudosa_no_se_cobro`, con confirmación). Las dos rutas
+  responden 403 a quien no es admin y hacen sus comprobaciones en `tareas.flowplus` (`asignar_prediccion`,
+  `resolver_sin_cobro`, skill `crear`). Prefijo `crear_dudosa:` en `PREFIJOS_SOLO_ADMIN`.
 - **Orgánico**: reintentar es una acción de la persona sobre la pieza; aquí solo se avisa.
 - **Acceso a los datos de Meta** (PND-058, 2026-10-15; motivo: el `meta.json` de colorado_forja decía que el token vencía el 2026-11-18 por `expires_in`, cuando el token no caduca y lo que vence es el acceso a los datos, el 2026-12-18, y nada avisaba). La fecha la lee `meta_conexion` con `debug_token` al conectar y la periódica diaria `meta_revisar_acceso` (que también rellenó las conexiones viejas), y la guarda en `meta.json` (`acceso_datos_vence_en`, ISO local). La fuente solo lee `meta.json` con `meta_conexion.acceso_datos_vence_en` (cero consultas, nunca llama a Meta). Una sola clave; el detalle dice cuántos días faltan («Vence hoy.» el mismo día) y manda a «Renovar el acceso» de la tarjeta de Meta, que vuelve a conectar SIN «Desconectar» (desconectar borra las métricas copiadas). La huella es la fecha y el estado: descartar «por vencer» no esconde el «vencido», y reconectar con otra fecha la vuelve a mostrar; si la fecha nueva queda a más de 14 días, desaparece sola. No es `solo_admin` ni de descarte solo admin: el cliente es quien reconecta con su app.
 - **Meta rendimiento** (E2, 2026-10-10, spec `2026-10-10-meta-rendimiento-e2-design.md` §10; skill `meta-rendimiento`): la fuente

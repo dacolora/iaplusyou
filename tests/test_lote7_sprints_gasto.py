@@ -66,7 +66,7 @@ def test_pnd166_gasto_con_usage_incluso_si_falla(base_temporal, claude, monkeypa
     assert filas[0]['proveedor'] == 'anthropic'
     assert filas[0]['detalle']
     assert ('·' in filas[0]['detalle']) == bool(fallo)
-    assert 'max_retries' not in claude['opciones']
+    assert claude['opciones'].get('max_retries') == 0     # PND-333: sin reintentos del SDK
     with base_temporal.conectar() as con:
         m = con.execute(base_temporal.movimiento_saldo.select()).mappings().all()
     assert len(m) == 1 and m[0]['tipo'] == ('no_cobrado' if fallo else 'cobro')

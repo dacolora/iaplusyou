@@ -404,6 +404,10 @@ def reintentar(cliente, cp_id):
     entry = creative_flow.cargar(cliente).get(i["cf_id"])
     if not entry or entry.get("estado") != "error":
         return False
+    if (entry.get("lanzamiento_incierto") or {}).get("estado") in flowplus_lanzar.REINTENTO_CON_CONFIRMACION:
+        # PND-346: el intento anterior pudo cobrarse sin respuesta; volver a pagarlo se confirma en Crear con el precio.
+        raise datos.ErrorDatos(gettext("El intento anterior de esta pieza pudo cobrarse aunque el proveedor no "
+                                       "respondió: reintenta desde Crear, donde se confirma con el precio."))
     ok = flowplus_lanzar.lanzar(cliente, i["cf_id"], entry, prioridad=PRIORIDAD_LOTE)
     if ok:
         mensaje = datos.texto_guardado(cliente, N_("Reintento de «%(titulo)s»"), titulo=i['titulo'])

@@ -16,7 +16,7 @@ def _cliente_falso(monkeypatch, texto):
     capturado = {}
 
     class _Cliente:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             pass
 
         class messages:

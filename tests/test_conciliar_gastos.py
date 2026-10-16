@@ -61,3 +61,23 @@ def test_filtra_por_rango_y_proyecto_y_no_escribe(base_temporal, conciliar, caps
 
 def test_mes_siguiente(conciliar):
     assert conciliar._mes_siguiente("2026-12") == "2027-01" and conciliar._mes_siguiente("2026-09") == "2026-10"
+
+
+def test_atria_y_trendtrack_salen_aparte_como_suscripciones_fijas(base_temporal, conciliar, capsys):
+    """PND-335 (decisión 2026-10-15, lote 3): Atria y TrendTrack son cupos de un plan de Creatv (la biblioteca global
+    de referentes), no están en `gasto` y no se prorratean a los barridos. El informe los lista aparte, para que su
+    factura no se lea como un faltante al compararla, en texto y en CSV, también sin ningún gasto en el rango."""
+    assert [nombre for nombre, _ in conciliar.SUSCRIPCIONES_FIJAS] == ["atria", "trendtrack"]
+    _sembrar()
+    assert conciliar.main([]) == 0
+    salida = capsys.readouterr().out
+    fijas = salida[salida.index("Suscripciones fijas"):]
+    assert "atria" in fijas and "trendtrack" in fijas and "recargas de créditos" in fijas
+    assert not any(emp in ("atria", "trendtrack") for _, emp in conciliar.resumen())
+    assert conciliar.main(["--csv"]) == 0
+    filas = capsys.readouterr().out.splitlines()
+    assert filas[0] == "mes;proveedor;usd;filas;estimadas;usd_estimado"
+    assert "suscripcion_fija;atria;;;;" in filas and "suscripcion_fija;trendtrack;;;;" in filas
+    assert conciliar.main(["--desde", "2030-01"]) == 0
+    sin = capsys.readouterr().out
+    assert "Sin gastos en ese rango." in sin and "Suscripciones fijas" in sin

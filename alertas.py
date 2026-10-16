@@ -78,7 +78,7 @@ HUELLA_VALIDA = r"^[0-9a-f]{64}$"
 # `tests/test_rutas_alertas.py` comprueba que toda alerta `solo_admin` que
 # producen las fuentes empiece por uno de estos prefijos.
 PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga", "saldo:fal_recarga",
-                       "cobros:plan_sin_renovar")
+                       "cobros:plan_sin_renovar", "crear_dudosa:")
 
 # PND-124 (decisión 2026-10-07): visibles para todos, descartes solo admin.
 TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
@@ -102,17 +102,25 @@ def huella(*partes):
     return hashlib.sha256("|".join(str(p) for p in partes).encode("utf-8")).hexdigest()
 
 
+# Acciones que una alerta puede ofrecer además de «Ir a…» (PND-345): la plantilla pinta su formulario; la ruta que
+# recibe cada una hace sus propias comprobaciones (aquí nada escribe ni gasta).
+ACCIONES = ("crear_no_se_cobro", "crear_asignar_prediccion")
+
+
 def _alerta(clave, huella_, nivel, grupo, titulo, detalle, tab, ancla=None, url=None, entidad=None,
-            solo_admin=False):
+            solo_admin=False, acciones=()):
     """El constructor de toda alerta (spec §1). `solo_admin`: la ve solo un
-    admin (llaves del .env, worker, fuentes caídas)."""
+    admin (llaves del .env, worker, fuentes caídas). `acciones`: nombres de
+    `ACCIONES` que la plantilla ofrece como botones (PND-345)."""
     if nivel not in NIVELES:
         raise ValueError(f"nivel inválido: {nivel}")
     if grupo not in GRUPOS:
         raise ValueError(f"grupo inválido: {grupo}")
+    if any(a not in ACCIONES for a in acciones):
+        raise ValueError(f"acción inválida: {acciones}")
     return {"clave": clave, "huella": huella_, "nivel": nivel, "grupo": grupo, "titulo": titulo,
             "detalle": detalle, "tab": tab, "ancla": ancla, "url": url, "entidad": entidad,
-            "solo_admin": bool(solo_admin)}
+            "solo_admin": bool(solo_admin), "acciones": list(acciones)}
 
 
 def _minutos(desde_iso, ahora_iso):
@@ -561,6 +569,48 @@ def _fuente_crear(cliente, ahora):
     return out
 
 
+def _fuente_crear_dudosas(cliente, ahora):
+    """PND-345 (decisión 2026-10-15, lote 2): una pieza de Crear «dudosa» (lanzamiento incierto que el historial de
+    WaveSpeed no resolvió, o con el historial caído y el admin ya avisado) no tenía salida, y el aviso
+    `lanzamiento_dudoso` solo iba por correo (el VPS no tiene SMTP). Una alerta por pieza, SOLO para el admin, con lo que
+    necesita para decidir (la ruta del modelo, la ventana del lanzamiento, las candidatas, el posible cobro anotado) y
+    dos acciones: «No se cobró» y «Asignar la predicción» (rutas `cf_dudosa_*`). UNA consulta (la línea de posible cobro
+    llega con un LEFT JOIN), sin límite de días: es plata sin resolver."""
+    co, g = db.concepto, db.gasto
+    estado = sa.func.json_extract(co.c.extra, "$.lanzamiento_incierto.estado")
+    avisado = sa.func.json_extract(co.c.extra, "$.lanzamiento_incierto.avisado")
+    ref = sa.func.json_extract(co.c.extra, "$.lanzamiento_incierto.referencia_gasto")
+    q = (sa.select(co.c.legado_id, co.c.extra, g.c.usd)
+         .select_from(co.outerjoin(g, sa.and_(g.c.cliente == cliente, g.c.referencia == ref)))
+         .where(co.c.cliente == cliente, co.c.legado_id.isnot(None),
+                sa.func.json_extract(co.c.extra, "$.prediccion.id").is_(None),
+                sa.or_(estado == "dudoso", sa.and_(estado == "buscando", avisado == sa.true())))
+         .order_by(co.c.id.desc()))
+    with db.conectar() as con:
+        filas = con.execute(q).fetchall()
+    import gastos  # noqa: PLC0415
+    out = []
+    for f in filas:
+        extra = f.extra or {}
+        lanz = extra.get("lanzamiento_incierto") or {}
+        nombre = " ".join(str(extra.get("accion_central") or "").split())[:60] or f.legado_id
+        candidatas = [str(c) for c in (lanz.get("candidatas") or []) if re.fullmatch(r"[A-Za-z0-9-]{6,80}", str(c))]
+        detalle = gettext(
+            "Se lanzó en %(ruta)s entre %(desde)s y %(hasta)s (UTC) y WaveSpeed no respondió; su historial no dice cuál "
+            "predicción es la de esta pieza. Posible cobro anotado sin cobrarlo: %(usd)s. Candidatas: %(ids)s. Búscala "
+            "en el panel de WaveSpeed y asígnala, o marca «No se cobró» si no se creó.",
+            ruta=_limpio(lanz.get("path"), 120), desde=str(lanz.get("desde") or "")[:19].replace("T", " "),
+            hasta=str(lanz.get("hasta") or "")[:19].replace("T", " "), usd=gastos.formatear(f.usd),
+            ids=", ".join(candidatas) or gettext("ninguna clara"))
+        out.append(_alerta(f"crear_dudosa:{f.legado_id}", huella(f.legado_id, lanz.get("desde"), lanz.get("estado")),
+                           "atencion", "decision", gettext("«%(nombre)s» pudo cobrarse y no sabemos cuál pedido es",
+                                                           nombre=nombre),
+                           detalle, "creativeflowplus", ancla=f"cf-{f.legado_id}", entidad=f.legado_id,
+                           url="#creativeflowplus?cf=" + quote(f.legado_id, safe=""), solo_admin=True,
+                           acciones=("crear_asignar_prediccion", "crear_no_se_cobro")))
+    return out
+
+
 def _fuente_organico(cliente, ahora):
     """Publicaciones orgánicas en error de los últimos DIAS_FALLOS días, en UNA consulta (con el nombre de la pieza
     sacado del concepto). Reintentar es una acción de la persona sobre la pieza: aquí solo se avisa."""
@@ -993,6 +1043,7 @@ FUENTES.extend([
     ("tablero", _fuente_tablero),
     ("proyecto", _fuente_proyecto),
     ("crear", _fuente_crear),
+    ("crear_dudosas", _fuente_crear_dudosas),
     ("organico", _fuente_organico),
     ("sprints", _fuente_sprints),
     ("nicho", _fuente_nicho),

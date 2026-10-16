@@ -118,7 +118,8 @@ Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESP
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
 devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
 —el hilo queda libre entre vueltas— mientras la predicción tenga menos de `ESPERA_MAXIMA` (2 h); recién después
-queda el botón. El sondeo aguanta hasta `FALLOS_SEGUIDOS` (6) cortes de red o 5xx seguidos, y un error que no sea
+queda el botón, y al rendirse el estimado queda en Gasto con `entregado=False` en la referencia del intento
+(`_anotar_espera_rendida`; la predicción guarda esa `referencia_gasto`): WaveSpeed casi seguro lo cobró (PND-331). El sondeo aguanta hasta `FALLOS_SEGUIDOS` (6) cortes de red o 5xx seguidos, y un error que no sea
 `ErrorProveedor` (estado final fallido) nunca borra el id: se sigue esperando. Un reinicio del worker corta esas esperas enseguida
 (`wavespeed_common.fijar_detener` + `cortable()`, solo en las tareas que saben retomar; un swap o una imagen
 siguen como antes) y el gancho `interrumpida` retoma por la predicción un video que quedó a medias por un
@@ -182,7 +183,7 @@ que fal ya terminó y cobró pero cuyo resultado no se pudo traer (429, 5xx, red
 `ErrorProveedor` es solo para un 4xx con motivo (revisión del guardián de gasto, 2026-10-09). Sin saldo en fal (PND-213, 2026-10-09): `_aviso_sin_saldo.html` pinta un aviso aparte con `con_fal` (solo lo pone Crear)
 y `aviso_saldo_fal`/`modelos_fal`; Alertas suma `saldo:fal`/`saldo:fal_recarga`. Pendientes: la factura de
 fal de la prueba real y de un 4:3 o un solo texto (PND-211, dentro de la auditoría de PND-013), videos de referencia como
-video (PND-212), el audio de fal no marca el saldo (PND-215).
+video (PND-212). Desde PND-215 (2026-10-15) el audio de fal también marca el saldo (skill `audios-y-voces`).
 
 **Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «<proveedor> no aceptó el pedido y no se cobró nada: <motivo>…» (WaveSpeed o fal.ai, `saldo.nombre_proveedor`) (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
 
@@ -215,9 +216,9 @@ que no filtró, un cruce) o historial caído → en palabras, posible cobro en G
 (`lanzamiento_pendiente`): «Recuperar el video» sí, «Reintentar» y «Rearmar» no (`cf_generar_video`, `cf_rearmar`,
 `flowplus_lanzar.lanzar` devuelven sin cobrar), y mientras está `buscando` tampoco «Descartar»; descartar en otro estado
 anota el posible cobro (`anotar_posible_cobro_al_descartar`) y `creative_flow.eliminar` guarda en `kv` la predicción y
-el lanzamiento. `duplicar` no copia `prediccion`, `prediccion_entregada` ni `lanzamiento_incierto`. Imagen (no se
-recupera): posible cobro anotado, `lanzamiento_incierto.estado = "imagen"` y «Reintentar» pide confirmar con el precio
-(`confirmo_posible_cobro`); tras confirmar queda `imagen_reintentada`. fal sigue contándolo como su 5xx. Riesgo que
+el lanzamiento. `duplicar` no copia `prediccion`, `prediccion_entregada` ni `lanzamiento_incierto`. Imagen con
+lanzamiento incierto (sin id, no se recupera): posible cobro anotado, `lanzamiento_incierto.estado = "imagen"` y «Reintentar» pide confirmar con el precio
+(`confirmo_posible_cobro`); tras confirmar queda `imagen_reintentada`. fal: ver PND-346 abajo. Riesgo que
 queda: una predicción hecha con la misma llave fuera de esta base (web de WaveSpeed, pruebas locales) con una ruta de la
 app no se distingue; como nunca se entrega sin la entrada, solo puede volver dudosa una búsqueda. Pruebas:
 `tests/test_lanzamiento_incierto.py`.
@@ -346,3 +347,58 @@ de marca en el proyecto (`dashboard._revision_marca_swap`), `gastos.estimar("swa
 lo que cobra cada intento: la imagen (entregado), un `ReadTimeout` (Google pudo generarla y cobrarla) y una
 respuesta sin imagen (su `usageMetadata`). Al cliente solo se le cobra el intento que entregó; los otros van en
 `swap:<id>:t<tarea>:intentos` con `entregado=False`, también cuando el swap falla.
+
+**«Recuperar» cobra lo que el proveedor ya cobró (PND-331, decisión 2026-10-15, lote 2).** Lo anotado sin cobrar en el
+intento que pagó (al rendirse a las 2 h, al fallar la descarga, el posible cobro de un lanzamiento incierto) se corregía
+bajo la misma referencia y nunca se cobraba (`cobrar_gasto` con `nuevo=False` no estrena cobro). Ahora
+`_terminar_video(recuperado=True)` lo pasa a la fila de esta entrega con `gastos.registrar_trasladando`
+(`_trasladar_lo_pendiente`: el origen baja, la entrega lo suma y lo cobra, la predicción pasa a nombrar la entrega) y no
+re-anota el origen; una pista nueva va aparte en `<ref>:musica`. Un proyecto que no cobra (o un origen ya cobrado) sigue
+como antes: se corrige la fila de origen. Solo «failed» del proveedor pone la línea en 0. Por eso el botón dice «Recuperar
+el video (se cobra ≈ X)» (`costo_estimado` de la sesión) y `cf_recuperar` pasa por `libro.exigir(..., job_id=)` antes de
+tocar la pieza; la recuperación automática de la cadena (`Continuar`) usa la reserva del lanzamiento. Pruebas:
+`tests/test_crear_recuperar_cobro.py`.
+
+**«Recuperar la imagen» (PND-332, decisión 2026-10-15, lote 2).** Antes una imagen con la espera agotada decía
+«Recuperar» pero el botón se ocultaba y `cf_recuperar` la rechazaba. Ahora `ejecutar_imagen` guarda el id de su
+predicción como el video (`_avisar_fase_de(..., cf_id=)`); si la espera se agota o la descarga falla, la sesión conserva
+`prediccion` con su `referencia_gasto` (la línea anotada sin cobrar); un rechazo del proveedor la borra, y una imagen
+lista la pasa a `prediccion_entregada`. `flowplus_recuperar` con una imagen va a `_recuperar_imagen`: una sola pregunta
+(`TIEMPO_RECUPERAR`), sin la espera de 2 h del video; si llegó, la baja, la sube y cobra trasladando lo anotado
+(`_trasladar_lo_pendiente(..., tipo="imagen")`). El botón es «Recuperar la imagen (se cobra ≈ X)» y la ruta pasa por el
+mismo freno. Pruebas: `tests/test_crear_recuperar_imagen.py`.
+
+**fal con el mismo trato (PND-346, decisión 2026-10-15, lote 2).** Un tiempo agotado al encolar en fal se contaba como su
+5xx (`PedidoRechazado`): no anotaba el posible cobro ni frenaba «Reintentar». Ahora `fal_video.lanzar` usa la misma regla
+que WaveSpeed (`wavespeed_common._no_salio`): no poder ni conectar es `fal_video.SinConexion`; una lectura agotada, una
+conexión cortada, cualquier 5xx o un 2xx sin `request_id` es `fal_video.LanzamientoIncierto` (`proveedor = "fal"`). fal no
+tiene historial: `ejecutar_video` no busca nada (`_lanzamiento_incierto_sin_historial`), anota el posible cobro con
+`entregado=False` (el detalle nombra al proveedor), suelta una predicción vieja y deja la pieza en error con
+`lanzamiento_incierto.estado = "sin_historial"`; «Reintentar» pide confirmar con el precio como la imagen
+(`REINTENTO_CON_CONFIRMACION = ("imagen", "sin_historial")`, en la ruta y en el detalle) y después queda «reintentada».
+Un incierto de fal no vuelve dudoso a uno de WaveSpeed (`_hay_otro_incierto` lo salta). En `fal_client.llamar` (voces,
+música, subtítulos, swaps de fal) lo mismo es `fal_client.EncoladoIncierto`, una `EsperaAgotadaFal` con `cobrado=True`
+sin `request_id`: quien llama lo anota sin cobrarlo como una espera agotada (PND-313). Riesgo que queda: Sprints y las
+derivaciones relanzan con `flowplus_lanzar.lanzar`, que no pide esa confirmación (como con la imagen incierta). Pruebas:
+`tests/test_lanzamiento_incierto_fal.py`.
+
+**La salida de una pieza «dudosa» (PND-345, decisión 2026-10-15, lote 2).** `es_dudosa(entry)`: lanzamiento incierto
+«dudoso», o «buscando» con `avisado` (historial caído), sin predicción. La búsqueda guarda sus candidatas
+(`lanzamiento_incierto.candidatas`) y la fuente `crear_dudosas` de Alertas (solo admin, skill `alertas`) ofrece dos
+acciones. «No se cobró» (`resolver_sin_cobro`): la línea de posible cobro vuelve a 0, `estado = "no_creado"` con
+`resuelto` {por, como, en} y vuelve «Reintentar». «Asignar la predicción» (`asignar_prediccion`): solo un id con forma
+de id que WaveSpeed conozca (`wavespeed_common.consultar`), de la MISMA ruta (`_es_de_la_ruta` con el `model` que
+devuelve), que no haya terminado sin video y que ninguna otra sesión nombre (`creative_flow.reclamar_prediccion`); queda
+`estado = "asignado"` y la predicción con la `referencia_gasto` del lanzamiento, así «Recuperar el video (se cobra ≈ X)»
+la trae y cobra el posible cobro una sola vez (PND-331). Ninguna de las dos lanza ni cobra nada, y no tocan una pieza que
+no esté en error o que se esté buscando ahora mismo. Pruebas: `tests/test_crear_dudosa_alertas.py`.
+
+**Revisión de guardian-gasto de la rama l2-gasto (2026-10-15, «hay riesgo de plata», arreglado en la misma rama).**
+(1) «Asignar la predicción» además exige que WaveSpeed diga que se creó dentro de la ventana del lanzamiento
+(`created_at` en `_ventana_busqueda`; sin fecha, no) y, si trae la entrada, el mismo prompt (`prompt_sha`): las
+candidatas son justo las de otras piezas a esa hora. (2) `creative_flow._otras_con_prediccion` mira solo
+`$.prediccion.id` y `$.prediccion_entregada` (con un LIKE sobre todo el extra, las candidatas guardadas de una dudosa
+le bloqueaban la predicción a la pieza que sí la pagó). (3) Sin precio, el botón dice «Recuperar el video (se cobra;
+precio no disponible)», nunca «sin pagar de nuevo». (4) `flowplus_lanzar.lanzar` no relanza una pieza en
+`REINTENTO_CON_CONFIRMACION` sin `confirmado=True` (solo «Reintentar» de Crear lo pasa, tras confirmar con el precio);
+Sprints «Reintentar» lo manda a Crear con un aviso y el director con `auto_lanzar` no la relanza.

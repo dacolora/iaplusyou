@@ -77,37 +77,49 @@ class EntradaInvalida(ValueError):
 # --------------------------------------------------------------- leer ---
 
 def _como_voz(m):
-    """`forma_nombre` es un msgid: la plantilla lo traduce con `|traducir`."""
+    """`forma_nombre` es un msgid: la plantilla lo traduce con `|traducir`. `por_cobrar` (USD del proveedor, o
+    None): la voz se recuperó en un GET sin cobrarla y no se puede usar hasta «Usar esta voz» (PND-339)."""
     e = m.get("extra") or {}
     forma = e.get("forma") or "disenada"
+    pc = e.get("por_cobrar")
     return {"id": m["id"], "valor": f"{PREFIJO}{m['id']}", "nombre": e.get("nombre") or f"Voz {m['id']}",
             "forma": forma, "forma_nombre": NOMBRES_FORMA.get(forma, forma),
             "voice_id": e.get("voice_id") or "", "url": m.get("url") or "",
             "idioma_muestra": e.get("idioma_muestra") or "es", "estrenada": bool(e.get("estrenada")),
-            "descripcion": e.get("descripcion") or "", "creado_en": m.get("creado_en")}
+            "descripcion": e.get("descripcion") or "", "creado_en": m.get("creado_en"),
+            "por_cobrar": float(pc.get("usd") or 0.0) if isinstance(pc, dict) else None}
 
 
-def listar(cliente):
-    """Las voces propias del proyecto, la más reciente primero."""
+def listar(cliente, usables=False):
+    """Las voces propias del proyecto, la más reciente primero. `usables`: sin las que esperan su cobro (PND-339),
+    para los selectores de Audios, del anuncio hablado y de Final edition."""
     recuperar_pendientes(cliente)
     with db.conectar() as con:
         filas = con.execute(sa.select(db.material).where(
             db.material.c.cliente == cliente, db.material.c.tipo == "audio",
             db.material.c.origen == ORIGEN).order_by(db.material.c.id.desc())).all()
-    return [_como_voz(dict(f._mapping)) for f in filas]
+    voces = [_como_voz(dict(f._mapping)) for f in filas]
+    return [v for v in voces if not v["por_cobrar"]] if usables else voces
 
 
 
-def _guardar_ficha(cliente, cobro, cobrar=False):
+def _guardar_ficha(cliente, cobro, cobrar=False, por_cobrar=False):
+    """`por_cobrar` (PND-339): la voz la recupera un GET que no puede cobrar; queda guardada (no se pierde) pero
+    marcada `extra.por_cobrar` {referencia, usd} desde el principio, así nadie la usa antes de «Usar esta voz»."""
     ficha = (cobro.get("extra") or {}).get("ficha") or {}
     if not (ficha.get("extra") or {}).get("voice_id"):
         raise ValueError(gettext("La voz todavía no tiene una respuesta del proveedor; no se vuelve a cobrar."))
+    marca = {"por_cobrar": {"referencia": cobro["referencia"], "usd": round(float(cobro.get("usd") or 0.0), 4)}} \
+        if por_cobrar else {}
     mat = materiales.buscar_hash(cliente, ficha["hash"])
     if not mat:
         if cobro["extra"].get("ficha_guardada"):
             raise ValueError(gettext("Esta voz se borró; no se vuelve a crear."))
-        mat, _ = materiales.obtener_o_crear(cliente, ficha["hash"], lambda: {
-            k: v for k, v in ficha.items() if k != "hash"})
+        campos = {k: v for k, v in ficha.items() if k != "hash"}
+        campos["extra"] = {**(campos.get("extra") or {}), **marca}
+        mat, _ = materiales.obtener_o_crear(cliente, ficha["hash"], lambda: campos)
+    if marca and not ((mat.get("extra") or {}).get("por_cobrar")):
+        mat = materiales.actualizar_extra(cliente, mat["id"], **marca) or mat
     gastos.registrar_seguro(cliente, cobro["tipo"], cobro["usd"], cobro["referencia"],
                             detalle=cobro["detalle"], proveedor=cobro["proveedor"],
                             extra={**cobro["extra"], "ficha_guardada": True})
@@ -123,10 +135,14 @@ def _guardar_ficha(cliente, cobro, cobrar=False):
 
 
 def recuperar_pendientes(cliente):
-    """Recuperación gratuita al abrir Mis voces; nunca sintetiza ni descarga."""
+    """Recuperación al abrir Mis voces; nunca sintetiza, descarga ni cobra (un GET nunca cobra). En un proyecto que
+    cobra, la voz recuperada queda «pagada y sin cobrar» (`por_cobrar`, PND-339): la tarea que la pagó falló y el
+    worker le devolvió el cobro, así que se usa recién después de «Usar esta voz (se cobra ≈ X)» (`cobrar_recuperada`)."""
     pendientes = gastos.fichas_pendientes(cliente, "voz_propia")
     if not pendientes:
         return
+    from cobros import libro, vista  # noqa: PLC0415 — perezoso: solo con fichas pendientes
+    cobra = libro.cobra_activo(cliente)
     with db.conectar() as con:
         t = db.tarea
         activas = con.execute(sa.select(t.c.id).where(t.c.cliente == cliente,
@@ -137,9 +153,34 @@ def recuperar_pendientes(cliente):
         if not (cobro["extra"]["ficha"].get("extra") or {}).get("voice_id"):
             continue
         try:
-            _guardar_ficha(cliente, cobro)
+            # Solo si al cliente no se le cobró (revisión de guardian-gasto, 2026-10-15): una voz entregada y cobrada
+            # cuya tarea solo falló al marcar `ficha_guardada` no se bloquea ni se vuelve a pedir.
+            pagada = cobra and vista.cobrado_por_gasto(cliente, [cobro["id"]]).get(cobro["id"], 0) > 0
+            _guardar_ficha(cliente, cobro, por_cobrar=cobra and not pagada)
         except Exception:
             log.warning("no pude recuperar una ficha de voz propia", exc_info=True)
+
+
+def cobrar_recuperada(cliente, voz_id):
+    """«Usar esta voz (se cobra ≈ X)» (PND-339, decisión 2026-10-15, lote 2): cobra lo que fal cobró por una voz
+    recuperada en un GET y la libera. Pasa por el freno de saldo (`libro.pedido`: lanza `SaldoInsuficiente` sin cobrar
+    ni liberar) y traslada el costo con `gastos.registrar_trasladando` a `<referencia>:recuperada`, como la voz que
+    recupera su propia tarea: una sola vez, aunque se haga clic dos veces (el segundo no tiene nada que mover). Si ya
+    no queda nada pendiente (un proyecto que dejó de cobrar), solo la libera. Devuelve la voz."""
+    m = materiales.obtener(cliente, voz_id)
+    if not m or m["tipo"] != "audio" or m["origen"] != ORIGEN:
+        raise EntradaInvalida(MENSAJES["no_encontrada"])
+    pc = (m.get("extra") or {}).get("por_cobrar")
+    if not isinstance(pc, dict):
+        return _como_voz(m)
+    from cobros import libro  # noqa: PLC0415
+    usd = round(float(pc.get("usd") or 0.0), 4)
+    nombre = (m.get("extra") or {}).get("nombre") or ""
+    with libro.pedido(cliente, usd):
+        gastos.registrar_trasladando(cliente, "voz_propia", 0, f"{pc['referencia']}:recuperada",
+                                     [{"referencia": pc["referencia"]}], proveedor=PROVEEDOR,
+                                     detalle=gettext("MiniMax · voz recuperada · %(nombre)s", nombre=nombre))
+    return _como_voz(materiales.actualizar_extra(cliente, voz_id, por_cobrar=None) or m)
 
 def obtener(cliente, voz_id):
     m = materiales.obtener(cliente, voz_id)
@@ -149,16 +190,17 @@ def obtener(cliente, voz_id):
 
 
 def resolver(cliente, valor):
-    """La voz si `valor` es `vp:<id>` de una voz propia de este proyecto; si no,
-    None. Un id descomunal (más de 64 bits) hace que SQLite lance
-    `OverflowError` al ligarlo, no `ValueError`: se cubren los dos."""
+    """La voz si `valor` es `vp:<id>` de una voz propia de este proyecto que se pueda usar; si no, None. Una voz
+    «pagada y sin cobrar» (PND-339) no se puede usar hasta «Usar esta voz». Un id descomunal (más de 64 bits) hace que
+    SQLite lance `OverflowError` al ligarlo, no `ValueError`: se cubren los dos."""
     if not audios.es_propia(valor):
         return None
     try:
         vid = int(valor[len(PREFIJO):])
-        return obtener(cliente, vid)
+        voz = obtener(cliente, vid)
     except (ValueError, OverflowError):
         return None
+    return None if voz is None or voz["por_cobrar"] else voz
 
 
 def marcar_estrenada(cliente, voz_id):

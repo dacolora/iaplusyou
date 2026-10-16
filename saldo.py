@@ -149,6 +149,15 @@ def nombre_proveedor(proveedor):
     return (PROVEEDORES.get(proveedor) or {}).get("nombre") or proveedor
 
 
+def mensaje_audio(proveedor="fal"):
+    """Lo que dicen las tareas de voz, música y subtítulos cuando su proveedor
+    se quedó sin saldo (PND-215; en el idioma que puso el llamador): en
+    palabras, sin la respuesta cruda del proveedor, y diciendo que no se cobró."""
+    return gettext("%(proveedor)s, el proveedor de voces, música y subtítulos, se quedó sin saldo: no se generó ni se "
+                   "cobró nada. Ya se avisó a Creatv; vuelve a intentarlo cuando lo recargue.",
+                   proveedor=nombre_proveedor(proveedor))
+
+
 def mensaje_tarjeta(proveedor="wavespeed"):
     """Lo que muestra la tarjeta de la pieza que falló (en el idioma que el
     llamador puso con idiomas.en_idioma): en palabras, sin el JSON del

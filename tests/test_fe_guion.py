@@ -45,7 +45,7 @@ def _instalar_fake(monkeypatch, respuestas):
             return _Resp(*respuesta) if isinstance(respuesta, tuple) else _Resp(respuesta)
 
     class FakeAnthropic:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _Messages()
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "clave-test")
@@ -244,7 +244,7 @@ def test_si_la_correccion_se_corta_viaja_lo_que_cobro_la_primera(monkeypatch):
     cliente_real = mod.anthropic.Anthropic
 
     class ConCorte:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self._real = cliente_real(api_key=api_key)
             self.messages = self
             self.n = 0

@@ -414,7 +414,7 @@ El modelo de una tarea de Claude que cobra con precio a la vista (`meta_rend_eva
 - `g.margen_precio` se lee perezoso (al primer precio de la petición), no en cada `before_request`.
 - `tienda_sync_productos` sigue sin frenar, pero su paso de pago (la regla de fidelidad con Claude, `importador._regla_si_hay_saldo`) pide saldo y se salta sin él. `exp_decidir` sigue exento (pausar perdedoras nunca se frena), pero su diagnóstico con Claude pide saldo; `sprint_qa_pendientes` encola cada QA con su precio reservado (revisión final 2026-10-08).
 - Los tipos marcados «cobra» exigen saldo positivo aunque una corrida concreta sea gratis (conservador; PND-168).
-- Una pieza que falló tras pagar (`no_cobrado`) y se recupera bajo la misma referencia sigue sin cobrarse; el aviso «no se te cobró» sale también en fallos de llamadas automáticas a Claude.
+- Una pieza que falló tras pagar (`no_cobrado`) y se recupera bajo la misma referencia sigue sin cobrarse; el aviso «no se te cobró» sale también en fallos de llamadas automáticas a Claude. (Superado: desde PND-318 y PND-331, 2026-10-15, lo recuperado se cobra en su propia fila con `gastos.registrar_trasladando`; skill `crear`.)
 - La ganancia del mes cuenta como pérdida el costo de un `no_cobrado` igual que el de un cobro revertido; para la lectura literal, quita `"no_cobrado"` de `TIPOS_CON_COSTO` en `cobros/vista.py`.
 - En el catálogo en inglés, «margen» es «markup» y «Cobrar» es «Charge usage» (`docs/i18n/glosario.md`).
 
@@ -449,4 +449,8 @@ propuestos: `docs/superpowers/auditorias/2026-10-15-cobros.md`. Lo que salió de
 - **Lo real, no una tarifa**: las llamadas de `generador_prompts` se miden con `contar_uso()`; la caché de la doctrina
   cuenta en la entrada (`guiones.claude.tokens_entrada_equivalentes`); Apify se concilia con `usageTotalUsd`.
 - **Para cuadrar con las facturas**: `venv/bin/python3 deploy/conciliar_gastos.py [--desde AAAA-MM] [--hasta AAAA-MM]
-  [--proyecto X] [--csv]` (solo lee; suma por empresa y mes; parte las finales en Anthropic y fal).
+  [--proyecto X] [--csv]` (solo lee; suma por empresa y mes; parte las finales en Anthropic y fal). Atria y TrendTrack
+  no están en `gasto` (PND-335, decisión 2026-10-15, lote 3): son cupos de un plan de Creatv para la biblioteca global
+  de referentes (y TrendTrack, además, recargas de créditos), no se prorratean a los barridos y el informe los lista
+  aparte como «Suscripciones fijas» (`SUSCRIPCIONES_FIJAS`; en el CSV, filas `suscripcion_fija;<nombre>`) para que su
+  factura no se lea como un faltante.

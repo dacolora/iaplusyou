@@ -195,9 +195,13 @@ def _otras_con_prediccion(con, pred_id, cliente, cf_id):
     lo dejó anotado al descartarse (`kv` crear:prediccion:<id>)?"""
     if con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == _clave_usada(pred_id))).first():
         return True
-    texto = sa.cast(db.concepto.c.extra, sa.Text)
+    # Solo `prediccion.id` y `prediccion_entregada` (revisión de guardian-gasto, 2026-10-15): con un LIKE sobre todo el
+    # extra, las candidatas que una pieza dudosa guarda para el admin (PND-345) bloqueaban para siempre esa
+    # predicción a la pieza que sí la pagó.
+    extra = db.concepto.c.extra
     fila = con.execute(sa.select(db.concepto.c.id).where(
-        texto.like(f'%"{pred_id}"%'),
+        sa.or_(sa.func.json_extract(extra, "$.prediccion.id") == pred_id,
+               sa.func.json_extract(extra, "$.prediccion_entregada") == pred_id),
         sa.not_(sa.and_(db.concepto.c.cliente == cliente, db.concepto.c.legado_id == cf_id))).limit(1)).first()
     return fila is not None
 

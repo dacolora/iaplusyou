@@ -87,18 +87,24 @@
               <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
             </form>
             {% endif %}
-            {% if item.estado == "error" and item.tipo != "imagen" and ((item.prediccion and item.prediccion.id) or item.lanzamiento_pendiente) %}
+            {% if item.estado == "error" and ((item.prediccion and item.prediccion.id) or item.lanzamiento_pendiente) %}
             {# Incidente 2026-09-28: el worker dejó de esperar pero WaveSpeed sigue con la predicción; se recupera sin pagar.
                PND-214: también si el pedido salió sin respuesta (se busca en el historial). #}
             <form method="post" action="{{ url_for('cf_recuperar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              <button type="submit" class="btn-generar btn-sm">{{ _('Recuperar el video (sin pagar de nuevo)') }}</button>
+              {# PND-331: lo que el proveedor ya cobró se cobra al llegar, con el precio a la vista (como el swap). #}
+              {% set con_precio = item.costo_estimado and item.costo_estimado.usd is not none %}
+              <button type="submit" class="btn-generar btn-sm">{% if item.tipo == "imagen" %}{% if con_precio %}{{ _('Recuperar la imagen (se cobra ≈ %(precio)s)', precio=item.costo_estimado.usd|precio|usd) }}{% else %}{{ _('Recuperar la imagen (se cobra; precio no disponible)') }}{% endif %}{% elif con_precio %}{{ _('Recuperar el video (se cobra ≈ %(precio)s)', precio=item.costo_estimado.usd|precio|usd) }}{% else %}{{ _('Recuperar el video (se cobra; precio no disponible)') }}{% endif %}</button>
             </form>
             {% endif %}
             {% if item.estado in ("prompt_listo", "error") and not item.lanzamiento_pendiente %}
-            {% set imagen_incierta = item.tipo == "imagen" and item.lanzamiento_incierto and item.lanzamiento_incierto.estado == "imagen" %}
+            {% set incierto_estado = item.lanzamiento_incierto.estado if item.lanzamiento_incierto else none %}
+            {% set imagen_incierta = item.tipo == "imagen" and incierto_estado == "imagen" %}
+            {# PND-346: un video de fal que pudo cobrarse sin respuesta tampoco se recupera (fal no tiene historial). #}
+            {% set video_incierto = item.tipo != "imagen" and incierto_estado == "sin_historial" %}
+            {% set precio_reintento = (item.costo_estimado.usd|precio|usd) if item.costo_estimado else _("precio no disponible") %}
             {# R5 (PND-214): la imagen anterior pudo cobrarse; reintentar paga otra vez y se dice con el precio. #}
-            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd|precio if item.costo_estimado else '' }}"{% if imagen_incierta %} onsubmit='return confirm({{ _("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta %(precio)s más. ¿Seguir?", precio=(item.costo_estimado.usd|precio|usd) if item.costo_estimado else _("precio no disponible"))|tojson }});'{% endif %}>
-              {% if imagen_incierta %}<input type="hidden" name="confirmo_posible_cobro" value="1">{% endif %}
+            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd|precio if item.costo_estimado else '' }}"{% if imagen_incierta %} onsubmit='return confirm({{ _("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta %(precio)s más. ¿Seguir?", precio=precio_reintento)|tojson }});'{% elif video_incierto %} onsubmit='return confirm({{ _("El video anterior pudo cobrarse aunque %(proveedor)s no respondió. Generarlo otra vez cuesta %(precio)s más. ¿Seguir?", proveedor=("WaveSpeed" if item.lanzamiento_incierto.proveedor == "wavespeed" else "fal.ai"), precio=precio_reintento)|tojson }});'{% endif %}>
+              {% if imagen_incierta or video_incierto %}<input type="hidden" name="confirmo_posible_cobro" value="1">{% endif %}
               {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}
               <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> {{ _('Generar también la versión B (dos videos)') }}</label>
               {% endif %}

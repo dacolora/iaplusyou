@@ -500,14 +500,16 @@ class IdeaConPieza(AnalisisInvalido):
     igual."""
 
 
-def reescribir(cliente, cp_id):
+def reescribir(cliente, cp_id, on_usage=None):
     """Doctrina, bloque 2 (§3.5): reescribe título, escena y sonido de una idea
     desde su ángulo (editado a mano o no). El ángulo y el gancho no se tocan.
     Devuelve (tokens_entrada, tokens_salida) de lo pagado. Si la respuesta no
     sirve, la idea queda como estaba y se lanza `AnalisisInvalido` con
     `tokens_entrada`/`tokens_salida` puestos (lo pagado se registra igual).
     Si para cuando toca guardar la idea ya tiene sesión de Crear (§3.5,
-    revisión final), tampoco se escribe: se lanza `IdeaConPieza`."""
+    revisión final), tampoco se escribe: se lanza `IdeaConPieza`.
+    `on_usage(ent, sal)` se llama apenas Claude responde, antes de leer y de
+    guardar nada (PND-336: si guardar fallaba, lo pagado no se anotaba)."""
     idea = datos.idea(cliente, cp_id)
     if not idea:
         raise datos.ErrorDatos(gettext("Esa idea no existe."))
@@ -534,6 +536,8 @@ def reescribir(cliente, cp_id):
                                                 system=doctrina.bloque_system("gancho", "video",
                                                                               extra=INSTRUCCIONES_REESCRIBIR,
                                                                               idioma=idiomas.de_proyecto(cliente)))
+    if on_usage:
+        on_usage(ent, sal)
     try:
         t = (crudo or "").strip()
         ini, fin = t.find("{"), t.rfind("}")

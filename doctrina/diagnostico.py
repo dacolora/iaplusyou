@@ -181,7 +181,7 @@ def diagnosticar(pz, veredicto, snapshots, reglas, extras=None, idioma=None):
     content = [{"type": "text", "text": texto_para_diagnostico(pz, veredicto, pistas_, extras)}]
     system = doctrina.bloque_system("diagnosticar", extra=_instrucciones(idioma), idioma=idioma)
     texto, ent, sal = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system,
-                                                timeout=TIMEOUT_S, max_retries=1)
+                                                timeout=TIMEOUT_S, max_retries=0)
     try:
         d = parsear(texto)
     except Exception as primero:  # noqa: BLE001 — una forma rara también es «no sirvió»
@@ -189,7 +189,7 @@ def diagnosticar(pz, veredicto, snapshots, reglas, extras=None, idioma=None):
                                                     "SOLO el JSON pedido."}]
         try:
             texto, e2, s2 = analisis._llamar_contando(pedido, max_tokens=MAX_TOKENS, system=system,
-                                                      timeout=TIMEOUT_S, max_retries=1)
+                                                      timeout=TIMEOUT_S, max_retries=0)
         except Exception as falla:  # noqa: BLE001 — lo pagado en la primera llamada viaja con el error
             raise ErrorDiagnostico(str(falla)[:200] or gettext("La corrección falló."), ent, sal) from falla
         ent, sal = ent + e2, sal + s2

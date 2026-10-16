@@ -156,9 +156,10 @@ def _fase_traducir(tarea, p, bid, avanzar):
             break
         trad, ent, sal = _pagada_aunque_falle(tarea, bid, f"firmas{lote}", gettext("traducción de firmas copycoders"),
                                               copycoders.traducir_firmas, [(r["id"], r["firma"]) for r in pendientes])
+        # PND-336: lo cobrado se anota antes de escribir (si marcar fallaba, el gasto se perdía).
+        _registrar_traduccion(tarea, bid, f"firmas{lote}", ent, sal, gettext("traducción de firmas copycoders"))
         if datos.marcar_traducidas(list(trad.items())):
             progreso = True
-        _registrar_traduccion(tarea, bid, f"firmas{lote}", ent, sal, gettext("traducción de firmas copycoders"))
         if not trad:
             break
     familias = [f for f in datos.familias() if not (f["descripcion"] or "").strip()]
@@ -169,11 +170,11 @@ def _fase_traducir(tarea, p, bid, avanzar):
         desc, ent, sal = _pagada_aunque_falle(tarea, bid, f"familias{len(familias)}",
                                               gettext("descripción de familias copycoders"),
                                               copycoders.describir_familias, list(ejemplos.items()))
+        _registrar_traduccion(tarea, bid, f"familias{len(familias)}", ent, sal,
+                              gettext("descripción de familias copycoders"))       # PND-336: antes de escribir
         for f in familias:
             if f["nombre"] in desc:
                 datos.familia_actualizar(f["id"], desc[f["nombre"]])
-        _registrar_traduccion(tarea, bid, f"familias{len(familias)}", ent, sal,
-                              gettext("descripción de familias copycoders"))
     quedan = bool(datos.sin_traducir(limite=1))
     # Solo re-encolar por firmas si esta pasada avanzó algo: si una pasada
     # completa no tradujo ni una fila (Claude omitió las mismas otra vez), la
@@ -545,7 +546,7 @@ def _fase_imagenes_barrer(tarea, p, bid, avanzar):
     return gettext("Imágenes listas: %(listas)s. Sigue la clasificación.", listas=con_imagen)
 
 
-def _clasificar_uno(cliente, r):
+def _clasificar_uno(cliente, r, anotar=None):
     """Clasifica un referente y actualiza sus columnas; un fallo de Claude
     (`ClasificacionInvalida`) deja `clasificacion=error` y el llamador sigue
     con el siguiente sin abortar el tramo. Lo mismo un `anthropic.BadRequestError`
@@ -559,6 +560,8 @@ def _clasificar_uno(cliente, r):
     `ejecutar_clasificar`, que marca el barrido y corta el tramo (nada raro:
     max_intentos=1, no tiene sentido seguir gastando si la API está caída, y
     ese tipo de error SÍ suele resolverse solo en un reintento posterior).
+    `anotar(ent, sal, ok)` anota lo que cobró Claude ANTES de escribir el
+    referente (PND-336: si la escritura fallaba, el gasto se perdía).
     Devuelve (ok: bool, tokens_entrada, tokens_salida)."""
     vocabulario = [f["nombre"] for f in datos.familias()]
     try:
@@ -566,6 +569,8 @@ def _clasificar_uno(cliente, r):
     except clasificar.ClasificacionInvalida as e:
         ent = getattr(e, "tokens_entrada", 0) or 0
         sal = getattr(e, "tokens_salida", 0) or 0
+        if anotar:
+            anotar(ent, sal, False)
         extra = dict(r.get("extra") or {})
         extra["error_clasificacion"] = str(e)
         datos.actualizar_referente(r["id"], clasificacion="error", extra=extra)
@@ -578,6 +583,8 @@ def _clasificar_uno(cliente, r):
         extra["error_clasificacion"] = cola.sin_token(str(e))
         datos.actualizar_referente(r["id"], clasificacion="error", extra=extra)
         return False, 0, 0
+    if anotar:
+        anotar(ent, sal, True)
     familia = resultado["familia"]
     if resultado.get("familia_nueva"):
         fn = resultado["familia_nueva"]
@@ -639,10 +646,12 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     b = datos.barrido(bid) or {}
     clasificados = int(b.get("clasificados") or 0)
     avanzo = False
-    for i, r in enumerate(pendientes, 1):
-        ok, ent, sal = _clasificar_uno(cliente, r)
-        avanzo = avanzo or ok
-        if ent or sal:
+
+    def _anotador(r):
+        def anotar(ent, sal, ok):
+            # PND-336: lo llama `_clasificar_uno` apenas Claude responde, antes de escribir el referente.
+            if not (ent or sal):
+                return
             usd = costo_real(ent, sal)
             gastos.registrar_seguro(cliente_gasto, "clasificacion", usd, f"referentes:clasificar:{r['id']}{ref_sufijo(tarea)}",
                                     detalle=r.get("titular") or r.get("marca") or "", proveedor="anthropic",
@@ -650,6 +659,11 @@ def _fase_clasificando(tarea, p, bid, avanzar):
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
             b2 = datos.barrido(bid) or {}
             datos.actualizar_barrido(bid, usd_real=round(float(b2.get("usd_real") or 0.0) + usd, 4))
+        return anotar
+
+    for i, r in enumerate(pendientes, 1):
+        ok, ent, sal = _clasificar_uno(cliente, r, anotar=_anotador(r))
+        avanzo = avanzo or ok
         clasificados += int(ok)
         cola.reportar(tarea.get("job_id") or job_id_barrer(bid), progreso=100.0 * i / max(1, len(pendientes)),
                       detalle=f"{i}/{len(pendientes)}")

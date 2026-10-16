@@ -522,7 +522,7 @@ def _llamar(texto, max_tokens):
     esta función."""
     import anthropic
     from generador_prompts import MODEL, _api_key
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens, system=doctrina.bloque_system("investigar"),
                                   messages=[{"role": "user", "content": texto}])
     from guiones.claude import tokens_entrada_equivalentes  # noqa: PLC0415 — la caché de la doctrina también se cobra

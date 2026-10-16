@@ -88,7 +88,7 @@ def validar_lectura(data):
 
 
 def _llamar(content, max_tokens=MAX_TOKENS_LEER):
-    client = anthropic.Anthropic(api_key=generador_prompts._api_key())
+    client = anthropic.Anthropic(api_key=generador_prompts._api_key(), max_retries=0)
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": content}])
     uso = getattr(resp, "usage", None)

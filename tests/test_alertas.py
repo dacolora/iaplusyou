@@ -52,7 +52,7 @@ def test_alerta_arma_el_dict_completo_y_rechaza_nivel_o_grupo_invalidos(alertas)
     a = alertas._alerta("llave:meta", alertas.huella(), "bloquea", "puesta_a_punto", "Titulo", "Detalle", "settings")
     assert a == {"clave": "llave:meta", "huella": alertas.huella(), "nivel": "bloquea", "grupo": "puesta_a_punto",
                  "titulo": "Titulo", "detalle": "Detalle", "tab": "settings", "ancla": None, "url": None,
-                 "entidad": None, "solo_admin": False}
+                 "entidad": None, "solo_admin": False, "acciones": []}
     b = alertas._alerta("x:y", alertas.huella(), "info", "fallos", "t", "d", "nicho", ancla="a", url="?x=1",
                         entidad="7", solo_admin=True)
     assert (b["ancla"], b["url"], b["entidad"], b["solo_admin"]) == ("a", "?x=1", "7", True)
@@ -60,6 +60,12 @@ def test_alerta_arma_el_dict_completo_y_rechaza_nivel_o_grupo_invalidos(alertas)
         alertas._alerta("x:y", alertas.huella(), "grave", "fallos", "t", "d", "nicho")
     with pytest.raises(ValueError):
         alertas._alerta("x:y", alertas.huella(), "info", "otros", "t", "d", "nicho")
+    # PND-345: solo acciones conocidas (la plantilla pinta su formulario).
+    c = alertas._alerta("crear_dudosa:cf_1", alertas.huella(), "atencion", "decision", "t", "d", "creativeflowplus",
+                        acciones=("crear_no_se_cobro",))
+    assert c["acciones"] == ["crear_no_se_cobro"]
+    with pytest.raises(ValueError):
+        alertas._alerta("x:y", alertas.huella(), "info", "fallos", "t", "d", "nicho", acciones=("borrar_todo",))
 
 
 def test_las_claves_y_huellas_validas(alertas):

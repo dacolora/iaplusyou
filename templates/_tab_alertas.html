@@ -56,6 +56,20 @@
         {% elif a.tab %}
         <a class="alerta-ir" href="#{{ a.tab }}" data-ir-tab="{{ a.tab }}"{% if a.ancla %} data-ancla="{{ a.ancla }}"{% endif %}>{{ _('Ir a %(tab)s →', tab=pestana) }}</a>
         {% endif %}
+        {# PND-345: una pieza «dudosa» de Crear (solo el admin la ve): asignarle su predicción o decir que no se cobró. #}
+        {% if 'crear_asignar_prediccion' in (a.acciones or []) %}
+        <form method="post" action="{{ url_for('cf_dudosa_asignar', cliente=cliente, cf_id=a.entidad) }}" class="alerta-form alerta-form-campo">
+          <input type="text" name="prediccion" required maxlength="80" pattern="[A-Za-z0-9\-]{6,80}" autocomplete="off"
+                 placeholder="{{ _('Id de la predicción') }}" aria-label="{{ _('Id de la predicción de WaveSpeed') }}">
+          <button type="submit" class="btn-xs">{{ _('Asignar la predicción') }}</button>
+        </form>
+        {% endif %}
+        {% if 'crear_no_se_cobro' in (a.acciones or []) %}
+        <form method="post" action="{{ url_for('cf_dudosa_no_se_cobro', cliente=cliente, cf_id=a.entidad) }}" class="alerta-form"
+              onsubmit='return confirm({{ _("¿Confirmas que en el panel de WaveSpeed este pedido no se creó ni se cobró? La línea de posible cobro vuelve a 0 y la pieza se podrá volver a generar.")|tojson }});'>
+          <button type="submit" class="btn-xs">{{ _('No se cobró') }}</button>
+        </form>
+        {% endif %}
         {% if a.puede_descartar %}
         <form method="post" action="{{ url_for('alertas_descartar', cliente=cliente) }}" class="alerta-form">
           <input type="hidden" name="clave" value="{{ a.clave }}">

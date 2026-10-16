@@ -204,15 +204,23 @@
       enviarVoz(borrar.dataset.url, new FormData());
       return;
     }
+    // PND-339: una voz recuperada sin cobrar se paga con su precio a la vista antes de usarla.
+    var cobrar = ev.target.closest('.au-vp-cobrar');
+    if (cobrar) {
+      if (!confirm(cobrar.dataset.confirmar)) return;
+      cobrar.disabled = true;
+      enviarVoz(cobrar.dataset.url, new FormData()).then(function () { cobrar.disabled = false; });
+      return;
+    }
     var play = ev.target.closest('.au-voz-play');
     if (play) { escucharVoz(play); return; }
     var tarjeta = ev.target.closest('.au-voz');
-    if (tarjeta) elegirVoz(tarjeta.dataset.voz);
+    if (tarjeta && tarjeta.dataset.voz) elegirVoz(tarjeta.dataset.voz);
   });
   vpWrap.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Enter' && ev.key !== ' ') return;
     var tarjeta = ev.target.closest('.au-voz');
-    if (tarjeta && ev.target === tarjeta) { ev.preventDefault(); elegirVoz(tarjeta.dataset.voz); }
+    if (tarjeta && tarjeta.dataset.voz && ev.target === tarjeta) { ev.preventDefault(); elegirVoz(tarjeta.dataset.voz); }
   });
   vpPanel.querySelectorAll('[data-vp-pestana]').forEach(function (p) {
     p.addEventListener('click', function () {
