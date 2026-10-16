@@ -41,19 +41,19 @@
 </div>
 {% endif %}
 
-<nav class="cat-tabs config-apartados" role="tablist" aria-label="{{ _('Apartados de Configuración') }}">
-  {% if es_admin %}<button type="button" class="cat-tab" data-apartado="puesta">{{ _('Puesta a punto') }}</button>{% endif %}
-  <button type="button" class="cat-tab" data-apartado="conexiones">{{ _('Conexiones') }}</button>
-  <button type="button" class="cat-tab" data-apartado="marca">{{ _('Marca') }}</button>
-  <button type="button" class="cat-tab" data-apartado="generacion">{{ _('Generación') }}</button>
-  <button type="button" class="cat-tab" data-apartado="cuenta">{{ _('Cuenta y avisos') }}</button>
-  <button type="button" class="cat-tab" data-apartado="gasto">{{ _('Gasto') }}</button>
-  {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}<button type="button" class="cat-tab" data-apartado="saldo">{{ _('Saldo y recargas') }}</button>{% endif %}
-  {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}<button type="button" class="cat-tab" data-apartado="plan">{{ _('Plan') }}</button>{% endif %}
+<nav class="cat-tabs config-apartados" role="tablist" aria-label="{{ _('Apartados de Configuración') }}" data-pestanas>
+  {% if es_admin %}<button type="button" class="cat-tab" role="tab" aria-selected="false" id="config-tab-puesta" aria-controls="config-ap-puesta" data-apartado="puesta">{{ _('Puesta a punto') }}</button>{% endif %}
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" id="config-tab-conexiones" aria-controls="config-ap-conexiones" data-apartado="conexiones">{{ _('Conexiones') }}</button>
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" id="config-tab-marca" aria-controls="config-ap-marca" data-apartado="marca">{{ _('Marca') }}</button>
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" id="config-tab-generacion" aria-controls="config-ap-generacion" data-apartado="generacion">{{ _('Generación') }}</button>
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" id="config-tab-cuenta" aria-controls="config-ap-cuenta" data-apartado="cuenta">{{ _('Cuenta y avisos') }}</button>
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" id="config-tab-gasto" aria-controls="config-ap-gasto" data-apartado="gasto">{{ _('Gasto') }}</button>
+  {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}<button type="button" class="cat-tab" role="tab" aria-selected="false" id="config-tab-saldo" aria-controls="config-ap-saldo" data-apartado="saldo">{{ _('Saldo y recargas') }}</button>{% endif %}
+  {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}<button type="button" class="cat-tab" role="tab" aria-selected="false" id="config-tab-plan" aria-controls="config-ap-plan" data-apartado="plan">{{ _('Plan') }}</button>{% endif %}
 </nav>
 
 {% if es_admin %}
-<section class="config-apartado" id="config-ap-puesta" data-apartado="puesta">
+<section class="config-apartado" id="config-ap-puesta" role="tabpanel" aria-labelledby="config-tab-puesta" data-apartado="puesta">
 <h2 id="config-puesta-a-punto">{{ _('Puesta a punto') }}</h2>
 <p class="vacio" style="padding-top:0;">
   {{ _('Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar
@@ -68,7 +68,7 @@
 </section>
 {% endif %}
 
-<section class="config-apartado" id="config-ap-conexiones" data-apartado="conexiones">
+<section class="config-apartado" id="config-ap-conexiones" role="tabpanel" aria-labelledby="config-tab-conexiones" data-apartado="conexiones">
 {# ---- Meta: la app del proyecto y la conexión (antes en Experimentos) ---- #}
 <h2 id="config-meta">Meta</h2>
 {% include "_meta_conectar.html" %}
@@ -163,13 +163,13 @@
 
 <details class="swap-card tienda-conectar" {% if not tiendas_cliente %}open{% endif %}>
   <summary class="swap-card-resumen">+ {{ _('Conectar tienda') }}</summary>
-  <div class="cat-tabs tienda-tipos" role="tablist">
+  <div class="cat-tabs tienda-tipos" role="tablist" aria-label="{{ _('Tipo de tienda') }}" data-pestanas>
     {% for tipo in tipos_tienda %}
-    <button type="button" class="cat-tab tienda-tipo-btn{% if loop.first %} activo{% endif %}" data-tienda-tipo="{{ tipo }}">{{ {"shopify_publico": _("Shopify (sin llaves)"), "shopify": "Shopify", "woo": "WooCommerce", "meli": "MercadoLibre"}.get(tipo, tipo) }}</button>
+    <button type="button" class="cat-tab tienda-tipo-btn{% if loop.first %} activo{% endif %}" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}" id="tienda-tab-{{ tipo }}" aria-controls="tienda-panel-{{ tipo }}" data-tienda-tipo="{{ tipo }}">{{ {"shopify_publico": _("Shopify (sin llaves)"), "shopify": "Shopify", "woo": "WooCommerce", "meli": "MercadoLibre"}.get(tipo, tipo) }}</button>
     {% endfor %}
   </div>
 
-  <div class="tienda-tipo-panel" data-tienda-panel="shopify_publico">
+  <div class="tienda-tipo-panel" id="tienda-panel-shopify_publico" role="tabpanel" aria-labelledby="tienda-tab-shopify_publico" data-tienda-panel="shopify_publico">
     <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
       <input type="hidden" name="tipo" value="shopify_publico">
       <label class="campo-label">{{ _('Dominio de la tienda') }}</label>
@@ -179,7 +179,7 @@
     </form>
   </div>
 
-  <div class="tienda-tipo-panel" data-tienda-panel="shopify" hidden>
+  <div class="tienda-tipo-panel" id="tienda-panel-shopify" role="tabpanel" aria-labelledby="tienda-tab-shopify" data-tienda-panel="shopify" hidden>
     <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
       <input type="hidden" name="tipo" value="shopify">
       <label class="campo-label">{{ _('Dominio de la tienda') }}</label>
@@ -195,7 +195,7 @@
     </form>
   </div>
 
-  <div class="tienda-tipo-panel" data-tienda-panel="woo" hidden>
+  <div class="tienda-tipo-panel" id="tienda-panel-woo" role="tabpanel" aria-labelledby="tienda-tab-woo" data-tienda-panel="woo" hidden>
     <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
       <input type="hidden" name="tipo" value="woo">
       <label class="campo-label">{{ _('URL de la tienda') }}</label>
@@ -212,7 +212,7 @@
     </form>
   </div>
 
-  <div class="tienda-tipo-panel" data-tienda-panel="meli" hidden>
+  <div class="tienda-tipo-panel" id="tienda-panel-meli" role="tabpanel" aria-labelledby="tienda-tab-meli" data-tienda-panel="meli" hidden>
     {% if meli_configurado and cifrado_ok %}
     <p class="vacio" style="padding-top:0;font-size:.8rem;">{{ _('Vas a iniciar sesión en MercadoLibre y autorizar la app: traemos tus publicaciones activas y tus ventas. No se pega ningún token.') }}</p>
     <a class="btn-generar btn-sm" href="{{ url_for('tienda_meli_iniciar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">{{ _('Conectar con MercadoLibre') }}</a>
@@ -327,7 +327,7 @@
 {% if not exp_sin_meta %}<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">{{ _('Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); document.getElementById(\'reglas-motor\').open = true; return false;">Probar anuncios →</a>') }}</p>{% endif %}
 </section>
 
-<section class="config-apartado" id="config-ap-marca" data-apartado="marca">
+<section class="config-apartado" id="config-ap-marca" role="tabpanel" aria-labelledby="config-tab-marca" data-apartado="marca">
 <h2>{{ _('Nombre del proyecto') }}</h2>
 <form method="post" action="{{ url_for('guardar_nombre_proyecto', cliente=cliente) }}" class="form-nueva-idea">
   <input type="text" name="nombre" value="{{ nombre_proyecto }}" placeholder="{{ _('Nombre visible del proyecto') }}">
@@ -366,7 +366,7 @@
 {% include "_seccion_marca.html" %}
 </section>
 
-<section class="config-apartado" id="config-ap-generacion" data-apartado="generacion">
+<section class="config-apartado" id="config-ap-generacion" role="tabpanel" aria-labelledby="config-tab-generacion" data-apartado="generacion">
 <p class="vacio" style="padding-top:0;">{{ _('Cada idea, guion y caption sigue la doctrina de venta de Creatv:') }}
   <a href="{{ url_for('doctrina_pagina', cliente=cliente) }}">{{ _('Cómo escribe Creatv →') }}</a></p>
 <h2>{{ _('Modelos por defecto — Cambiar producto') }}</h2>
@@ -476,7 +476,7 @@
 {% if es_admin or margen_precio() == 1 %}{% include "_comparacion_modelos.html" %}{% endif %}
 </section>
 
-<section class="config-apartado" id="config-ap-cuenta" data-apartado="cuenta">
+<section class="config-apartado" id="config-ap-cuenta" role="tabpanel" aria-labelledby="config-tab-cuenta" data-apartado="cuenta">
 {# ---- Cuenta: correo (verificado o no) y contraseña del usuario de la
    sesión. cuenta_actual/smtp_ok vienen del context processor
    _cuenta_en_plantillas; el admin ve el bloque con su propia cuenta. ---- #}
@@ -552,7 +552,7 @@
 </form>
 </section>
 
-<section class="config-apartado" id="config-ap-gasto" data-apartado="gasto">
+<section class="config-apartado" id="config-ap-gasto" role="tabpanel" aria-labelledby="config-tab-gasto" data-apartado="gasto">
 {# ---- Gasto real: todo lo pagado a los proveedores desde el primer cobro, en
    USD; la pauta de Meta al lado, en la moneda de la cuenta. Solo totales desde
    el 2026-10-08 (Daniel: las cifras del mes confundían a sus clientes).
@@ -740,10 +740,10 @@
 </section>
 
 {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}
-<section class="config-apartado" id="config-ap-saldo" data-apartado="saldo">
+<section class="config-apartado" id="config-ap-saldo" role="tabpanel" aria-labelledby="config-tab-saldo" data-apartado="saldo">
 {% include "_config_saldo.html" %}
 </section>
-<section class="config-apartado" id="config-ap-plan" data-apartado="plan">
+<section class="config-apartado" id="config-ap-plan" role="tabpanel" aria-labelledby="config-tab-plan" data-apartado="plan">
 {% include "_config_plan.html" %}
 </section>
 {% endif %}

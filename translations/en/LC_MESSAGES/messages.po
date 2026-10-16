@@ -4272,6 +4272,9 @@ msgstr "Use cases: <em>Create and manage ads (Marketing API)</em>, <em>Measure p
 msgid "Casting (personajes por crear)"
 msgstr "Casting (characters to create)"
 
+msgid "Categorías del catálogo"
+msgstr "Catalog categories"
+
 msgid "Catálogo"
 msgstr "Catalog"
 
@@ -18732,6 +18735,9 @@ msgstr "Invalid season type: %(tipo)s"
 #, python-format
 msgid "Tipo de temporada inválido: %(tipo)s. Opciones: %(opciones)s"
 msgstr "Invalid season type: %(tipo)s. Options: %(opciones)s"
+
+msgid "Tipo de tienda"
+msgstr "Store type"
 
 #, python-format
 msgid "Tipo de variante no soportado: %(tipo)s. Opciones: %(opciones)s"

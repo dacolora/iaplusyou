@@ -10,12 +10,12 @@
    antes, _tab_nicho.html tal cual, con su contexto de nicho.rutas.contexto).
    Sus direcciones son #sprints y #nicho; ningún elemento lleva esos ids, o el
    navegador saltaría a él. El JS de las sub-pestañas vive aquí, al final. #}
-<nav class="cat-tabs sprints-subs" role="tablist" aria-label="{{ _('Secciones de Sprints') }}">
-  <button type="button" class="cat-tab activo" role="tab" aria-selected="true" data-sub="sprints">{{ _('Sprints') }}</button>
-  <button type="button" class="cat-tab" role="tab" aria-selected="false" data-sub="nicho">{{ _('Nicho') }}{% if avatares_resumen and avatares_resumen.nuevos %} <span class="cat-n">{{ avatares_resumen.nuevos }}</span>{% endif %}</button>
+<nav class="cat-tabs sprints-subs" role="tablist" aria-label="{{ _('Secciones de Sprints') }}" data-pestanas>
+  <button type="button" class="cat-tab activo" role="tab" aria-selected="true" id="sprints-tab-sprints" aria-controls="sprints-sub-sprints" data-sub="sprints">{{ _('Sprints') }}</button>
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" id="sprints-tab-nicho" aria-controls="sprints-sub-nicho" data-sub="nicho">{{ _('Nicho') }}{% if avatares_resumen and avatares_resumen.nuevos %} <span class="cat-n">{{ avatares_resumen.nuevos }}</span>{% endif %}</button>
 </nav>
 
-<div class="sprints-sub" id="sprints-sub-sprints" data-sub="sprints">
+<div class="sprints-sub" id="sprints-sub-sprints" role="tabpanel" aria-labelledby="sprints-tab-sprints" data-sub="sprints">
 <div class="panel-cabecera">
   <div>
     <h2>Sprints</h2>
@@ -67,7 +67,7 @@
 </div>
 </div>
 
-<div class="sprints-sub" id="sprints-sub-nicho" data-sub="nicho" hidden>
+<div class="sprints-sub" id="sprints-sub-nicho" role="tabpanel" aria-labelledby="sprints-tab-nicho" data-sub="nicho" hidden>
   {% include "_tab_nicho.html" %}
 </div>
 

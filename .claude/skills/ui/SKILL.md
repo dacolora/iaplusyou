@@ -287,3 +287,14 @@ sigue global antes del compositor. Node ejecuta los módulos completos sobre el 
   círculo que brilla, flecha a la siguiente; de a tres hasta 1100 px y una debajo de otra en el celular). Después,
   «Maximize your results.» con el tablero de ingresos (`static/landing/tablero-ingresos.webp`, marcado «Illustrative
   image.»: sus cifras no son de ningún cliente).
+
+**Barras de pestañas accesibles (PND-317, decisión 2026-10-13: «arreglarlo una vez para las tres barras»;
+2026-10-15).** Toda barra de pastillas `cat-tabs` que cambia de panel es un `role="tablist"` con `aria-label` y
+`data-pestanas`; cada botón lleva `role="tab"`, `id` y `aria-controls`, y su panel `role="tabpanel"` con
+`aria-labelledby` (Sprints · Nicho `sprints-tab-*`/`sprints-sub-*`, Catálogo `cat-tab-*`/`cat-panel-*`, Configuración
+`config-tab-*`/`config-ap-*` y su «Conectar tienda» `tienda-tab-*`/`tienda-panel-*`). El comportamiento vive UNA vez en
+`static/pestanas.js` (lo carga `base.html`): `aria-selected` y el tabindex itinerante siguen a la clase `activo` con un
+MutationObserver (cada pantalla la sigue poniendo con su propio script, también desde el hash o lo guardado), y
+← → / Inicio / Fin mueven el foco y activan con el mismo clic. Una barra nueva solo necesita esas marcas. Visto con
+teclado de verdad en el navegador integrado (las cuatro barras). Prueba: `tests/test_pestanas_accesibles.py` (marcas en
+la página de admin y de cliente, ids únicos, y el script en Node).

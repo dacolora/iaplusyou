@@ -16,15 +16,15 @@
   </div>
 </div>
 
-<div class="cat-tabs" id="cat-tabs">
+<div class="cat-tabs" id="cat-tabs" role="tablist" aria-label="{{ _('Categorías del catálogo') }}" data-pestanas>
   {% for cid, c in categorias.items() %}
-  <button type="button" class="cat-tab" data-cat="{{ cid }}">{{ c.plural|traducir }} <span class="cat-n" data-n-cat="{{ cid }}">{{ n_por_categoria[cid] }}</span></button>
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" id="cat-tab-{{ cid }}" aria-controls="cat-panel-{{ cid }}" data-cat="{{ cid }}">{{ c.plural|traducir }} <span class="cat-n" data-n-cat="{{ cid }}">{{ n_por_categoria[cid] }}</span></button>
   {% endfor %}
-  <button type="button" class="cat-tab" data-cat="logo">{{ _('Logos') }} <span class="cat-n">{{ logos | length }}</span></button>
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" id="cat-tab-logo" aria-controls="cat-panel-logo" data-cat="logo">{{ _('Logos') }} <span class="cat-n">{{ logos | length }}</span></button>
 </div>
 
 {% for cid, c in categorias.items() %}
-<div class="cat-panel" data-cat="{{ cid }}" hidden>
+<div class="cat-panel" id="cat-panel-{{ cid }}" role="tabpanel" aria-labelledby="cat-tab-{{ cid }}" data-cat="{{ cid }}" hidden>
   {% if cid == 'producto' %}
   {% for t in tiendas_cliente %}{% set trabajo_t = trabajos_prod.tiendas.get(t.id) %}{% if trabajo_t %}
   <div class="idea-block cat-sync">
@@ -122,7 +122,7 @@
 </div>
 {% endfor %}
 
-<div class="cat-panel" data-cat="logo" hidden>
+<div class="cat-panel" id="cat-panel-logo" role="tabpanel" aria-labelledby="cat-tab-logo" data-cat="logo" hidden>
   <p class="vacio" style="padding-top:0;">{{ _('El logo tal como debe verse. En cada generación se adjunta como <code>@Logo N</code> con la orden de reproducirlo exacto. Sube 1 o 2 (PNG limpio, o una foto nítida del logo en el producto).') }}</p>
   <form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
     <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
