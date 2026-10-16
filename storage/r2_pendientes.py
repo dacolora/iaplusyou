@@ -24,6 +24,11 @@ CLAVE_KV = "r2:borrar_pendientes"
 # Tope de la lista: con R2 caído días enteros y muchas cuentas soltadas no crece sin fin. Si se pasa, se quedan las
 # más nuevas (las viejas ya tuvieron sus reintentos) y el log dice cuántas se dejaron.
 MAX_PENDIENTES = 5000
+# PND-303 (2026-10-15): cuántas se intentan en cada corrida diaria, en UN pedido a R2 (`delete_files_lote`). Corre en el
+# único hilo del carril general del worker: sin tope, cientos de claves con R2 lento lo tenían ocupado y un despliegue
+# esperaba la cola vacía. Las que fallan pasan al final de la lista, así una clave que R2 rechaza siempre no frena a
+# las de atrás.
+TOPE_POR_CORRIDA = 200
 
 
 def _bloquear(con):
@@ -84,16 +89,19 @@ def anotar(claves):
 
 
 def reintentar():
-    """Borra de R2 las claves anotadas y deja en la lista solo las que siguen fallando. Devuelve (borradas, siguen):
-    `siguen` = cuántas quedan anotadas después (también las que otro proceso anotó mientras tanto). Nunca lanza."""
+    """Borra de R2 las `TOPE_POR_CORRIDA` claves más viejas de la lista en una tanda (`r2_uploader.delete_files_lote`)
+    y deja en la lista solo las que siguen fallando, al final (y las que no se intentaron, en su lugar). Devuelve
+    (borradas, siguen): `siguen` = cuántas quedan anotadas después (también las que otro proceso anotó mientras
+    tanto). Nunca lanza."""
     try:
         with db.conectar() as con:
-            claves = _leer(con)
-        if not claves:
+            todas = _leer(con)
+        if not todas:
             return 0, 0
+        claves = todas[:TOPE_POR_CORRIDA]
         from storage import r2_uploader  # noqa: PLC0415 — tardío: las pruebas lo cambian por uno falso
         try:
-            _, fallos = r2_uploader.delete_files_detalle(claves)
+            _, fallos = r2_uploader.delete_files_lote(claves)
             fallidas = {clave for clave, _ in fallos}
             tipos = sorted({tipo for _, tipo in fallos})
         except Exception as e:  # noqa: BLE001 — R2 sin configurar o caído: se queda todo para mañana
@@ -101,13 +109,14 @@ def reintentar():
         borradas = set(claves) - fallidas
         if tipos:
             log.warning("borrados pendientes de R2: %s siguen fallando (%s)", len(fallidas), ", ".join(tipos))
-        if not borradas:
-            return 0, len(claves)
+        if not borradas and len(todas) <= len(claves):
+            return 0, len(todas)
         # Se relee con el candado puesto y se quitan SOLO las que se borraron: lo que otro proceso anotó entre la
-        # primera lectura y ahora se queda.
+        # primera lectura y ahora se queda. Las que fallaron van al final (las de atrás se intentan la próxima vez).
         with db.conectar() as con:
             _bloquear(con)
             resto = [c for c in _leer(con) if c not in borradas]
+            resto = [c for c in resto if c not in fallidas] + [c for c in resto if c in fallidas]
             _escribir(con, resto)
         return len(borradas), len(resto)
     except Exception as e:  # noqa: BLE001 — el reintento corre dentro de la limpieza diaria: nunca la tumba

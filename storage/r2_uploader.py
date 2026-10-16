@@ -18,6 +18,7 @@ import re
 from urllib.parse import quote
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 def _client():
@@ -137,7 +138,10 @@ def delete_files_detalle(keys):
     bucket = os.environ.get("R2_BUCKET_NAME")
     if not bucket:
         raise RuntimeError("Falta R2_BUCKET_NAME en tu .env. Ver SETUP.md.")
-    cliente = _client()
+    return _una_por_una(_client(), bucket, keys)
+
+
+def _una_por_una(cliente, bucket, keys):
     borradas, fallos = 0, []
     for key in keys:
         try:
@@ -145,6 +149,46 @@ def delete_files_detalle(keys):
             borradas += 1
         except Exception as e:  # noqa: BLE001 — R2 caído o una clave que no se deja: las demás se intentan igual
             fallos.append((key, type(e).__name__))
+    return borradas, fallos
+
+
+LOTE_BORRADO = 1000     # el máximo de claves de un DeleteObjects
+_CODIGO_R2 = re.compile(r"[A-Za-z]{1,40}")
+
+
+def delete_files_lote(keys):
+    """Borra varias claves con DeleteObjects (hasta `LOTE_BORRADO` por pedido) y un solo cliente. PND-303
+    (2026-10-15): el reintento diario de `storage.r2_pendientes` borraba clave por clave y, con R2 lento, cada una
+    agotaba los reintentos de boto3 y el carril general del worker esperaba; una tanda es UN pedido. Mismo contrato que
+    `delete_files_detalle`: (borradas, fallos) con `fallos` = [(clave, tipo)], el tipo es la clase del error o el
+    código que R2 da para esa clave (solo letras; nunca el texto). Una tanda que R2 rechaza ENTERA (`ClientError`:
+    respondió pero no la acepta) se reintenta clave por clave; una que no llega (red, tiempo) queda toda en `fallos`
+    para el día siguiente. Sin claves no abre cliente; si R2 no está configurado lanza como `delete_file`."""
+    keys = list(keys or [])
+    if not keys:
+        return 0, []
+    bucket = os.environ.get("R2_BUCKET_NAME")
+    if not bucket:
+        raise RuntimeError("Falta R2_BUCKET_NAME en tu .env. Ver SETUP.md.")
+    cliente = _client()
+    borradas, fallos = 0, []
+    for i in range(0, len(keys), LOTE_BORRADO):
+        tanda = keys[i:i + LOTE_BORRADO]
+        try:
+            r = cliente.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in tanda], "Quiet": True})
+        except ClientError:
+            b, f = _una_por_una(cliente, bucket, tanda)
+            borradas, fallos = borradas + b, fallos + f
+            continue
+        except Exception as e:  # noqa: BLE001 — R2 caído o lento: la tanda entera queda para el día siguiente
+            fallos += [(k, type(e).__name__) for k in tanda]
+            continue
+        errores = {}
+        for err in (r or {}).get("Errors") or []:
+            codigo = str((err or {}).get("Code") or "")
+            errores[(err or {}).get("Key")] = codigo if _CODIGO_R2.fullmatch(codigo) else "ErrorR2"
+        fallos += [(k, errores[k]) for k in tanda if k in errores]
+        borradas += sum(1 for k in tanda if k not in errores)
     return borradas, fallos
 
 
