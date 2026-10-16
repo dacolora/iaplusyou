@@ -44,6 +44,10 @@
 .alerta-detalle { margin: .2rem 0 0; color: var(--muted); }
 .alerta-acciones { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; max-width: 100%; }
 .alerta-form { margin: 0; }
+/* PND-345: la acción con un campo (asignar la predicción de una pieza dudosa): campo y botón en una línea. */
+.alerta-form-campo { display: flex; align-items: center; gap: .4rem; max-width: 100%; }
+.alerta-form-campo input { flex: 0 1 15rem; width: auto; min-width: 7rem; margin: 0; padding: .25rem .5rem; font-size: .8rem; }
+.alerta-form-campo button { flex: none; }
 .alerta-ir { color: var(--accent-texto); text-decoration: none; font-size: .8rem; white-space: nowrap; }
 .alerta-ir:hover { text-decoration: underline; }
 .alerta-bloquea { border-left-color: var(--error); }

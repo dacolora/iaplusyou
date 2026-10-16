@@ -30,8 +30,8 @@
 <div class="au-voz au-voz-propia au-voz-por-cobrar" aria-disabled="true">
   <span class="au-voz-nombre">{{ v.nombre }}</span>
   <small class="au-voz-tono">{{ v.forma_nombre|traducir }} · {{ _('pagada y sin cobrar') }}</small>
+  {% if cobrar_url %}<button type="button" class="au-vp-cobrar btn-xs" data-url="{{ cobrar_url }}" data-confirmar="{{ _('Se cobra %(precio)s por la voz «%(nombre)s», que ya está creada. ¿Seguir?', precio=v.por_cobrar|precio|usd, nombre=v.nombre) }}">{{ _('Usar esta voz (se cobra ≈ %(precio)s)', precio=v.por_cobrar|precio|usd) }}</button>{% endif %}
 </div>
-  {% if cobrar_url %}<button type="button" class="au-vp-cobrar" data-url="{{ cobrar_url }}" data-confirmar="{{ _('Se cobra %(precio)s por la voz «%(nombre)s», que ya está creada. ¿Seguir?', precio=v.por_cobrar|precio|usd, nombre=v.nombre) }}">{{ _('Usar esta voz (se cobra ≈ %(precio)s)', precio=v.por_cobrar|precio|usd) }}</button>{% endif %}
   {% if borrar_url %}<button type="button" class="au-vp-borrar" data-url="{{ borrar_url }}" data-nombre="{{ v.nombre }}" aria-label="{{ _('Borrar') }} {{ v.nombre }}">✕</button>{% endif %}
 </div>
 {% else %}

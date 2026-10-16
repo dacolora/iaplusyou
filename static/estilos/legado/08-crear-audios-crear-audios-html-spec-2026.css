@@ -110,3 +110,8 @@
 /* PND-095 (2026-10-07): acciones hermanas del radio; filtro oculta la tarjeta completa. */
 .au-voz-contenedor { position: relative; min-width: 0; }
 .au-voz-contenedor:has(.au-voz[hidden]) { display: none; }
+/* PND-339: una voz propia «pagada y sin cobrar» no se elige; su botón «Usar esta voz» va dentro de la tarjeta y el ✕
+   de borrar ocupa el lugar del ▶. */
+.au-voz-por-cobrar { cursor: default; }
+.au-voz-por-cobrar .au-vp-cobrar { align-self: flex-start; margin-top: .35rem; white-space: normal; text-align: left; }
+.au-voz-contenedor:has(.au-voz-por-cobrar) .au-vp-borrar { right: .5rem; top: .55rem; transform: none; }
