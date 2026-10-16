@@ -396,6 +396,32 @@ def _fuente_meta_acceso(cliente, ahora):
                     "settings", ancla="config-meta")]
 
 
+def _fuente_meta_negocio(cliente, ahora):
+    """PND-057 (Daniel, 2026-10-13: «dale la alerta al cliente»): el negocio dueño de la cuenta publicitaria de la
+    conexión propia no está verificado en Meta, según la última revisión diaria (`meta_revisar_acceso` →
+    `meta_conexion.revisar_negocio`, guardada en meta.json). Sin verificar, Meta puede restringir la app del proyecto
+    (la primera app de Creatv quedó restringida el 2026-09-14). La ven el admin y el cliente, que es quien verifica su
+    negocio. Solo lee meta.json: ni la base ni Meta. La huella es el negocio y su estado: descartar «en revisión» no
+    esconde un «rechazado», y otro negocio vuelve a avisar. El nombre del negocio es dato de Meta: pasa por `_limpio`."""
+    import meta_conexion  # noqa: PLC0415 — arrastra requests; aquí solo se lee meta.json
+    n = meta_conexion.negocio_sin_verificar(cliente)
+    if not n:
+        return []
+    nombre = _limpio(n.get("nombre") or n.get("id") or "", 120) or "—"
+    riesgo = gettext("Mientras no esté verificado, Meta puede restringir la app de tu conexión y Creatv dejaría de "
+                     "lanzar tus anuncios y de leer sus métricas.")
+    if n["verificacion"] == "pending":
+        titulo = gettext("Meta está revisando la verificación de tu negocio «%(negocio)s»", negocio=nombre)
+        detalle = gettext("%(riesgo)s Si Meta te pide más datos, respóndelos en business.facebook.com › Configuración "
+                          "del negocio › Centro de seguridad.", riesgo=riesgo)
+    else:
+        titulo = gettext("Tu negocio «%(negocio)s» no está verificado en Meta", negocio=nombre)
+        detalle = gettext("Verifícalo en business.facebook.com › Configuración del negocio › Centro de seguridad › "
+                          "Verificación del negocio. %(riesgo)s", riesgo=riesgo)
+    return [_alerta("meta_negocio:verificacion", huella(n.get("id") or "", n["verificacion"]), "atencion",
+                    "puesta_a_punto", titulo, detalle, "settings", ancla="config-meta")]
+
+
 # Meta rendimiento (spec E2 §10): el título y el detalle de cada tipo de recomendación que puede ser «alta»
 # (`meta_rendimiento.recomendaciones`). La copia guarda solo tipo y huella; las cifras y los nombres de campañas
 # están en el «Diagnóstico» de Meta, que desde la integración con main (2026-10-10) pinta la pestaña Rendimiento, adonde
@@ -1021,5 +1047,6 @@ FUENTES.extend([
     ("cobros", _fuente_cobros),
     ("meta", _fuente_meta),
     ("meta_acceso", _fuente_meta_acceso),
+    ("meta_negocio", _fuente_meta_negocio),
     ("meta_rendimiento", _fuente_meta_rendimiento),
 ])

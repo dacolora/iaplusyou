@@ -1693,3 +1693,98 @@ def test_meta_acceso_esta_registrada_despues_de_meta():
     nombres = [n for n, _ in alertas.FUENTES]
     assert ("meta_acceso", alertas._fuente_meta_acceso) in alertas.FUENTES
     assert nombres.index("meta_acceso") == nombres.index("meta") + 1
+
+
+# ---------- Meta: el negocio de la conexión no está verificado (PND-057, 2026-10-15) ----------
+
+def _negocio_meta(monkeypatch, tmp_path, verificacion="not_verified", cliente="acme", nombre="Forja Habit",
+                  act="act_1", revisada="act_1", **campos):
+    """meta.json de una conexión propia con lo que guardó la revisión diaria del negocio de su cuenta."""
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "BASE_DIR", str(tmp_path))
+    datos = {"token": "EAAsecreto123456", "ad_account_id": act, "page_id": "9",
+             "negocio": {"id": "1766812841431317", "nombre": nombre, "verificacion": verificacion,
+                         "ad_account_id": revisada, "revisado_en": "2026-10-15T03:00:00"}, **campos}
+    meta_conexion._escribir_atomico(meta_conexion._path(cliente), datos)
+
+
+def test_meta_negocio_sin_verificar_avisa_al_cliente_con_lo_que_tiene_que_hacer(monkeypatch, tmp_path):
+    import alertas
+    _negocio_meta(monkeypatch, tmp_path)
+    [a] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert a["clave"] == "meta_negocio:verificacion" and a["nivel"] == "atencion" and a["grupo"] == "puesta_a_punto"
+    assert a["solo_admin"] is False and not alertas.descarte_solo_admin(a["clave"], [a])   # el cliente la resuelve
+    assert a["tab"] == "settings" and a["ancla"] == "config-meta"
+    assert a["titulo"] == "Tu negocio «Forja Habit» no está verificado en Meta"
+    assert "Verificación del negocio" in a["detalle"] and "restringir la app" in a["detalle"]
+    assert a["huella"] == alertas.huella("1766812841431317", "not_verified")
+
+
+def test_meta_negocio_en_revision_dice_que_espere_y_tiene_otra_huella(monkeypatch, tmp_path):
+    import alertas
+    _negocio_meta(monkeypatch, tmp_path, verificacion="pending")
+    [a] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert a["titulo"] == "Meta está revisando la verificación de tu negocio «Forja Habit»"
+    assert "restringir la app" in a["detalle"] and "más datos" in a["detalle"]
+    _negocio_meta(monkeypatch, tmp_path, verificacion="rejected")
+    [b] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert b["huella"] != a["huella"]                     # descartar «en revisión» no esconde un rechazo
+
+
+@__import__("pytest").mark.parametrize("caso", ["verificado", "sin_dato", "otra_cuenta", "agencia", "sin_token",
+                                                "sin_conexion"])
+def test_meta_negocio_sin_alerta(monkeypatch, tmp_path, caso):
+    import alertas
+    import meta_conexion
+    if caso == "verificado":
+        _negocio_meta(monkeypatch, tmp_path, verificacion="verified")
+    elif caso == "sin_dato":
+        _negocio_meta(monkeypatch, tmp_path, verificacion=None)
+    elif caso == "otra_cuenta":
+        _negocio_meta(monkeypatch, tmp_path, act="act_2")            # cambió de cuenta: la revisión era de la vieja
+    elif caso == "agencia":
+        _negocio_meta(monkeypatch, tmp_path, modo="agencia")
+    elif caso == "sin_token":
+        _negocio_meta(monkeypatch, tmp_path, token=None)
+    else:
+        monkeypatch.setattr(meta_conexion, "BASE_DIR", str(tmp_path))
+    assert alertas._fuente_meta_negocio("acme", AHORA) == []
+
+
+def test_meta_negocio_no_mezcla_proyectos_ni_llama_a_meta(monkeypatch, tmp_path, base_temporal):
+    import alertas
+    import meta_conexion
+
+    def _no(*a, **k):
+        raise AssertionError("no debía llamar a Meta")
+    monkeypatch.setattr(meta_conexion.requests, "get", _no)
+    _negocio_meta(monkeypatch, tmp_path, cliente="otro")
+    assert alertas._fuente_meta_negocio("acme", AHORA) == []
+    resultado, n = _consultas(base_temporal, alertas._fuente_meta_negocio, "otro", AHORA)
+    assert _claves(resultado) == ["meta_negocio:verificacion"] and n == 0
+    assert "EAAsecreto" not in json.dumps(resultado)
+
+
+def test_meta_negocio_el_nombre_de_meta_sale_limpio_y_acotado(monkeypatch, tmp_path):
+    import alertas
+    _negocio_meta(monkeypatch, tmp_path, nombre="Shop https://x.com/?access_token=EAAotro987654 " + "y" * 300)
+    [a] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert "EAAotro987654" not in a["titulo"] and len(a["titulo"]) < 220
+
+
+def test_meta_negocio_la_huella_no_depende_del_idioma_y_el_texto_si(monkeypatch, tmp_path):
+    import alertas
+    import idiomas
+    _negocio_meta(monkeypatch, tmp_path)
+    [es] = alertas._fuente_meta_negocio("acme", AHORA)
+    with idiomas.en_idioma("en"):
+        [en] = alertas._fuente_meta_negocio("acme", AHORA)
+    assert en["huella"] == es["huella"] and en["titulo"] != es["titulo"] and en["detalle"] != es["detalle"]
+    assert en["titulo"] == "Your business “Forja Habit” is not verified on Meta"
+
+
+def test_meta_negocio_esta_registrada_despues_de_meta_acceso():
+    import alertas
+    nombres = [n for n, _ in alertas.FUENTES]
+    assert ("meta_negocio", alertas._fuente_meta_negocio) in alertas.FUENTES
+    assert nombres.index("meta_negocio") == nombres.index("meta_acceso") + 1

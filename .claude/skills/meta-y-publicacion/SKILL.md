@@ -108,3 +108,16 @@ falla no frena a los demás y el registro lleva solo el tipo del error. Alertas 
 hasta el …» con «Renovar el acceso» (la ruta `meta_conectar`: reconectar reemplaza el token sin pasar por
 `_soltar_cuentas_meta`). Pruebas: `tests/test_meta_acceso_datos.py`. No cubre el modo agencia: el token del usuario
 del sistema de Creatv vive en `kv` y no se revisa aquí.
+
+**Verificación del negocio (2026-10-15, PND-057; Daniel: «dale la alerta al cliente»).** La primera app de Creatv quedó
+restringida el 2026-09-14 con su verificación de negocio todavía en revisión. La misma periódica diaria
+`meta_revisar_acceso` llama también a `meta_conexion.revisar_negocio` (cada revisión con su propio try/except: una que
+falla no frena la otra): `GET act_…?fields=business{id,name,verification_status}` con el token del proyecto (el id de la
+cuenta solo como `act_<dígitos>`), y guarda `negocio` = {id, nombre, verificacion, ad_account_id, revisado_en} en
+`meta.json` con el mismo candado y la misma regla que los vencimientos (solo si sigue siendo la misma conexión: mismo
+token y misma cuenta). Un estado que no está en `ESTADOS_VERIFICACION`, una cuenta sin negocio o un campo que Meta no dejó
+leer guardan `verificacion` None: sin dato no se avisa. Solo app propia con token; en modo agencia la app es de Creatv.
+`negocio_sin_verificar(cliente)` lo lee para la fuente `meta_negocio` de Alertas (skill `alertas`), que avisa al cliente
+y al admin. Nunca se lee en una página. Pruebas: `tests/test_meta_negocio.py` (con dobles: no se llamó a Meta de
+verdad; la primera corrida real dirá si el token de usuario puede leer `verification_status`, y si no, queda None y no
+avisa).

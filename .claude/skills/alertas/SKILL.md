@@ -1,6 +1,6 @@
 ---
 name: alertas
-description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con catorce fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
+description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con quince fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
 ---
 
 # Alertas: lo que necesita la atención de la persona
@@ -30,7 +30,7 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 
 `calcular(cliente)` corre cada fuente de `FUENTES` en su propio `try/except` y ordena por grupo, luego nivel, y dentro de eso en el orden de las fuentes. Si una fuente revienta sale `revision:<fuente>` (`info`, `solo_admin`) con SOLO el nombre de la clase de la excepción, nunca el mensaje (podría arrastrar un token), y las demás se calculan igual. Los nombres de grupo, nivel y pestaña son constantes `idiomas.N_` (`NOMBRES_GRUPO`, `NOMBRES_NIVEL`, `NOMBRES_TAB`) que la plantilla traduce con `|traducir`.
 
-## Las catorce fuentes (en el orden de `FUENTES`)
+## Las quince fuentes (en el orden de `FUENTES`)
 
 | # | Fuente | Claves | Grupo · nivel | Huella |
 |---|---|---|---|---|
@@ -47,7 +47,8 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 | 11 | `cobros` | `cobros:sin_saldo`, `cobros:saldo_bajo`, `cobros:no_cobrado:<mov_id>`, `cobros:recarga_pendiente:<id>` (Bold o Wompi); y del plan mensual `cobros:plan_morosa`, `cobros:plan_renueva`, `cobros:plan_cancelada`, `cobros:plan_bolsa_80` y `cobros:plan_sin_renovar` (**solo_admin**) | puesta_a_punto `bloquea` / puesta_a_punto `atencion` / fallos `info` / decision `info`; las del saldo a Configuración › Saldo y recargas (`config-ap-saldo`), las del plan a Configuración › Plan (`config-ap-plan`) | `sin_saldo` constante; `saldo_bajo` el saldo en dólares redondeados; las otras, tipo y monto o el id; las del plan, cifras y fechas (ver la skill `cobros`, «Alertas del plan») |
 | 12 | `meta` | `meta:metodo_pago` | puesta_a_punto · `info`, solo con la app propia de Meta conectada (no en modo agencia) | vacía |
 | 13 | `meta_acceso` | `meta_acceso:datos` | puesta_a_punto · `atencion` desde `DIAS_AVISO_ACCESO_META` (14) días antes de que venza el acceso de Creatv a los datos de Meta; `bloquea` ya vencido. Solo conexión propia con token (en modo agencia el token es de Creatv). Para el admin y el cliente; a Configuración › Conexiones (`config-meta`) | la fecha de vencimiento (día) + `por_vencer`/`vencido` |
-| 14 | `meta_rendimiento` | `meta_rendimiento:<tipo>:<act_…>` | decision · `atencion`, a la pestaña Rendimiento (`tab="rendimiento"` desde la integración con main del 2026-10-10: la pestaña Meta se jubiló el 2026-10-09 y su «Diagnóstico» vive en Rendimiento; sin ancla: llega por fetch) | la de la recomendación (`recomendaciones.huella_recomendacion`), guardada por la copia |
+| 14 | `meta_negocio` | `meta_negocio:verificacion` | puesta_a_punto · `atencion`, para el admin y el cliente (es quien verifica su negocio), a Configuración › Conexiones (`config-meta`). Solo conexión propia con token, y solo si la revisión guardada es de la cuenta actual | el id del negocio + su `verification_status` |
+| 15 | `meta_rendimiento` | `meta_rendimiento:<tipo>:<act_…>` | decision · `atencion`, a la pestaña Rendimiento (`tab="rendimiento"` desde la integración con main del 2026-10-10: la pestaña Meta se jubiló el 2026-10-09 y su «Diagnóstico» vive en Rendimiento; sin ancla: llega por fetch) | la de la recomendación (`recomendaciones.huella_recomendacion`), guardada por la copia |
 
 Detalles que ya costaron una duda:
 
@@ -60,6 +61,15 @@ Detalles que ya costaron una duda:
 - **Cobros** (2026-10-08, spec `2026-10-08-cobros-saldo-prepagado` §8): solo si `libro.estado(cliente)["cobrar"]`; un proyecto que no cobra sale tras leer la cuenta y no consulta nada más. `sin_saldo` mira el DISPONIBLE (saldo menos lo reservado) ≤ 0; `saldo_bajo` mira el saldo (0 < saldo < umbral) y no sale si ya hay `sin_saldo`; su huella lleva el saldo en dólares redondeados, así que un descarte no esconde un saldo que siguió bajando. `no_cobrado`: un `reverso` o `no_cobrado` de los últimos `DIAS_NO_COBRADO` (7) días (en el `no_cobrado` el monto es `extra.precio`); `recarga_pendiente`: una recarga de Bold **o de Wompi** pendiente de hace más de `MINUTOS_RECARGA_PENDIENTE` (15) min; el texto dice con cuál pasarela (planes 8/8, 2026-10-10). Dos consultas fijas (movimientos y recargas, tope `TOPE_COBROS` = 20 cada una) más las del plan (`_alertas_plan`, al final de `_fuente_cobros`): 1 consulta sin plan (buscar la suscripción) y a lo más 3 con plan, sin importar cuánto haya pasado (`tests/test_planes_alertas.py` las cuenta). El concepto sale de `cobros.vista.nombre_concepto`. Ninguna es `solo_admin` salvo `cobros:plan_sin_renovar` (una suscripción activa cuyo pagado terminó sin periodo abierto ni cobro en curso: la periódica no la renovó; es cosa de Creatv, revisión final de planes 2026-10-10). Los apartados `config-ap-saldo` y `config-ap-plan` solo existen en la página de un cliente que cobra (el admin siempre los ve): por eso `SOLO_SI_COBRA` en `tests/test_rutas_alertas.py`, y `tests/test_planes_alertas.py::test_el_ancla_del_plan_solo_existe_si_el_proyecto_cobra`. El detalle de cada alerta del plan (textos, huellas, bordes) vive en la skill `cobros`, sección «Alertas del plan».
 - **Orgánico**: reintentar es una acción de la persona sobre la pieza; aquí solo se avisa.
 - **Acceso a los datos de Meta** (PND-058, 2026-10-15; motivo: el `meta.json` de colorado_forja decía que el token vencía el 2026-11-18 por `expires_in`, cuando el token no caduca y lo que vence es el acceso a los datos, el 2026-12-18, y nada avisaba). La fecha la lee `meta_conexion` con `debug_token` al conectar y la periódica diaria `meta_revisar_acceso` (que también rellenó las conexiones viejas), y la guarda en `meta.json` (`acceso_datos_vence_en`, ISO local). La fuente solo lee `meta.json` con `meta_conexion.acceso_datos_vence_en` (cero consultas, nunca llama a Meta). Una sola clave; el detalle dice cuántos días faltan («Vence hoy.» el mismo día) y manda a «Renovar el acceso» de la tarjeta de Meta, que vuelve a conectar SIN «Desconectar» (desconectar borra las métricas copiadas). La huella es la fecha y el estado: descartar «por vencer» no esconde el «vencido», y reconectar con otra fecha la vuelve a mostrar; si la fecha nueva queda a más de 14 días, desaparece sola. No es `solo_admin` ni de descarte solo admin: el cliente es quien reconecta con su app.
+- **Negocio de Meta sin verificar** (PND-057, 2026-10-15; Daniel: «dale la alerta al cliente»; motivo: la primera app de
+  Creatv quedó restringida el 2026-09-14 con su verificación en revisión, y Forja Habit seguía sin verificar). La
+  periódica diaria `meta_revisar_acceso` también llama a `meta_conexion.revisar_negocio`: `GET act_…?fields=business{id,name,verification_status}`
+  con el token del proyecto, guardado en `meta.json` como `negocio` = {id, nombre, verificacion, ad_account_id,
+  revisado_en} bajo el candado y solo si sigue siendo la misma conexión. La fuente solo lee `meta.json`
+  (`meta_conexion.negocio_sin_verificar`, cero consultas, nunca llama a Meta): sin dato, verificado, un estado que no
+  está en `ESTADOS_VERIFICACION`, modo agencia (la app es de Creatv) o una revisión de otra cuenta (el proyecto cambió
+  de cuenta) no avisan. `pending` dice que Meta está revisando; los demás estados, que lo verifique en el Centro de
+  seguridad. La huella es negocio + estado: descartar «en revisión» no esconde un rechazo.
 - **Meta rendimiento** (E2, 2026-10-10, spec `2026-10-10-meta-rendimiento-e2-design.md` §10; skill `meta-rendimiento`): la fuente
   NO calcula reglas (cargar 30 días de anuncios en cada página sería caro) y hace UNA consulta (`cuentas.listar`, una
   fila por cuenta del proyecto). Al terminar bien cada copia, `tareas.meta_rendimiento._guardar_alertas` guarda en

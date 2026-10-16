@@ -569,6 +569,70 @@ def revisar_vencimientos(cliente):
     return vence
 
 
+# ---------- verificación del negocio (PND-057) ----------
+
+# Los valores de `verification_status` de un Business en la Graph API. Uno que no esté aquí (Meta agregó otro, o no
+# dejó leer el campo) no se guarda: sin dato no se avisa, nunca un estado inventado.
+ESTADOS_VERIFICACION = frozenset({"verified", "not_verified", "pending", "pending_submission", "pending_need_more_info",
+                                  "failed", "rejected", "revoked", "expired", "ineligible"})
+CAMPOS_NEGOCIO = "business{id,name,verification_status}"
+
+
+def _act(valor):
+    """`act_<dígitos>` o None: el id de la cuenta se usa como edge de Graph."""
+    v = str(valor or "").strip()
+    v = v if v.startswith("act_") else f"act_{v}"
+    return v if v[4:].isdigit() and 0 < len(v) - 4 <= 30 else None
+
+
+def revisar_negocio(cliente):
+    """PND-057 (Daniel, 2026-10-13: «dale la alerta al cliente»): lee en Meta si el negocio dueño de la cuenta
+    publicitaria de la conexión propia está verificado (`GET act_…?fields=business{id,name,verification_status}`, con
+    el token del proyecto) y lo guarda en meta.json como `negocio` = {id, nombre, verificacion, ad_account_id,
+    revisado_en}. Sin verificar, Meta puede restringir la app del proyecto (la primera app de Creatv quedó
+    restringida el 2026-09-14 con su verificación todavía en revisión). La corre la periódica diaria `meta_revisar_acceso`; nunca una página.
+
+    Devuelve lo leído, o None si no hay nada que revisar (sin conexión, sin token, sin cuenta o modo agencia: ahí la app
+    es de Creatv, no del cliente). Lanza MetaConexionError (sin token adentro) si Meta no contesta, sin tocar
+    meta.json. Como `revisar_vencimientos`: pregunta fuera del candado y escribe bajo él SOLO si sigue siendo la misma
+    conexión (mismo token y misma cuenta)."""
+    datos = _cargar_crudo(cliente)
+    if not datos or datos.get("modo") == MODO_AGENCIA or not datos.get("token"):
+        return None
+    act = _act(datos.get("ad_account_id"))
+    if not act:
+        return None
+    token = datos["token"]
+    negocio = (_graph_get(act, token, {"fields": CAMPOS_NEGOCIO}) or {}).get("business") or {}
+    estado_ = str(negocio.get("verification_status") or "").strip().lower()
+    info = {"id": str(negocio.get("id") or "") or None, "nombre": str(negocio.get("name") or "")[:200] or None,
+            "verificacion": estado_ if estado_ in ESTADOS_VERIFICACION else None, "ad_account_id": act,
+            "revisado_en": datetime.now().isoformat(timespec="seconds")}
+    with _candado(cliente):
+        actual = _cargar_crudo(cliente)
+        if (not actual or actual.get("modo") == MODO_AGENCIA or actual.get("token") != token
+                or _act(actual.get("ad_account_id")) != act):
+            return info
+        _escribir_atomico(_path(cliente), {**actual, "negocio": info})
+    return info
+
+
+def negocio_sin_verificar(cliente):
+    """{id, nombre, verificacion} del negocio de la conexión propia del proyecto si la última revisión diaria lo vio
+    sin verificar, o None (verificado, sin dato, sin conexión propia con token, o la revisión es de otra cuenta: el
+    proyecto cambió de cuenta y todavía no se volvió a revisar). Solo lee meta.json: lo usa la fuente `meta_negocio` de
+    Alertas, que nunca llama a Meta."""
+    datos = _cargar_crudo(cliente) or {}
+    if datos.get("modo") == MODO_AGENCIA or not datos.get("token"):
+        return None
+    n = datos.get("negocio")
+    if not isinstance(n, dict) or n.get("ad_account_id") != _act(datos.get("ad_account_id")):
+        return None
+    if n.get("verificacion") not in ESTADOS_VERIFICACION or n["verificacion"] == "verified":
+        return None
+    return {"id": n.get("id"), "nombre": n.get("nombre"), "verificacion": n["verificacion"]}
+
+
 def clientes():
     """Las carpetas de proyecto bajo clientes/ (ordenadas; sin las ocultas)."""
     try:

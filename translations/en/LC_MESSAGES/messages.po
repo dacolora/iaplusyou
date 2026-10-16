@@ -1913,6 +1913,10 @@ msgid "%(restante)s restantes"
 msgstr "%(restante)s left"
 
 #, python-format
+msgid "%(riesgo)s Si Meta te pide más datos, respóndelos en business.facebook.com › Configuración del negocio › Centro de seguridad."
+msgstr "%(riesgo)s If Meta asks you for more information, answer it at business.facebook.com › Business settings › Security Center."
+
+#, python-format
 msgid "%(roas)s× (la cuenta, %(roas_cuenta)s×)"
 msgstr "%(roas)s× (account: %(roas_cuenta)s×)"
 
@@ -12557,6 +12561,10 @@ msgid "Meta está revisando la cuenta por riesgo y puede frenar la entrega."
 msgstr "Meta is reviewing the account for risk and may slow delivery."
 
 #, python-format
+msgid "Meta está revisando la verificación de tu negocio «%(negocio)s»"
+msgstr "Meta is reviewing the verification of your business “%(negocio)s”"
+
+#, python-format
 msgid "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta) y NO se pudo pausar: páusalo en Meta ya."
 msgstr "Meta saved a different daily budget on the ad set than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit) and it could NOT be paused: pause it in Meta now."
 
@@ -12791,6 +12799,9 @@ msgstr "While Galadsy creates, tests and replicates what sells, your team breath
 
 msgid "Mientras algo llega por fetch: el aviso con su círculo (con la forma de lo que viene, si es un panel grande) y el botón ocupado."
 msgstr "While something arrives by fetch: the notice with its spinner (with the shape of what's coming, for a large panel) and the busy button."
+
+msgid "Mientras no esté verificado, Meta puede restringir la app de tu conexión y Creatv dejaría de lanzar tus anuncios y de leer sus métricas."
+msgstr "Until it is verified, Meta may restrict the app of your connection, and Creatv would stop launching your ads and reading their metrics."
 
 #, python-format
 msgid "Mientras no llegues al 100 %%, esto no descuenta de tu saldo."
@@ -19469,6 +19480,10 @@ msgid "Tu momento"
 msgstr "Your moment"
 
 #, python-format
+msgid "Tu negocio «%(negocio)s» no está verificado en Meta"
+msgstr "Your business “%(negocio)s” is not verified on Meta"
+
+#, python-format
 msgid "Tu plan %(plan)s está activo"
 msgstr "Your %(plan)s plan is active"
 
@@ -20289,6 +20304,10 @@ msgstr "Checking your payment…"
 
 msgid "Verificar"
 msgstr "Check"
+
+#, python-format
+msgid "Verifícalo en business.facebook.com › Configuración del negocio › Centro de seguridad › Verificación del negocio. %(riesgo)s"
+msgstr "Verify it at business.facebook.com › Business settings › Security Center › Business verification. %(riesgo)s"
 
 msgid "Versiones nuevas del guion al derivar"
 msgstr "New script versions when deriving"
