@@ -63,6 +63,7 @@ TIPOS_EXENTOS_DE_COBRO = {
     "meta_publicar": "publica en Meta; no llama a un proveedor que cobra",
     "meta_refrescar": "lee métricas de Meta",
     "meta_revisar_acceso": "periódica: lee en Meta cuándo vence el acceso a los datos; no cobra",
+    "apify_revisar_uso": "periódica: lee gratis en Apify el uso del mes contra el tope de la cuenta (PND-010)",
     "meta_rend_sincronizar": "lee métricas de las cuentas de Meta y las tasas del BCE; no cobra",
     "meta_rend_sincronizar_todas": "periódica: solo encola meta_rend_sincronizar",
     "meta_rend_limpiar": "periódica de mantenimiento",

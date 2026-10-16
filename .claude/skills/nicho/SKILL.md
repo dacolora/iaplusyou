@@ -166,3 +166,14 @@ más) y `plataformas.costo_conciliado(n, corridas, actor)` lo usa en `tareas/nic
 estimado (la regla del barrido de referentes: `usageTotalUsd` puede no traer lo que cobra un actor por resultado), con
 `usd_apify` y `usd_formula` en el extra; si falta alguna (terminó al arrancar, sondeo malo), el estimado con
 `conciliacion_pendiente`. Pruebas: `tests/test_cobros_lo_real.py`.
+
+**El uso del mes de Apify, al admin (PND-010, decisión 2026-10-13).** No se sube de plan por ahora (el mes iba en
+US$ 1,99 de 5 y cada corrida ya se le cobra al cliente). La periódica `apify_revisar_uso` (cada 6 h, `tareas/nicho.py`,
+exenta de cobro) lee gratis `GET /v2/users/me/limits` (`providers.apify.uso_del_mes`: `current.monthlyUsageUsd`
+contra `limits.maxMonthlyUsageUsd` y el ciclo `monthlyUsageCycle`, forma tomada de la doc oficial el 2026-10-15: el
+`.env` local no tenía `APIFY_TOKEN` para una lectura real) y la guarda en `kv` `apify:uso_mes` (`providers/apify_uso.py`,
+único escritor; sin token no pide nada; si Apify falla queda la lectura anterior). La fuente `saldo` de Alertas solo
+lee esa fila (nunca la red en una página): `saldo:apify_tope`, **solo admin**, `atencion` desde el 80 % y `bloquea` al
+100 %, a la tarjeta `llave-apify`; huella = ciclo + nivel; una lectura de un ciclo ya terminado no cuenta. Al llegar ese
+aviso, o si 10 reseñas por producto se quedan cortas, se sube a Starter. Pruebas: `tests/test_apify_uso.py`.
+

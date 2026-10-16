@@ -449,3 +449,26 @@ def costo_corrida(sesion, token, run_id):
                 "conciliacion_pendiente": dato.get("status") not in TERMINALES}
     except (ErrorFuente, ValueError, TypeError, AttributeError):
         return None
+
+
+def uso_del_mes(sesion, token):
+    """PND-010: `GET /v2/users/me/limits` (gratis): lo usado en el ciclo de este mes contra el tope de la cuenta
+    (docs.apify.com/api/v2/users-me-limits-get, 2026-10-15: `data.current.monthlyUsageUsd`,
+    `data.limits.maxMonthlyUsageUsd`, `data.monthlyUsageCycle.startAt/endAt`). Devuelve {usado_usd, tope_usd, desde,
+    hasta}; lanza ErrorFuente en palabras si Apify no responde o la respuesta no trae esas cifras."""
+    import math
+    r = _http.pedir(sesion, "GET", URL_API + "/users/me/limits", "Apify", headers=cabeceras(token))
+    if r.status_code != 200:
+        raise ErrorFuente(gettext("Apify no devolvió el uso del mes (%(codigo)s).", codigo=r.status_code))
+    try:
+        data = _cuerpo(r).get("data") or {}
+        usado = float((data.get("current") or {}).get("monthlyUsageUsd"))
+        tope = float((data.get("limits") or {}).get("maxMonthlyUsageUsd"))
+        ciclo = data.get("monthlyUsageCycle") or {}
+    except (TypeError, ValueError, AttributeError):
+        raise ErrorFuente(gettext("Apify devolvió el uso del mes sin sus cifras.")) from None
+    if not (math.isfinite(usado) and math.isfinite(tope)) or usado < 0 or tope <= 0:
+        raise ErrorFuente(gettext("Apify devolvió el uso del mes sin sus cifras."))
+    return {"usado_usd": round(usado, 4), "tope_usd": round(tope, 4),
+            "desde": str(ciclo.get("startAt") or "")[:30], "hasta": str(ciclo.get("endAt") or "")[:30]}
+

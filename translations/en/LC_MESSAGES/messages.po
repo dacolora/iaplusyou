@@ -3160,6 +3160,9 @@ msgstr "Apify (Niche: reviews/comments · Swipe file: Ad Library)"
 msgid "Apify aceptó el token."
 msgstr "Apify accepted the token."
 
+msgid "Apify devolvió el uso del mes sin sus cifras."
+msgstr "Apify returned the month's usage without its figures."
+
 #, python-format
 msgid "Apify no aceptó el token (%(codigo)s)."
 msgstr "Apify didn't accept the token (%(codigo)s)."
@@ -3174,6 +3177,10 @@ msgstr "Apify didn't start the run (%(codigo)s)."
 #, python-format
 msgid "Apify no arrancó la corrida: %(motivo)s"
 msgstr "Apify did not start the run: %(motivo)s"
+
+#, python-format
+msgid "Apify no devolvió el uso del mes (%(codigo)s)."
+msgstr "Apify did not return the month's usage (%(codigo)s)."
 
 #, python-format
 msgid "Apify no devolvió los ids de la corrida (corrida %(corrida)s, dataset %(dataset)s); revísala en console.apify.com."
@@ -3205,6 +3212,10 @@ msgstr "Apify answered without readable data when starting the run (%(codigo)s);
 #, python-format
 msgid "Apify terminó %(estado)s; los resultados son parciales (corrida %(corrida)s)."
 msgstr "Apify finished %(estado)s; results are partial (run %(corrida)s)."
+
+#, python-format
+msgid "Apify va en el %(pct)s %% de su tope del mes"
+msgstr "Apify is at %(pct)s %% of its monthly cap"
 
 #, python-format
 msgid "Apify: %(estado)s · corrida %(corrida)s"
@@ -20051,6 +20062,13 @@ msgstr "Use “%(titular)s” in a sprint"
 msgid "Usaste %(gastado)s de %(credito)s (%(pct)s %%)."
 msgstr "You used %(gastado)s of %(credito)s (%(pct)s %%)."
 
+#, python-format
+msgid "Uso de Apify: %(usado)s de %(tope)s"
+msgstr "Apify usage: %(usado)s of %(tope)s"
+
+msgid "Uso de Apify: sin lectura"
+msgstr "Apify usage: no reading"
+
 msgid "Usuario"
 msgstr "Username"
 
@@ -20139,6 +20157,10 @@ msgstr "Purchase value per Meta divided by spend"
 
 msgid "Valor de compras según Meta; debajo, el gasto del anuncio ese día y su retorno."
 msgstr "Purchase value per Meta; below, the ad's spend that day and its return."
+
+#, python-format
+msgid "Van %(usado)s de %(tope)s y el ciclo termina el %(hasta)s. Al llegar al tope, Nicho y los barridos de referentes con Apify paran sin cobrar. Si no alcanza, o si 10 reseñas por producto se quedan cortas, sube la cuenta a Starter en console.apify.com."
+msgstr "%(usado)s of %(tope)s used, and the cycle ends on %(hasta)s. At the cap, Niche and the reference sweeps that use Apify stop without charging. If it is not enough, or 10 reviews per product fall short, upgrade the account to Starter at console.apify.com."
 
 msgid "Variable"
 msgstr "Variable"

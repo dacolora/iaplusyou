@@ -379,6 +379,20 @@ def _plan_sin_renovar(cliente):
             cubierto_hasta="2026-01-01T10:00:00", intentos_fallidos=0, usuario="u", precio_usd=1000))
 
 
+def _apify_al_tope():
+    """La lectura del uso de Apify de la periódica (PND-010), al 90 % de un ciclo que sigue corriendo."""
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    import db
+    from providers import apify_uso
+    hasta = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+    with db.conectar() as con:
+        con.execute(db.kv.insert().values(clave=apify_uso.CLAVE, actualizado_en=db.ahora(), valor=json.dumps(
+            {"usado_usd": 4.5, "tope_usd": 5, "desde": "2026-10-02T00:00:00.000Z", "hasta": hasta,
+             "leido_en": db.ahora()})))
+
+
 def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monkeypatch):
     """`PREFIJOS_SOLO_ADMIN` decide cuando la alerta ya no está calculada: tiene que cubrir toda alerta `solo_admin`
     que producen las fuentes de verdad (llaves, worker, recarga del saldo, una fuente caída), y ninguna otra."""
@@ -395,6 +409,7 @@ def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monke
         raise RuntimeError("x")
     monkeypatch.setattr(al, "FUENTES", al.FUENTES + [("rota", rota)])
     _plan_sin_renovar("acme")
+    _apify_al_tope()
     lista = al.calcular("acme")
     de_admin = [a["clave"] for a in lista if a["solo_admin"]]
     assert all(c.startswith(al.PREFIJOS_SOLO_ADMIN) for c in de_admin), de_admin
@@ -651,7 +666,8 @@ def _anclas_de_alertas():
 
 
 # Anclas que solo usan alertas `solo_admin` (worker parado): no existen en la página de un cliente.
-SOLO_ADMIN = {"config-puesta-a-punto"}
+SOLO_ADMIN = {"config-puesta-a-punto",
+              "llave-apify"}   # PND-010: el uso de Apify solo lo ve el admin (las tarjetas de llaves son del admin)
 # Los apartados Saldo y Plan solo existen para un cliente cuyo proyecto cobra (lo comprueba tests/test_cobros_alertas.py).
 SOLO_SI_COBRA = {"config-ap-saldo", "config-ap-plan"}
 

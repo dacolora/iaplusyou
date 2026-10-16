@@ -79,7 +79,7 @@ HUELLA_VALIDA = r"^[0-9a-f]{64}$"
 # `tests/test_rutas_alertas.py` comprueba que toda alerta `solo_admin` que
 # producen las fuentes empiece por uno de estos prefijos.
 PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga", "saldo:fal_recarga",
-                       "cobros:plan_sin_renovar")
+                       "cobros:plan_sin_renovar", "saldo:apify")
 
 # PND-124 (decisión 2026-10-07): visibles para todos, descartes solo admin.
 TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
@@ -249,7 +249,7 @@ def _fuente_saldo(cliente, ahora):
     el proyecto que falló) y la del admin, con desde cuándo y dónde recargar.
     Después, las de fal (`_alertas_saldo_fal`), si las hay."""
     import saldo  # noqa: PLC0415
-    alertas_saldo = _alertas_saldo_fal(saldo)
+    alertas_saldo = _alertas_saldo_fal(saldo) + _alertas_apify()
     aviso = saldo.vigente("wavespeed")
     if not aviso:
         return alertas_saldo
@@ -295,6 +295,33 @@ def _alertas_saldo_fal(saldo):
                         desde=desde, modelos=modelos, recarga=aviso["recarga"]),
                 "creativeflowplus", solo_admin=True),
     ]
+
+
+def _alertas_apify():
+    """PND-010 (decisión 2026-10-13): solo al admin, el uso del mes de la cuenta de Apify de Creatv desde el 80 % de
+    su tope (`atencion`) y al llegar al 100 % (`bloquea`: Nicho y los barridos paran, sin cobrar). Lo lee la periódica
+    `apify_revisar_uso`; aquí solo se mira la fila guardada (una consulta; una lectura de un ciclo ya terminado no
+    cuenta). La huella es el ciclo y el nivel: descartar el 80 % no esconde el 100 % ni el mes siguiente."""
+    from providers import apify_uso  # noqa: PLC0415
+    uso = apify_uso.vigente()
+    if not uso or uso["fraccion"] < apify_uso.UMBRAL:
+        return []
+    lleno = uso["fraccion"] >= 1
+    pct = int(min(uso["fraccion"], 9.99) * 100)
+    hasta = str(uso.get("hasta") or "")[:10]
+    return [_alerta("saldo:apify_tope", huella(uso.get("desde"), "100" if lleno else "80"),
+                    "bloquea" if lleno else "atencion", "puesta_a_punto",
+                    gettext("Apify va en el %(pct)s %% de su tope del mes", pct=pct),
+                    gettext("Van %(usado)s de %(tope)s y el ciclo termina el %(hasta)s. Al llegar al tope, Nicho y los "
+                            "barridos de referentes con Apify paran sin cobrar. Si no alcanza, o si 10 reseñas por "
+                            "producto se quedan cortas, sube la cuenta a Starter en console.apify.com.",
+                            usado=_usd(uso["usado_usd"]), tope=_usd(uso["tope_usd"]), hasta=hasta),
+                    "settings", ancla="llave-apify", solo_admin=True)]
+
+
+def _usd(valor):
+    import gastos  # noqa: PLC0415
+    return gastos.formatear(valor)
 
 
 # Las alertas del Tablero (tablero.alertas) NO se reescriben: solo se les pone
