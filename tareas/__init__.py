@@ -110,8 +110,6 @@ SIN_ENTIDAD_AL_INTERRUMPIR = {
     "sprint_sugerir_personas": "la ruta solo avisa con un flash; las personas se guardan al terminar",
     "sprint_reescribir_idea": "«reescribiendo» sale de trabajos.en_curso",
     "sprint_proponer_ideas": "trabajo_ideas sale de trabajos.en_curso; la idea vieja sigue viva hasta reemplazarse",
-    "sprint_qa_pieza": "«QA pendiente» es qa NULL con la pieza lista: la periódica sprint_qa_pendientes la vuelve a "
-                       "encolar con su precio reservado (y sin saldo no la encola)",
     "referentes_sugerir_ia": "trabajo_sugerir_ia sale de trabajos.en_curso; las sugerencias se guardan al terminar",
     "catalogo_importar": "Catálogo lee trabajos.en_curso del job_id de la importación",
     "producto_vincular": "la ficha lee cola.job_ids_vivos",

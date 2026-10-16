@@ -118,3 +118,11 @@ Segunda ronda lote 7 (2026-10-09, encargo de Daniel): fotos del producto exigen 
 PND-209/032 (2026-10-09, decisión del lote 8): sprint-link-campo reemplaza el width en línea; los filtros de sprint_revision viven en sprint-filtros separados de las acciones, con campaña a todo el ancho en celular. CSS en pantallas/sprints.css, hoja generada con estilos.py. Los avisos largos envuelven; tests/test_lote8_ui.py, capturas a cargo de Claude.
 
 Enmienda PND-032/210 (2026-10-10, pedido de Daniel): sprint-filtros tiene margen superior para separar las acciones a 375 px. La guardia de Detenida comprueba su propio párrafo; la de filtros exige grilla de escritorio y reglas dentro de @media max-width. Capturas en es/en a 375/1280 px por Claude.
+
+**El QA de una pieza, un solo intento (decisión de quien orquesta, 2026-10-15; regla 1).** `sprint_qa_pieza` cobra
+(visión con Claude) y va con `max_intentos=1` (`tareas/sprints.encolar_qa`; con 3, la cola volvía a pagar la misma
+pieza). El `job_id` es determinista (`<cliente>__cp<id>__qa`): con la tarea viva, la periódica no la duplica. Si la
+tarea no termina (reinicio, colgada, el respaldo sin saldo), su gancho `qa_interrumpida` deja el mismo marcador
+terminal `veredicto="error"` que un QA que falla (solo si la pieza sigue sin QA): sin él, `qa` quedaba vacío y la
+periódica lo volvía a encolar y pagar. «Repetir QA» limpia el marcador. Pruebas: `tests/test_sprint_qa_un_intento.py`.
+

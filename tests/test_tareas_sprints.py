@@ -281,7 +281,7 @@ def test_encolar_qa_usa_el_worker(base_temporal, monkeypatch):
     assert ts.encolar_qa("acme", 5) is True
     job_id, tipo, payload, kw = encolados[0]
     assert job_id == "acme__cp5__qa" and tipo == "sprint_qa_pieza" and payload == {"cliente": "acme", "cp_id": 5}
-    assert kw["max_intentos"] == 3 and kw["cliente"] == "acme"
+    assert kw["max_intentos"] == 1 and kw["cliente"] == "acme"   # cobra: un solo intento (2026-10-15)
 
 
 def test_qa_pieza_descarta_el_resultado_si_la_pieza_se_regenero(base_temporal, monkeypatch):
