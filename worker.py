@@ -173,6 +173,9 @@ def ejecutar(tarea):
 # Se guarda en la entidad de atrás (sesión, swap, anuncio): va en el idioma
 # del proyecto de cada tarea — gettext dentro de idiomas.en_idioma(de_tarea).
 MENSAJE_INTERRUMPIDA = idiomas.N_("Se interrumpió por un reinicio del servidor. Vuelve a intentar.")
+# PND-169: la que recuperar_interrumpidas da por colgada en marcha (llevaba más de 30 min sin que este worker la
+# corriera) no se cortó por un reinicio: el reverso y el gancho lo dicen así.
+MENSAJE_COLGADA = idiomas.N_("Se dio por colgada: llevaba demasiado tiempo en curso. Vuelve a intentar.")
 # Cobros (spec 2026-10-08 §5.1): el respaldo que no arranca una tarea que
 # cobra en un proyecto que cobra y no tiene saldo. Se guarda en la tarea y en
 # la entidad de atrás (vía AL_INTERRUMPIR), en el idioma del proyecto.
@@ -244,17 +247,20 @@ def recuperar_interrumpidas(minutos):
     `generando` o un anuncio en `publicando` que nadie más va a tocar. Cada
     tipo registra en tareas.AL_INTERRUMPIR cómo marcar esa entidad en error
     para que la persona pueda reintentar. Un hook que falla no tumba el ciclo.
-    Devuelve cuántas tareas tocó recuperar_colgadas (mismo número de antes)."""
+    Devuelve cuántas tareas tocó recuperar_colgadas (mismo número de antes).
+    Con `minutos=0` (el arranque) lo que estaba en curso se cortó por el reinicio; con más, la tarea se dio por
+    colgada (PND-169): el detalle del reverso y el mensaje del gancho dicen cuál de las dos fue."""
+    motivo = MENSAJE_INTERRUMPIDA if not minutos else MENSAJE_COLGADA
     tocadas, interrumpidas = cola.recuperar_colgadas(minutos, excluir=en_vuelo())
     for t in interrumpidas:
         # Error definitivo: lo que cobró la cadena se devuelve (cobros §3.5), tenga o no gancho.
-        _revertir(t, MENSAJE_INTERRUMPIDA)
+        _revertir(t, motivo)
         hook = tareas.AL_INTERRUMPIR.get(t["tipo"])
         if hook is None:
             continue
         try:
             with idiomas.en_idioma(idiomas.de_tarea(t)):
-                hook(t, gettext(MENSAJE_INTERRUMPIDA))
+                hook(t, gettext(motivo))
             log.info("tarea %s interrumpida → entidad marcada en error", t["id"])
         except Exception as e:  # noqa: BLE001 — el hook nunca tumba al worker
             log.error("tarea %s interrumpida: el hook de %s falló: %s", t["id"], t["tipo"], cola.sin_token(e))

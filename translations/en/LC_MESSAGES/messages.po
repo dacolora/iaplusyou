@@ -17271,6 +17271,9 @@ msgstr "Stopped getting more ads: Atria's monthly quota ran out."
 msgid "Se detuvo la investigación de «%(estudio)s»"
 msgstr "The research of “%(estudio)s” was stopped"
 
+msgid "Se dio por colgada: llevaba demasiado tiempo en curso. Vuelve a intentar."
+msgstr "It was treated as stuck: it had been running for too long. Try again."
+
 #, python-format
 msgid "Se ejecutan las %(n)s propuestas en orden. Las que escalan, derivan, rescatan o activan gastan; las de publicar orgánico publican en tus redes con el texto tal como está. ¿Seguimos?"
 msgstr "The %(n)s proposals will run in order. The ones that scale, derive, rescue or activate spend money; the ones that publish organically post to your channels with the text exactly as it is. Continue?"
