@@ -579,6 +579,10 @@ msgid "%(motor)s · %(n)s caracteres · %(voz)s"
 msgstr "%(motor)s · %(n)s characters · %(voz)s"
 
 #, python-format
+msgid "%(n)s %% o más"
+msgstr "%(n)s %% or more"
+
+#, python-format
 msgid "%(n)s acción(es) con error"
 msgstr "%(n)s action(s) with error"
 
@@ -4820,6 +4824,10 @@ msgstr "With an image"
 msgid "Con los datos del %(desde)s al %(hasta)s; desde entonces cambió."
 msgstr "Based on data from %(desde)s to %(hasta)s; it has changed since."
 
+#, python-format
+msgid "Con menos de %(n)s visitantes no se dice la etapa: el porcentaje engaña."
+msgstr "With fewer than %(n)s visitors there is no stage: the percentage would mislead."
+
 msgid "Con mi propia app de Meta"
 msgstr "With my own Meta app"
 
@@ -6878,6 +6886,9 @@ msgstr "The plan needs a name (up to 60 characters)"
 
 msgid "El plan ya se ofrece a los proyectos que cobran."
 msgstr "The plan is now offered to projects that charge usage."
+
+msgid "El porcentaje de visitantes nuevos dice a quién le llega el anuncio:"
+msgstr "The share of new visitors tells you who the ad is reaching:"
 
 msgid "El porqué"
 msgstr "The reason why"
@@ -21690,6 +21701,10 @@ msgid "de %(antes)s a %(despues)s por día"
 msgstr "from %(antes)s to %(despues)s per day"
 
 #, python-format
+msgid "de %(desde)s %% a %(hasta)s %%"
+msgstr "%(desde)s %% to %(hasta)s %%"
+
+#, python-format
 msgid "de %(monto)s"
 msgstr "of %(monto)s"
 
@@ -22787,6 +22802,10 @@ msgstr "best: %(nombre)s"
 #, python-format
 msgid "mejora de calidad pagada que no llegó (%(error)s)"
 msgstr "quality upscale paid for but not delivered (%(error)s)"
+
+#, python-format
+msgid "menos de %(n)s %%"
+msgstr "under %(n)s %%"
 
 msgid "mensaje_id inválido."
 msgstr "Invalid mensaje_id."

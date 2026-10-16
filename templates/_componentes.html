@@ -3,16 +3,49 @@
 
 {#- NVP: % de visitantes nuevos y etapa del embudo (spec 2026-10-09-nvp-visitantes-nuevos §4; CSS componentes/nvp.css).
     `nuevos` y `visitantes` son SUMAS del periodo (nunca un promedio de porcentajes); la regla vive en
-    triple_whale/visitantes.py y llega como el global `resumen_nvp`. -#}
-{% macro nvp(nuevos, visitantes) -%}
+    triple_whale/visitantes.py y llega como el global `resumen_nvp`. El chip es un botón (PND-221, 2026-10-15): al
+    tocarlo abre la explicación de TOF, MOF y BOF con sus cortes (`nvp_ayuda`, un popover que pinta base.html una vez),
+    también en el celular, donde el `title` no se ve. `tocable=false` lo deja como texto: dentro de un enlace (la
+    tarjeta de un experimento) un botón no puede ir. -#}
+{% macro nvp(nuevos, visitantes, tocable=true) -%}
 {%- set r = resumen_nvp(nuevos, visitantes) -%}
 {%- if r.estado == 'sin_datos' -%}
-<span class="chip-nvp chip-nvp-vacio" title="{{ _('Sin visitas atribuidas por el Pixel de Triple Whale (sin rastreo o sin clics en este periodo).') }}">—</span>
+{%- set clase = 'chip-nvp chip-nvp-vacio' -%}
+{%- set dato = _('Sin visitas atribuidas por el Pixel de Triple Whale (sin rastreo o sin clics en este periodo).') -%}
+{%- set cuerpo = '—' -%}
 {%- elif r.estado == 'pocos' -%}
-<span class="chip-nvp chip-nvp-pocos" title="{{ _('NVP: %(nuevos)s visitantes nuevos de %(total)s. Son muy pocos para decir la etapa del embudo.', nuevos=r.nuevos, total=r.visitantes) }}">{{ '%.0f' | format(r.nvp) }}&nbsp;%</span>
+{%- set clase = 'chip-nvp chip-nvp-pocos' -%}
+{%- set dato = _('NVP: %(nuevos)s visitantes nuevos de %(total)s. Son muy pocos para decir la etapa del embudo.', nuevos=r.nuevos, total=r.visitantes) -%}
+{%- set cuerpo %}{{ '%.0f' | format(r.nvp) }}&nbsp;%{% endset -%}
 {%- else -%}
-<span class="chip-nvp chip-nvp-{{ r.etapa | lower }}" title="{{ _('NVP: %(nuevos)s visitantes nuevos de %(total)s.', nuevos=r.nuevos, total=r.visitantes) }} {{ explicacion_nvp[r.etapa] | traducir }}">{{ '%.0f' | format(r.nvp) }}&nbsp;% <span class="chip-nvp-etapa" translate="no">{{ r.etapa }}</span></span>
+{%- set clase = 'chip-nvp chip-nvp-' ~ (r.etapa | lower) -%}
+{%- set dato = _('NVP: %(nuevos)s visitantes nuevos de %(total)s.', nuevos=r.nuevos, total=r.visitantes) ~ ' ' ~ (explicacion_nvp[r.etapa] | traducir) -%}
+{%- set cuerpo %}{{ '%.0f' | format(r.nvp) }}&nbsp;% <span class="chip-nvp-etapa" translate="no">{{ r.etapa }}</span>{% endset -%}
 {%- endif -%}
+{%- if tocable -%}
+<button type="button" class="{{ clase }}" title="{{ dato }}" data-nvp-ayuda popovertarget="nvp-ayuda">{{ cuerpo }}</button>
+{%- else -%}
+<span class="{{ clase }}" title="{{ dato }}">{{ cuerpo }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{#- La explicación del NVP que abre el chip (PND-221): una sola vez por página, al final de base.html. Lo de arriba
+    (`#nvp-ayuda-dato`) lo llena el JS de base.html con el `title` del chip tocado; lo de abajo son las etapas con los
+    cortes de triple_whale/visitantes.py (global `nvp_cortes`). Sin «chip-nvp» en sus clases: las pruebas lo buscan
+    para saber si una pantalla pinta el chip. -#}
+{% macro nvp_ayuda() -%}
+<div id="nvp-ayuda" class="nvp-ayuda" popover role="dialog" aria-labelledby="nvp-ayuda-titulo">
+  <p class="nvp-ayuda-titulo" id="nvp-ayuda-titulo"><strong>{{ _('Visitantes nuevos (NVP)') }}</strong></p>
+  <p class="nvp-ayuda-dato" id="nvp-ayuda-dato"></p>
+  <p>{{ _('El porcentaje de visitantes nuevos dice a quién le llega el anuncio:') }}</p>
+  <dl class="nvp-ayuda-etapas">
+    <div><dt><span class="nvp-etapa-tof" translate="no">TOF</span> · {{ _('%(n)s %% o más', n=nvp_cortes.tof) }}</dt><dd>{{ explicacion_nvp['TOF'] | traducir }}</dd></div>
+    <div><dt><span class="nvp-etapa-mof" translate="no">MOF</span> · {{ _('de %(desde)s %% a %(hasta)s %%', desde=nvp_cortes.bof, hasta=nvp_cortes.tof) }}</dt><dd>{{ explicacion_nvp['MOF'] | traducir }}</dd></div>
+    <div><dt><span class="nvp-etapa-bof" translate="no">BOF</span> · {{ _('menos de %(n)s %%', n=nvp_cortes.bof) }}</dt><dd>{{ explicacion_nvp['BOF'] | traducir }}</dd></div>
+  </dl>
+  <p class="nvp-ayuda-nota">{{ _('Con menos de %(n)s visitantes no se dice la etapa: el porcentaje engaña.', n=nvp_cortes.minimo) }}</p>
+  <button type="button" class="btn-sm" popovertarget="nvp-ayuda" popovertargetaction="hide">{{ _('Cerrar') }}</button>
+</div>
 {%- endmacro %}
 
 {#- Cargando: el aviso de que algo llega por fetch (pedido de Daniel 2026-10-13; CSS componentes/cargando.css). Un
