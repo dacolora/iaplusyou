@@ -127,8 +127,17 @@ constancia). Pruebas: `tests/test_fal_espera_agotada.py`.
 que pagó la voz falló después (el worker devolvió el cobro), Mis voces la recupera gratis al abrirse
 (`recuperar_pendientes`, como siempre) y ese GET nunca cobra. Solo cuando la recupera su propia tarea
 (`voces_propias.crear` con la ficha de la misma referencia), con el precio que la persona vio al lanzarla, se cobra con
-`gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`). Pendiente propuesto: un botón con su precio para
-cobrar la recuperada por el GET.
+`gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`).
+
+**«Pagada y sin cobrar» (PND-339, decisión 2026-10-15, lote 2).** La que recupera el GET de Mis voces en un proyecto que
+cobra (`libro.cobra_activo`) se guarda igual (no se pierde) pero marcada `extra.por_cobrar` {referencia, usd} desde que
+nace (`_guardar_ficha(..., por_cobrar=True)`): `resolver` no la devuelve (nadie la usa), `listar(cliente, usables=True)`
+la saca de los selectores (Final edition, anuncio hablado, el `voces` del JSON de Mis voces) y la tarjeta
+(`voz_propia_item(..., cobrar_url=)`, sin `data-voz` ni `role=radio`) dice «pagada y sin cobrar» con el botón «Usar esta
+voz (se cobra ≈ X)» → `POST vp_cobrar` → `voces_propias.cobrar_recuperada`: `libro.pedido` (freno y reserva; sin saldo,
+402 y la voz sigue bloqueada) y `gastos.registrar_trasladando` a `<referencia>:recuperada` (una sola vez, aunque haya dos
+clics), y la libera (`por_cobrar=None`). Un proyecto que no cobra la recupera libre, como antes. Pruebas:
+`tests/test_voz_propia_por_cobrar.py`.
 
 **Sin saldo en fal por el lado del audio (PND-215, decisión 2026-10-13, lote 2).** `fal_client.llamar` (voces de Audios,
 del anuncio hablado y de las finales, Mi música, la música de fondo, Whisper de los subtítulos, las voces propias)

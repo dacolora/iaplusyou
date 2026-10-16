@@ -52,7 +52,7 @@ def panel(cliente):
     jid = tareas_hablado.job_id(cliente)
     return render_template(
         "_hablado_panel.html", cliente=cliente, fotos=_con_miniaturas(cliente, hablado.fotos(cliente)),
-        fichas_voces=audios.fichas_voces(), voces_propias=voces_propias.listar(cliente),
+        fichas_voces=audios.fichas_voces(), voces_propias=voces_propias.listar(cliente, usables=True),
         idiomas_audio=audios.IDIOMAS,
         nombres_idioma_audio=audios.NOMBRES_IDIOMA, velocidades_audio=audios.NOMBRES_VELOCIDAD,
         idioma_audio_defecto=audios.idioma_defecto(cliente), max_caracteres=hablado.MAX_CARACTERES,

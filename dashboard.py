@@ -3235,7 +3235,7 @@ def _contexto_organico(cliente):
 def _mis_voces_fe(cliente):
     """Las voces propias del proyecto para el selector «Voz» de Final edition:
     solo valor y nombre (el voice_id de MiniMax no sale a la página)."""
-    return [{"valor": v["valor"], "nombre": v["nombre"]} for v in voces_propias.listar(cliente)]
+    return [{"valor": v["valor"], "nombre": v["nombre"]} for v in voces_propias.listar(cliente, usables=True)]
 
 
 def _contexto_final_edition(cliente):
@@ -8025,7 +8025,9 @@ def _contexto_mis_voces(cliente):
 def _respuesta_mis_voces(cliente, error=None, mensaje=None, job_id=None):
     ctx = _contexto_mis_voces(cliente)
     html = render_template("_audios_mis_voces.html", cliente=cliente, **ctx)
-    return jsonify({"ok": error is None, "html": html, "voces": ctx["voces_propias"], "trabajo": ctx["trabajo_voz"],
+    # PND-339: una voz «pagada y sin cobrar» se ve en Mis voces pero no se elige hasta «Usar esta voz».
+    usables = [v for v in ctx["voces_propias"] if not v.get("por_cobrar")]
+    return jsonify({"ok": error is None, "html": html, "voces": usables, "trabajo": ctx["trabajo_voz"],
                     "error": error, "mensaje": mensaje, "job_id": job_id}), (400 if error else 200)
 
 
@@ -8118,6 +8120,25 @@ def vp_borrar(cliente, vid):
         bitacora.registrar(cliente, str(vid), "voces_propias", "error", str(e))
         return _respuesta_mis_voces(cliente, error=gettext("No pude borrarla (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__))
     return _respuesta_mis_voces(cliente)
+
+
+@app.route("/cliente/<cliente>/audios/voces/<int:vid>/cobrar", methods=["POST"])
+def vp_cobrar(cliente, vid):
+    """«Usar esta voz (se cobra ≈ X)» (PND-339): cobra una voz propia recuperada sin cobrar y la libera. Sin saldo,
+    `SaldoInsuficiente` sigue al manejador de siempre (402 con el enlace de recarga) y la voz queda como estaba."""
+    if not _mismo_origen():
+        abort(403)
+    try:
+        voces_propias.cobrar_recuperada(cliente, vid)
+    except SaldoInsuficiente:
+        raise
+    except voces_propias.EntradaInvalida as e:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(str(e)))
+    except Exception as e:
+        bitacora.registrar(cliente, str(vid), "voces_propias", "error", str(e))
+        return _respuesta_mis_voces(cliente, error=gettext("No pude cobrarla (%(tipo)s); intenta de nuevo.",
+                                                           tipo=type(e).__name__))
+    return _respuesta_mis_voces(cliente, mensaje=gettext("Listo: la voz ya se puede usar."))
 
 
 @app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])

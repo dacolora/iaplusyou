@@ -11958,6 +11958,9 @@ msgstr "Done: the possible-charge line is back to 0 and the piece can be generat
 msgid "Listo: la versión de Claude es ahora el prompt vigente."
 msgstr "Done: Claude's version is now the current prompt."
 
+msgid "Listo: la voz ya se puede usar."
+msgstr "Done: the voice can be used now."
+
 #, python-format
 msgid "Listo: sumamos %(monto)s a tu saldo."
 msgstr "Done: we added %(monto)s to your balance."
@@ -12877,6 +12880,10 @@ msgid "MiniMax · estreno · %(nombre)s"
 msgstr "MiniMax · try-out · %(nombre)s"
 
 #, python-format
+msgid "MiniMax · voz recuperada · %(nombre)s"
+msgstr "MiniMax · recovered voice · %(nombre)s"
+
+#, python-format
 msgid "Mira el detalle en la pestaña Triple Whale del proyecto %(cliente)s."
 msgstr "See the details in the Triple Whale tab of the %(cliente)s project."
 
@@ -13624,6 +13631,10 @@ msgstr "Could not load more results. Try again."
 #, python-format
 msgid "No pude cerrar el experimento: %(error)s"
 msgstr "Couldn't close the experiment: %(error)s"
+
+#, python-format
+msgid "No pude cobrarla (%(tipo)s); intenta de nuevo."
+msgstr "I couldn't charge it (%(tipo)s); try again."
 
 #, python-format
 msgid "No pude conectar Triple Whale: %(error)s"
@@ -17294,6 +17305,10 @@ msgstr "They're built from the fields above when you generate. If you write here
 msgid "Se borró «{nombre}»."
 msgstr "“{nombre}” was deleted."
 
+#, python-format
+msgid "Se cobra %(precio)s por la voz «%(nombre)s», que ya está creada. ¿Seguir?"
+msgstr "You'll be charged %(precio)s for the voice “%(nombre)s”, which is already created. Continue?"
+
 msgid "Se cobra por resultado (aprox.: Apify suma cómputo). Cada clic es una corrida y no se reintenta sola. Usar estos datos es responsabilidad de quien pone el token."
 msgstr "Charged per result (approx.: Apify adds compute). Each click is one run and doesn't retry on its own. Using this data is the responsibility of whoever provides the token."
 
@@ -20028,6 +20043,10 @@ msgstr "Use this image as a reference"
 
 msgid "Usar esta versión"
 msgstr "Use this version"
+
+#, python-format
+msgid "Usar esta voz (se cobra ≈ %(precio)s)"
+msgstr "Use this voice (charged ≈ %(precio)s)"
 
 msgid "Usar la grabación"
 msgstr "Use the recording"
@@ -23159,6 +23178,9 @@ msgstr "e.g. In MX, the price in pesos in the hook lowers the CTR"
 
 msgid "p.ej. 89900"
 msgstr "e.g. 89900"
+
+msgid "pagada y sin cobrar"
+msgstr "paid for, not yet charged"
 
 msgid "pago pendiente"
 msgstr "pending payment"

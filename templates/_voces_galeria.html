@@ -22,7 +22,19 @@
 {% endfor %}
 {% endmacro %}
 
-{% macro voz_propia_item(v, borrar_url=None) -%}
+{% macro voz_propia_item(v, borrar_url=None, cobrar_url=None) -%}
+{% if v.por_cobrar %}
+{# PND-339: recuperada sin cobrar (la tarea que la pagó falló): se ve, pero no se elige hasta pagarla. Sin data-voz
+   ni role=radio: el JS de Audios no la elige. #}
+<div class="au-voz-contenedor">
+<div class="au-voz au-voz-propia au-voz-por-cobrar" aria-disabled="true">
+  <span class="au-voz-nombre">{{ v.nombre }}</span>
+  <small class="au-voz-tono">{{ v.forma_nombre|traducir }} · {{ _('pagada y sin cobrar') }}</small>
+</div>
+  {% if cobrar_url %}<button type="button" class="au-vp-cobrar" data-url="{{ cobrar_url }}" data-confirmar="{{ _('Se cobra %(precio)s por la voz «%(nombre)s», que ya está creada. ¿Seguir?', precio=v.por_cobrar|precio|usd, nombre=v.nombre) }}">{{ _('Usar esta voz (se cobra ≈ %(precio)s)', precio=v.por_cobrar|precio|usd) }}</button>{% endif %}
+  {% if borrar_url %}<button type="button" class="au-vp-borrar" data-url="{{ borrar_url }}" data-nombre="{{ v.nombre }}" aria-label="{{ _('Borrar') }} {{ v.nombre }}">✕</button>{% endif %}
+</div>
+{% else %}
 <div class="au-voz-contenedor">
 <div class="au-voz au-voz-propia" data-voz="{{ v.valor }}" role="radio" aria-checked="false" tabindex="0">
   <span class="au-voz-nombre">{{ v.nombre }}</span>
@@ -31,4 +43,5 @@
   {% if borrar_url %}<button type="button" class="au-vp-borrar" data-url="{{ borrar_url }}" data-nombre="{{ v.nombre }}" aria-label="{{ _('Borrar') }} {{ v.nombre }}">✕</button>{% endif %}
   <button type="button" class="au-voz-play" data-voz="{{ v.valor }}" aria-label="{{ _('Escuchar') }} {{ v.nombre }}">▶</button>
 </div>
+{% endif %}
 {%- endmacro %}
