@@ -387,3 +387,67 @@ def test_error_inesperado_del_compositor_conserva_usage(monkeypatch):
         director.compilar('acme', _sesion())
     assert exc.value.costo_usd > 0
     assert len(llamadas.kwargs) == 1
+
+
+# --- PND-240: sin nombres ni logos que no estén en las referencias -------------------------------
+
+def test_ningun_system_trae_un_nombre_propio_de_ejemplo():
+    """Prueba real del 2026-10-10: con el ejemplo «Ana@Image1» el director llamó «Ana» a una mujer sin nombre en
+    ACTIVOS (y «Ana (Image 2)» con Kling en la medición del 2026-10-15). Ninguna familia enseña un nombre propio."""
+    import director
+    for familia in director._FAMILIAS:
+        sistema = director._system(familia, "cierre", 2, 8, "es")
+        assert "Ana" not in sistema, familia
+        assert "nunca le inventes un nombre" in sistema and "no nombres logotipos" in sistema
+    assert '"the woman@Image1"' in director._system("seedance_ref", "c", 2, 8, "es")
+    assert '"the woman (Image 1)"' in director._system("kling", "c", 2, 8, "es")
+
+
+def _con_logo(dur=8):
+    r = json.loads(_respuesta(dur))
+    r["planos"][1]["accion"] = "Image 1 turns to show its silver logo to the camera"
+    return json.dumps(r)
+
+
+def test_un_logo_que_nadie_pidio_vuelve_como_correccion(monkeypatch):
+    """Prueba real del 2026-10-10: «botella negra con logotipo plateado … mostrando el logotipo de frente» en una
+    botella sin logo. Sin logo en la IDEA, en ACTIVOS ni en la bandeja, nombrarlo invalida la respuesta."""
+    import director
+    reg = _instalar_fake(monkeypatch, [_con_logo(), _respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert len(reg.kwargs) == 2
+    assert "nombra un logotipo que ni la IDEA ni ACTIVOS traen" in reg.kwargs[1]["messages"][-1]["content"]
+    assert "logo" not in " ".join(p["accion"] for p in r["planos"])
+
+
+def test_dos_veces_un_logo_inventado_cae_al_prompt_basico(monkeypatch):
+    import director
+    _instalar_fake(monkeypatch, [_con_logo(), _con_logo()])
+    with pytest.raises(director.DirectorError) as e:
+        director.compilar("acme", _sesion())
+    assert "logotipo" in e.value.motivo
+
+
+@pytest.mark.parametrize("cambio", [
+    {"accion_central": "@Imagen 1 gira y se ve su logo bordado"},                         # la IDEA lo pide
+    {"referencias": [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1", "url": "https://x/1.png",
+                      "activo": "Gorra", "categoria": "producto", "regla": "Logo bordado al frente."}]},   # el activo lo trae
+    {"referencias": [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1", "url": "https://x/1.png"},
+                     {"tipo": "imagen", "etiqueta": "@Logo 1", "token": "Image 2", "url": "https://x/l.png",
+                      "logo": True}]},                                                     # logo oficial en la bandeja
+])
+def test_el_logo_vale_cuando_las_referencias_o_la_idea_lo_traen(monkeypatch, cambio):
+    import director
+    reg = _instalar_fake(monkeypatch, [_con_logo()])
+    director.compilar("acme", _sesion(**cambio))
+    assert len(reg.kwargs) == 1
+
+
+def test_decir_que_no_hay_logo_siempre_vale(monkeypatch):
+    import director
+    r = json.loads(_respuesta())
+    r["planos"][0]["accion"] = "Image 1, a plain matte bottle with no visible logo, turns slowly"
+    r["planos_b"][1]["accion"] = "Image 1 sin ningún logotipo gira despacio"
+    reg = _instalar_fake(monkeypatch, [json.dumps(r)])
+    director.compilar("acme", _sesion())
+    assert len(reg.kwargs) == 1

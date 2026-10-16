@@ -255,6 +255,15 @@ persona (guía de marca, regla y nombre de cada activo) va tal cual. La sesión 
 básico de respaldo (`tareas/director._fallback`) sigue con las etiquetas del proyecto, como Sprints y las derivaciones.
 `_PARAMETRO_ESCRITO` también rechaza «8-second video». Medido en `docs/superpowers/evals/2026-10-15-director-ingles-sin-inventos.md`.
 
+**Sin nombres ni logos que no estén en las referencias (PND-240, decisión 2026-10-13, lote 2).** La prueba real del
+2026-10-10 llamó «Ana» a una mujer sin nombre y le puso un «logotipo plateado» a una botella sin logo. La regla 4 del
+system ya no pide «nombre» ni «logotipo tal cual»: un activo con nombre en ACTIVOS se nombra tal cual; uno sin nombre se
+describe por lo que se ve; nada de logos, marcas, etiquetas ni textos que la IDEA o ACTIVOS no traigan. Los ejemplos de
+los tokens dicen «the woman (Image 1)» (`_system` cambia el «Ana» de `_TOKENS_REGLAS` por `_SUJETO_EJEMPLO`, también en
+una familia nueva que copie el ejemplo) y `_sin_logos_inventados` devuelve como corrección un plano que nombra un logo
+sin que la IDEA, un activo (nombre o regla), la guía de marca o un logo oficial de la bandeja lo traigan («without
+logo» siempre vale). Un nombre inventado no tiene validación: solo la regla (medido: 0 de 3 tras el cambio).
+
 Cambiar producto cobra un video por lo que dura (PND-312, 2026-10-13): la tabla es `providers/swap_video_precio.py` y el detalle está en la skill `cobros` («Swap de video por su duración»); el precio se ve antes de generar (`#swap-precio`, `static/swap-precio.js`).
 
 PND-062, entrega 1 (2026-10-10, pedido de Daniel): Del catálogo y Cambiar producto comparten
