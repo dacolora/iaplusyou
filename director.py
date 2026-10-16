@@ -29,6 +29,10 @@ MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 MAX_TOKENS = 4000
 VERSION = 1
 MAX_CARACTERES_PROMPT = 2500
+# Idioma del prompt que arma el director (PND-239, regla 3 del repo): los planos y las etiquetas del prompt van al
+# modelo de video, así que van en inglés aunque el proyecto sea en español (prueba real del 2026-10-10: salían en
+# español). Lo que lee la persona alrededor («diferencia_b») sigue en el idioma del proyecto.
+IDIOMA_PROMPT = "en"
 
 # `Image N` / `Video N`, y la forma pegada `@Image1` de Seedance 2.5 con varias
 # referencias (vía fal): un token que no está en ACTIVOS se rechaza en las dos.
@@ -42,7 +46,8 @@ _TOKEN_SUELTO = re.compile(r"(?<!@)\bImage (\d+)\b")
 # mismo reintento/fallback que cualquier otro plano inválido.
 _TOKEN_ES = re.compile(r"\bIm[aá]gen \d+\b|\bV[ií]deo \d+\b")
 # Lo que va por API y NO en el prompt (spec §2 validación 5).
-_PARAMETRO_ESCRITO = re.compile(r"\b(\d+:\d+|\d{3,4}p|\d+ ?fps|\d+ segundos? de video|\d+ ?s de video)\b", re.IGNORECASE)
+_PARAMETRO_ESCRITO = re.compile(r"\b(\d+:\d+|\d{3,4}p|\d+ ?fps|\d+ segundos? de video|\d+ ?s de video"
+                                r"|\d+[- ]?seconds?(?: of)? video|\d+ ?s video)\b", re.IGNORECASE)
 
 
 class DirectorError(Exception):
@@ -78,12 +83,12 @@ _REGLAS_COMUNES = """\
 REGLAS
 1. Intención primero: no cambies sujetos, cantidades, producto, lugar, orden de los hechos ni final. Los hechos vienen del texto; de las imágenes solo tomas rasgos visibles.
 2. Planos: exactamente {n_planos} para {duracion} s. Tiempos enteros en segundos, sin huecos: el primero empieza en 0, cada fin es el inicio del siguiente, el último termina en {duracion}.
-3. Cada plano: tamaño de plano ("primer plano", "plano medio", "plano general", "macro"...), UN solo movimiento de cámara elegido por su id de esta lista: {camaras}; la acción concreta (parte del cuerpo, grado, velocidad; movimientos lentos y continuos); y el sonido de ese tramo (fuente + acción + ambiente), sin voces ni música.
+3. Cada plano: tamaño de plano ("close-up", "medium shot", "wide shot", "macro"...), UN solo movimiento de cámara elegido por su id de esta lista: {camaras}; la acción concreta (parte del cuerpo, grado, velocidad; movimientos lentos y continuos); y el sonido de ese tramo (fuente + acción + ambiente), sin voces ni música.
 4. Activos: nómbralos siempre por su token y su nombre, p. ej. {ejemplo_token}. Usa SOLO los tokens de la tabla ACTIVOS; nunca inventes otros. El producto se describe con forma, color, material y logotipo tal cual. Nunca dos personajes desde una misma imagen; sin duplicados.
 5. Emociones como gestos observables (una sonrisa que crece, hombros que se relajan), nunca adjetivos.
 6. No escribas duración total, formato (9:16), resolución (720p) ni fps: van por API.
 7. Nada de "alta calidad", "8k", "sin deformaciones" ni packs de calidad.
-8. Idioma de los textos: {idioma}. Los tokens ({forma_tokens}) siempre en inglés.
+8. Idioma: "plano", "accion" y "sonido" van SIEMPRE en inglés, porque son el prompt del modelo de video; "diferencia_b" va en {idioma}, porque la lee la persona. Los tokens ({forma_tokens}) siempre así.
 9. planos_b: misma intención y mismos activos; el primer plano usa OTRO movimiento de cámara y otro arranque; diferencia_b lo explica en una frase.
 10. Los planos de cada versión, juntos, no pasan de {max_chars} caracteres.
 11. El sistema antepone «Hard cut.» a cada plano a partir del segundo: no escribas transiciones, fundidos ni disolvencias entre planos.
@@ -190,7 +195,7 @@ def _mensaje(sesion, idioma):
         lineas.append(f"AUDIENCIA: {json.dumps(ctx['persona'], ensure_ascii=False)}")
     if ctx.get("temporada"):
         lineas.append(f"TEMPORADA: {json.dumps(ctx['temporada'], ensure_ascii=False)}")
-    lineas.append(f"IDIOMA: {idioma}")
+    lineas.append(f"IDIOMA: planos en inglés; diferencia_b en {idiomas.nombre_para_claude(idioma)}")
     return "\n".join(lineas)
 
 
@@ -290,7 +295,9 @@ def _validar_y_componer(cliente, sesion, datos, n, duracion, cierre, idioma):
 def compilar(cliente, sesion, idioma="es"):
     """Devuelve {planos, planos_b, prompt_a, prompt_b, diferencia_b,
     modelo_claude, version, usd}. Lanza DirectorError si Claude no entrega
-    planos válidos en dos intentos o si el modelo no tiene familia."""
+    planos válidos en dos intentos o si el modelo no tiene familia.
+    `idioma` es el del proyecto: decide `diferencia_b` (lo lee la persona). Los
+    planos y el prompt compuesto van siempre en inglés (`IDIOMA_PROMPT`, PND-239)."""
     modelo = sesion.get("modelo")
     info = flowplus_modelos.VIDEO.get(modelo) or {}
     familia = info.get("familia")
@@ -337,7 +344,7 @@ def compilar(cliente, sesion, idioma="es"):
             continue
         try:
             datos = _extraer_json(texto)
-            resultado = _validar_y_componer(cliente, sesion, datos, n, duracion, cierre, idioma)
+            resultado = _validar_y_componer(cliente, sesion, datos, n, duracion, cierre, IDIOMA_PROMPT)
         except (ValueError, TypeError, KeyError) as e:
             ultimo_error = str(e)
             mensajes = mensajes + [{"role": "assistant", "content": texto},

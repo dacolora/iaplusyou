@@ -247,6 +247,14 @@ PND-068 (corrección 2026-10-08): la página del proyecto no carga estado_videos
 
 **Probado en real el 2026-10-10** (`docs/superpowers/evals/2026-10-10-pruebas-reales.md`): Kling O3 Pro respeta «Image N» (no hace falta «@Image1»); `seedance25_ref` rechaza fotos realistas de personas como referencia aunque sean de IA (ByteDance; la app no cobra y lo dice, PND-242); «Que Wan mejore mi prompt» siguió la acción completa en la única muestra, al mismo precio; el director arma el prompt en el idioma del proyecto e inventó detalles (PND-239, PND-240).
 
+**El director escribe el prompt en inglés (PND-239, decisión 2026-10-13, lote 2; regla 3 del repo).** `director.compilar`
+recibe el idioma del proyecto, pero los planos (`plano`, `accion`, `sonido`), las cámaras (`CAMARAS_EN`) y las etiquetas
+del prompt compuesto (`FIDELITY`, `AVOID`, `BRAND STYLE`…) van en `director.IDIOMA_PROMPT` («en»); solo `diferencia_b`,
+que lee la persona, sale en el idioma del proyecto (regla 8 del system y la línea `IDIOMA:` del mensaje). El texto de la
+persona (guía de marca, regla y nombre de cada activo) va tal cual. La sesión guarda `idioma_prompt="en"`; el prompt
+básico de respaldo (`tareas/director._fallback`) sigue con las etiquetas del proyecto, como Sprints y las derivaciones.
+`_PARAMETRO_ESCRITO` también rechaza «8-second video». Medido en `docs/superpowers/evals/2026-10-15-director-ingles-sin-inventos.md`.
+
 Cambiar producto cobra un video por lo que dura (PND-312, 2026-10-13): la tabla es `providers/swap_video_precio.py` y el detalle está en la skill `cobros` («Swap de video por su duración»); el precio se ve antes de generar (`#swap-precio`, `static/swap-precio.js`).
 
 PND-062, entrega 1 (2026-10-10, pedido de Daniel): Del catálogo y Cambiar producto comparten

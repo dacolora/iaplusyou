@@ -102,7 +102,10 @@ def ejecutar(tarea):
                                proveedor="anthropic", extra={"modelo": director.MODEL},
                                entregado=datos["estado"] == "ok")
     trabajos.reportar(jid, etapa=ETAPA_LISTO)
-    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos, idioma_prompt=idioma)
+    # El prompt de los planos va en inglés (PND-239); el básico de `_fallback` sigue con las etiquetas del proyecto.
+    idioma_prompt = director.IDIOMA_PROMPT if datos["estado"] == "ok" else idioma
+    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos,
+                             idioma_prompt=idioma_prompt)
     if p.get("auto_lanzar"):
         mensaje = _lanzar_aprobado(cliente, cf_id, p, excluir_job=jid) or mensaje
     return mensaje

@@ -99,9 +99,9 @@ def test_compilar_devuelve_prompts_a_y_b_compuestos_con_armar(monkeypatch):
     # 2026-09-28: sin personaje el prompt ya no remata con «solo y sin nadie» ni
     # prohíbe personas/manos; el enfoque llega explicado en el mensaje a Claude.
     assert "Recordatorio final" not in r["prompt_a"] and "personas, pies, manos" not in r["prompt_a"]
-    assert r["prompt_a"].splitlines()[-1].startswith("EVITAR: ")
+    assert r["prompt_a"].splitlines()[-1].startswith("AVOID: ")      # PND-239: el prompt del director va en inglés
     assert "ENFOQUE: producto — el producto es el protagonista" in reg.kwargs[0]["messages"][0]["content"]
-    assert "No dialogue. No background music." in r["prompt_a"] and "ESTILO DE MARCA: Luz natural." in r["prompt_a"]
+    assert "No dialogue. No background music." in r["prompt_a"] and "BRAND STYLE: Luz natural." in r["prompt_a"]
     assert "macro" in r["prompt_b"] and r["prompt_b"] != r["prompt_a"] and r["diferencia_b"].startswith("Arranca")
     assert r["planos"][0]["camara"] == "dolly_in" and r["usd"] == 0.0 and r["version"] == 1
 
@@ -234,14 +234,32 @@ def test_idioma_en_cambia_la_instruccion_de_idioma(monkeypatch):
     import director
     reg = _instalar_fake(monkeypatch, [_respuesta()])
     director.compilar("acme", _sesion(), idioma="en")
-    assert "IDIOMA: en" in reg.kwargs[0]["messages"][0]["content"]
+    assert "IDIOMA: planos en inglés; diferencia_b en inglés" in reg.kwargs[0]["messages"][0]["content"]
+
+
+def test_proyecto_en_espanol_arma_el_prompt_en_ingles(monkeypatch):
+    """PND-239 (regla 3; prueba real del 2026-10-10): el prompt que va al modelo de video sale en inglés aunque el
+    proyecto sea en español —planos, cámaras y etiquetas—; el texto de la persona (guía de marca) va tal cual y lo
+    que ella lee alrededor («diferencia_b») sigue en el idioma del proyecto."""
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta()])
+    r = director.compilar("acme", _sesion(), idioma="es")
+    sistema, msg = _sys(reg.kwargs[0]), reg.kwargs[0]["messages"][0]["content"]
+    assert '"plano", "accion" y "sonido" van SIEMPRE en inglés' in sistema and '"diferencia_b" va en español' in sistema
+    assert "IDIOMA: planos en inglés; diferencia_b en español" in msg
+    for prompt in (r["prompt_a"], r["prompt_b"]):
+        assert "the camera moves straight toward the subject" in prompt or "pulls back continuously" in prompt
+        assert "Sound: brisa." in prompt and prompt.splitlines()[-1].startswith("AVOID: ")
+        assert "EVITAR" not in prompt and "Sonido:" not in prompt and "la cámara" not in prompt
+        assert "BRAND STYLE: Luz natural." in prompt
+    assert r["diferencia_b"] == "Arranca en macro y sigue de lado."
 
 
 def test_sesion_muda_no_lleva_sonido(monkeypatch):
     import director
     _instalar_fake(monkeypatch, [_respuesta()])
     r = director.compilar("acme", _sesion(con_sonido=False))
-    assert "Sonido:" not in r["prompt_a"] and "No dialogue" not in r["prompt_a"]
+    assert "Sound:" not in r["prompt_a"] and "Sonido:" not in r["prompt_a"] and "No dialogue" not in r["prompt_a"]
 
 
 def test_modelo_sin_familia_lanza(monkeypatch):
