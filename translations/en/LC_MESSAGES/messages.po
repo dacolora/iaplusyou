@@ -7814,8 +7814,8 @@ msgstr "It's the product's only photo. If you want to remove it, upload another 
 msgid "Es lo que se descontó de tu saldo (el detalle de cada movimiento está en Saldo y recargas); la pauta se cobra en tu cuenta de Meta y no entra en este total."
 msgstr "This is what was deducted from your balance (each movement is listed in Balance and top-ups); ad spend is charged to your Meta account and is not part of this total."
 
-msgid "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios."
-msgstr "This is my voice, or I have the person's written permission to clone it and use it in ads."
+msgid "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios. Entiendo que la voz clonada queda en la cuenta del proveedor (MiniMax, vía fal) y que no se puede borrar de ahí, aunque la quite de Mis voces."
+msgstr "This is my voice, or I have the person's written permission to clone it and use it in ads. I understand that the cloned voice stays in the provider's account (MiniMax, through fal) and cannot be deleted from there, even if I remove it from My voices."
 
 #, python-format
 msgid "Es pospago: genera sin frenos y lo que pase de cero queda por pagar. Vuelve a avisar con cada %(tramo)s de deuda nueva; cóbrale o pásalo a prepago en /admin/cobros."
