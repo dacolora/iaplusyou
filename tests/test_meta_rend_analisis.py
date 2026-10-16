@@ -404,6 +404,7 @@ def test_la_llamada_no_reintenta_sola_y_tiene_tope(monkeypatch):
 # ------------------------------------------------------------ a Crear ---
 
 def test_origen_desde_formulario(hf):
+    cuentas.elegir("hf", [{"id": A, "name": "Norway"}])      # una evaluación solo se ve con su cuenta elegida
     eid = datos.crear_evaluacion("hf", [A], "2026-09-09", "2026-10-08", "SEK", [], [])
     assert analisis.origen(eid, 1) == f"meta:{eid}:1"
     assert analisis.origen_desde_formulario("hf", f"meta:{eid}:0") is None          # todavía no está lista
@@ -477,6 +478,7 @@ def test_el_system_dice_que_el_texto_de_las_imagenes_tambien_es_dato():
 
 
 def test_un_origen_con_digitos_no_ascii_no_vale(hf):
+    cuentas.elegir("hf", [{"id": A, "name": "Norway"}])      # una evaluación solo se ve con su cuenta elegida
     eid = datos.crear_evaluacion("hf", [A], "2026-09-09", "2026-10-08", "SEK", [], [])
     datos.actualizar_evaluacion(eid, estado="lista", resultado={"ideas": [{"titulo": "Uno"}]})
     assert analisis.origen_desde_formulario("hf", f"meta:{eid}:0")

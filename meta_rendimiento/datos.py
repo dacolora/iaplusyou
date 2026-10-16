@@ -874,11 +874,28 @@ def medios_anuncios(cliente, ad_ids):
         return {r.objeto_id: {"miniatura_url": r.miniatura_url, "video_id": r.video_id} for r in con.execute(q)}
 
 
-def evaluacion(cliente, evaluacion_id):
-    """La evaluación como dict, o None si no existe o es de otro proyecto."""
+def _evaluacion_visible(t):
+    """La evaluación es de cuentas que SIGUEN elegidas en su proyecto: todas las de `cuentas` están en `meta_cuenta`.
+    Quien orquesta, 2026-10-15: la de una cuenta quitada no se muestra ni va a Claude (ni como contexto ni en «Evaluar
+    con IA»), pero no se borra (se pagó): si la cuenta vuelve a elegirse, reaparece. Desconectar Meta sí las borra."""
+    j = sa.func.json_each(t.c.cuentas).table_valued("value").alias("j")
+    c = db.meta_cuenta
+    falta = (sa.select(sa.literal(1)).select_from(j)
+             .where(~sa.exists().where(c.c.cliente == t.c.cliente, c.c.ad_account_id == j.c.value)))
+    return ~sa.exists(falta)
+
+
+def evaluacion(cliente, evaluacion_id, solo_visibles=True):
+    """La evaluación como dict, o None si no existe, es de otro proyecto o (con `solo_visibles`, lo de siempre) alguna
+    de sus cuentas ya no está elegida: la pantalla, «Llevar a Crear» y la tarea antes de llamar a Claude no la ven.
+    `solo_visibles=False` solo para quien la marca o la limpia (el gancho de interrupción, la tarea al dejarla en
+    error)."""
     t = db.meta_evaluacion
+    q = sa.select(t).where(t.c.id == evaluacion_id, t.c.cliente == cliente)
+    if solo_visibles:
+        q = q.where(_evaluacion_visible(t))
     with db.conectar() as con:
-        fila = con.execute(sa.select(t).where(t.c.id == evaluacion_id, t.c.cliente == cliente)).first()
+        fila = con.execute(q).first()
     return dict(fila._mapping) if fila else None
 
 
@@ -902,9 +919,10 @@ def evaluaciones_panel(cliente, limite=8):
     leerlas."""
     t = db.meta_evaluacion
     u, r = t.alias("u"), t.alias("r")
-    ultima = (sa.select(u.c.id).where(u.c.cliente == cliente, u.c.estado == "lista")
+    # Solo las de cuentas que siguen elegidas (`_evaluacion_visible`): la de una cuenta quitada no se muestra.
+    ultima = (sa.select(u.c.id).where(u.c.cliente == cliente, u.c.estado == "lista", _evaluacion_visible(u))
               .order_by(u.c.creado_en.desc(), u.c.id.desc()).limit(1).scalar_subquery())
-    ventana = (sa.select(r.c.id).where(r.c.cliente == cliente)
+    ventana = (sa.select(r.c.id).where(r.c.cliente == cliente, _evaluacion_visible(r))
                .order_by(r.c.creado_en.desc(), r.c.id.desc()).limit(limite))
     es_ultima = t.c.id == ultima
     columnas = ([c for c in t.c if c.name not in _PESADAS_EVALUACION]

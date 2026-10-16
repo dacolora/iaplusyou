@@ -767,18 +767,24 @@ def test_desconectar_meta_borra_las_evaluaciones_de_ese_proyecto_y_no_las_de_otr
     r = _desconectar(conectado, monkeypatch)
     assert r.status_code == 302
     assert datos.evaluaciones("acme") == [] and all(datos.evaluacion("acme", i) is None for i in mias)
-    assert datos.evaluacion("otro", ajena) is not None                     # el otro proyecto sigue igual
+    assert datos.evaluacion("otro", ajena, solo_visibles=False) is not None   # el otro proyecto sigue igual
     assert _filas_gasto("acme") == 1                                       # lo que se pagó queda en el gasto
     assert not any("no se pudieron borrar" in m for m in _flashes(conectado["c"]))
 
 
 def test_cambiar_las_cuentas_elegidas_no_borra_las_evaluaciones(conectado):
-    # `cuentas.elegir` también corre al cambiar la selección: lo pagado no se pierde por eso.
+    # `cuentas.elegir` también corre al cambiar la selección: lo pagado no se pierde por eso. Desde 2026-10-15 (quien
+    # orquesta) no se ve mientras su cuenta no esté elegida, ni en la pantalla ni para «Llevar a Crear».
     _sembrar()
     e = _evaluar("acme")
+    datos.actualizar_evaluacion(e, estado="lista", resultado={"resumen": "Norway vende", "ideas": [{"titulo": "X"}]})
     cuentas.elegir("acme", [])
-    datos.borrar_cuenta("acme", A)
-    assert datos.evaluacion("acme", e) is not None
+    _limpiar("acme")
+    assert datos.evaluacion("acme", e) is None and datos.evaluacion("acme", e, solo_visibles=False) is not None
+    assert conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{e}").status_code == 404
+    assert conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{e}/idea/0/crear").status_code == 404
+    _dos_cuentas()                                         # vuelve a elegirse: reaparece
+    assert conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{e}").status_code == 200
 
 
 def test_si_falla_borrar_las_copias_las_evaluaciones_se_borran_igual(conectado, monkeypatch):
@@ -806,7 +812,7 @@ def test_si_falla_borrar_las_evaluaciones_las_copias_se_borran_igual_y_se_avisa_
     _desconectar(conectado, monkeypatch)
     _limpiar("acme")
     assert cuentas.ids("acme") == [] and _filas_copiadas() == 0           # lo de las cuentas no se saltó
-    assert datos.evaluacion("acme", e) is not None                         # y la evaluación se reintenta después
+    assert datos.evaluacion("acme", e, solo_visibles=False) is not None    # y la evaluación se reintenta después
     mensajes = _flashes(conectado["c"])
     assert sum("no se pudieron borrar sus métricas copiadas (ValueError)" in m for m in mensajes) == 1
     assert all("base bloqueada" not in m for m in mensajes)
@@ -1117,7 +1123,15 @@ def test_evaluar_si_encolar_falla_por_saldo_borra_la_fila(conectado, monkeypatch
     assert r.status_code == 402 and _evaluaciones() == []
 
 
+def _con_a(cliente):
+    """La cuenta A elegida en el proyecto (si no es de otro): una evaluación solo se ve con sus cuentas elegidas
+    (quien orquesta, 2026-10-15)."""
+    actuales = [{"id": c["ad_account_id"], "name": c["nombre"]} for c in cuentas.listar(cliente)]
+    cuentas.elegir(cliente, actuales + [{"id": A, "name": "HappyFlops Norway"}])
+
+
 def _evaluacion_lista(cliente="acme", ideas=None):
+    _con_a(cliente)
     eid = datos.crear_evaluacion(cliente, [A], _hace(29), _hace(0), "SEK",
                                  [{"ref": "A1", "ad_id": "gana", "nombre": "Video <b>gana</b>"}], [])
     datos.actualizar_evaluacion(eid, estado="lista", usd=0.2, resultado={
@@ -1145,6 +1159,7 @@ def test_ver_una_evaluacion_y_la_de_otro_proyecto_es_404(conectado):
 
 
 def test_una_evaluacion_en_curso_o_fallida_se_dice_en_palabras(conectado):
+    _con_a("acme")
     eid = datos.crear_evaluacion("acme", [A], _hace(29), _hace(0), "SEK", [], [])
     assert "Evaluando con IA" in conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}").get_data(as_text=True)
     datos.actualizar_evaluacion(eid, estado="error", error="Claude no devolvió un análisis que se pueda usar.")
@@ -1230,6 +1245,7 @@ def test_una_idea_llevada_a_crear_en_un_proyecto_no_se_usa_en_otro(conectado):
 
 
 def _evaluacion_con_miniaturas(cliente, estado, muestra):
+    _con_a(cliente)
     eid = datos.crear_evaluacion(cliente, [A], "2026-09-10", "2026-10-09", "SEK", muestra, [], "ana")
     datos.actualizar_evaluacion(eid, estado=estado)
     return eid
@@ -1259,7 +1275,7 @@ def test_desconectar_meta_borra_de_r2_las_miniaturas_de_sus_evaluaciones(conecta
     base = "clientes/acme/meta_rendimiento"
     assert sorted(borradas) == sorted([f"{base}/eval{lista}_A1.jpg", f"{base}/eval{fallida}_A1.jpg",
                                        f"{base}/eval{fallida}_A2.jpg"])
-    assert datos.evaluaciones("acme") == [] and datos.evaluacion("otro", ajena) is not None
+    assert datos.evaluaciones("acme") == [] and datos.evaluacion("otro", ajena, solo_visibles=False) is not None
     assert momentos == [[]]                                                # una sola llamada, con las filas ya borradas
     assert not any("no se pudieron borrar" in m for m in _flashes(conectado["c"]))
 
@@ -1314,7 +1330,8 @@ def test_si_borrar_las_filas_falla_las_miniaturas_se_borran_igual_y_se_reintenta
     monkeypatch.setattr(datos, "borrar_evaluaciones", _falla)
     eid = _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}])
     _desconectar(conectado, monkeypatch)
-    assert borradas == [f"clientes/acme/meta_rendimiento/eval{eid}_A1.jpg"] and datos.evaluacion("acme", eid)
+    assert borradas == [f"clientes/acme/meta_rendimiento/eval{eid}_A1.jpg"] and datos.evaluacion("acme", eid,
+                                                                                               solo_visibles=False)
     assert sum("(ValueError)" in m for m in _flashes(conectado["c"])) == 1
 
 
@@ -1499,6 +1516,7 @@ def test_el_panel_muestra_la_ultima_lista_entera_y_las_anteriores_por_fetch(cone
 
 
 def test_el_plan_nombra_sus_objetos_marca_las_cifras_sin_dato_y_solo_enlaza_al_administrador(conectado):
+    _con_a("acme")
     eid = datos.crear_evaluacion(
         "acme", [A], _hace(29), _hace(0), "SEK",
         [{"ref": "A1", "ad_id": "9", "nombre": "Video <b>gana</b>", "veredicto": "ganador",

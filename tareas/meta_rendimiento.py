@@ -318,8 +318,14 @@ def meta_rend_evaluar(tarea):
     claude_anotado = llamada_hecha = False
     temporales, elegidos = [], []
     ya_no_existe = gettext("Esa evaluación ya no existe.")
+    cuenta_quitada = gettext("Una de las cuentas de esta evaluación ya no está en el proyecto: no se evaluó ni se "
+                             "cobró nada.")
     try:
         fila = datos.evaluacion(cliente, eid)
+        if fila is None and datos.evaluacion(cliente, eid, solo_visibles=False) is not None:
+            # Quien orquesta, 2026-10-15: una cuenta suya se quitó mientras esperaba. Nada de ella va a Claude.
+            datos.actualizar_evaluacion(eid, estado="error", error=cuenta_quitada)
+            return cuenta_quitada
         # Sigue «en_cola» mientras copia miniaturas: «analizando» es «la llamada a Claude empezó» (abajo), lo que mira
         # el gancho de interrupción para anotar el estimado (PND-268; revisión del gasto, 2026-10-15).
         if fila is None or not datos.actualizar_evaluacion(eid, tarea_id=tarea.get("id"), error=None):
@@ -335,6 +341,11 @@ def meta_rend_evaluar(tarea):
         bloques, temporales = tw_analisis.visuales(cliente, elegidos, medios, creatv)
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
         texto, imagenes = analisis.armar(cliente, fila, medios, bloques)
+        if datos.evaluacion(cliente, eid) is None and datos.evaluacion(cliente, eid, solo_visibles=False) is not None:
+            # Se quitó una de sus cuentas mientras se copiaban las miniaturas: ni Claude ni sus copias.
+            _soltar_miniaturas(cliente, eid, elegidos)
+            datos.actualizar_evaluacion(eid, estado="error", error=cuenta_quitada)
+            return cuenta_quitada
         if not datos.actualizar_evaluacion(eid, estado="analizando"):
             # Desconectar Meta la borró mientras se copiaban las miniaturas: no se paga una llamada que nadie va a ver.
             _soltar_miniaturas(cliente, eid, elegidos)
@@ -404,7 +415,7 @@ def _evaluar_interrumpida(tarea, mensaje):
     if not (p.get("cliente") and p.get("evaluacion_id")):
         return
     cliente, eid = p["cliente"], int(p["evaluacion_id"])
-    fila = datos.evaluacion(cliente, eid)
+    fila = datos.evaluacion(cliente, eid, solo_visibles=False)
     if fila and fila["estado"] in ("en_cola", "analizando"):
         if fila["estado"] == "analizando":
             anotar_estimado_cortado(cliente, f"meta_eval:{eid}{ref_sufijo(tarea)}",

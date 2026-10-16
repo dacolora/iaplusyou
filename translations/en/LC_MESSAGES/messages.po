@@ -19859,6 +19859,9 @@ msgstr "One video fades into the other."
 msgid "Una campaña necesita al menos un video o una imagen."
 msgstr "A campaign needs at least one video or image."
 
+msgid "Una de las cuentas de esta evaluación ya no está en el proyecto: no se evaluó ni se cobró nada."
+msgstr "One of the accounts of this evaluation is no longer in the project: nothing was evaluated or charged."
+
 msgid "Una de las piezas no está disponible (o no está lista)."
 msgstr "One of the pieces is not available (or not ready)."
 
