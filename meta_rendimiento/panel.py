@@ -188,7 +188,7 @@ def _evaluar(ids, periodo_, recientes, previos, cuentas_por_id, reglas):
             t = por_ad.get(a["ad_id"]) or {}
             a.update(ad_account_id=act, adset_id=t.get("adset_id"), campaign_id=t.get("campaign_id"),
                      estado=t.get("estado"), miniatura_url=t.get("miniatura_url"), moneda=c.get("moneda"), cuenta=c,
-                     problemas_meta=t.get("problemas_meta") or [])
+                     problemas_meta=t.get("problemas_meta") or [], miniatura_r2=t.get("miniatura_r2"))
             # «Sin rastreo» habla de los parámetros de Triple Whale: aquí no aplica.
             a["problemas"] = [p for p in a["problemas"] if p != "sin_rastreo"]
             anuncios.append(a)

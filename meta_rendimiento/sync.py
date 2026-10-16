@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 import db
 import idiomas
-from meta_rendimiento import cuentas, datos, desgloses, graph, tasas
+from meta_rendimiento import cuentas, datos, desgloses, graph, miniaturas, tasas
 from monedas_meta import SIN_DECIMALES as MONEDAS_SIN_DECIMALES
 
 log = logging.getLogger("creatv.meta_rendimiento.sync")
@@ -496,6 +496,8 @@ def _sincronizar(cliente, act, token, guardada, hoy, on_etapa):
     # después de los días de anuncio: en la primera copia esos días recién se escribieron.
     if completo:
         n_objetos += _miniaturas(cliente, act, token, hoy)
+        # PND-194: y su copia en R2 (la URL de Meta caduca), una vez por anuncio y creativo, las de más gasto primero.
+        miniaturas.copiar(cliente, act, (hoy - timedelta(days=DIAS_MINIATURA - 1)).isoformat())
 
     # 5. Alcance (gente única: se pide por ventana, no se suma de los días).
     etapa(ETAPA_ALCANCE, 90)

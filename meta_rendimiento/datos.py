@@ -458,6 +458,39 @@ def anuncios_sin_miniatura_al_dia(cliente, act, desde, horas=20, ahora=None):
     return salida
 
 
+def miniaturas_por_copiar(cliente, act, desde, limite):
+    """[(ad_id, miniatura_url, creative_id)] de los anuncios de ESA cuenta con gasto desde `desde` (AAAA-MM-DD) y una
+    miniatura de Meta guardada que todavía no tienen copia en R2 de su creativo actual (`extra.miniatura_r2` y
+    `extra.miniatura_r2_de`; PND-194), los de más gasto primero, como mucho `limite`. Una consulta."""
+    a, o = db.meta_anuncio_dia, db.meta_objeto
+    gasto = (sa.select(a.c.ad_id, sa.func.sum(a.c.gasto).label("gasto"))
+             .where(a.c.cliente == cliente, a.c.ad_account_id == act, a.c.fecha >= desde, a.c.gasto > 0,
+                    a.c.ad_id.is_not(None))
+             .group_by(a.c.ad_id).subquery("g"))
+    copiada_de = sa.func.json_extract(o.c.extra, "$.miniatura_r2_de")
+    q = (sa.select(o.c.objeto_id, o.c.miniatura_url, o.c.creative_id)
+         .select_from(gasto.join(o, sa.and_(o.c.cliente == cliente, o.c.objeto_id == gasto.c.ad_id)))
+         .where(o.c.ad_account_id == act, o.c.nivel == "anuncio", o.c.miniatura_url.is_not(None),
+                sa.or_(sa.func.json_extract(o.c.extra, "$.miniatura_r2").is_(None), copiada_de.is_(None),
+                       copiada_de != sa.func.coalesce(o.c.creative_id, "")))
+         .order_by(gasto.c.gasto.desc(), o.c.objeto_id)
+         .limit(int(limite)))
+    with db.conectar() as con:
+        return [(str(r.objeto_id), r.miniatura_url, r.creative_id) for r in con.execute(q)]
+
+
+def anuncios_con_miniatura_r2(cliente, act, con=None):
+    """Los ad_id de ESA cuenta cuya miniatura se copió a R2 (`extra.miniatura_r2`, PND-194): soltar la cuenta borra
+    esas copias DESPUÉS de las filas (`cuentas.elegir`). Con `con`, dentro de esa transacción."""
+    if con is None:
+        with db.conectar() as con_:
+            return anuncios_con_miniatura_r2(cliente, act, con=con_)
+    o = db.meta_objeto
+    q = sa.select(o.c.objeto_id).where(o.c.cliente == cliente, o.c.ad_account_id == act, o.c.nivel == "anuncio",
+                                       sa.func.json_extract(o.c.extra, "$.miniatura_r2").is_not(None))
+    return [str(r) for r in con.execute(q).scalars()]
+
+
 def cuenta_por_dia(cliente, cuentas, desde, hasta):
     """Las filas de meta_cuenta_dia del rango (para el gráfico diario), por fecha y cuenta."""
     if not cuentas:
@@ -568,8 +601,15 @@ def totales_por_anuncio(cliente, cuentas, desde, hasta):
         anuncio=f["anuncio"], conjunto=f["conjunto"], campana=f["campana"], estado=f["estado"],
         miniatura_url=f["miniatura_url"], primera_fecha=f["primera_fecha"], ultima_fecha=f["ultima_fecha"],
         dias_con_gasto=int(f["dias_con_gasto"] or 0), canal="meta", problemas_meta=_problemas_meta(f["extra_objeto"]),
-        **_medidas(f, METRICAS_ANUNCIO)))
+        miniatura_r2=_miniatura_r2(f["extra_objeto"]), **_medidas(f, METRICAS_ANUNCIO)))
         for f in filas]
+
+
+def _miniatura_r2(extra):
+    """La copia en R2 de la miniatura (`extra.miniatura_r2`, PND-194), o None. Quien la pinta la vuelve a pasar por
+    `triple_whale.medio_permitido`."""
+    url = (extra or {}).get("miniatura_r2") if isinstance(extra, dict) else None
+    return url if isinstance(url, str) and url else None
 
 
 def _problemas_meta(extra):

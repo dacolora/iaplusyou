@@ -104,7 +104,7 @@ def bloquear_elegida(con, cliente, ad_account_id):
 def elegir(cliente, elegidas, usuario=None):
     """Deja en el proyecto exactamente `elegidas` (las de otro proyecto se rechazan). Devuelve {"agregadas",
     "quitadas", "rechazadas", "fallos_r2"}: `fallos_r2`, el tipo de cada copia en R2 de un análisis «Cómo mejorarlo»
-    de una cuenta quitada que no se pudo borrar (S1; quien llama avisa).
+    o de una miniatura (PND-194) de una cuenta quitada que no se pudo borrar (S1; quien llama avisa).
 
     PND-206 (decisión 2026-10-13): todo en UNA transacción que toma el candado de escritura ANTES de leer qué cuentas
     tiene el proyecto. Agregar, quitar y borrar las copias de las quitadas (métricas y análisis de fuente Meta) pasa
@@ -113,7 +113,7 @@ def elegir(cliente, elegidas, usuario=None):
     (`bloquear_elegida`) y no escribe. Las copias en R2 se borran DESPUÉS del commit: si la transacción no se
     confirmó, sus filas siguen y sus imágenes también."""
     nuevas = {normalizar_id(c["id"]): c for c in elegidas or [] if c.get("id")}
-    agregadas, rechazadas, copiadas = [], [], []
+    agregadas, rechazadas, copiadas, miniaturas = [], [], [], []
     ahora = db.ahora()
     with db.conectar() as con:
         con.execute(db.meta_cuenta.update().where(_C.cliente == cliente).values(actualizado_en=_C.actualizado_en))
@@ -133,6 +133,9 @@ def elegir(cliente, elegidas, usuario=None):
             (agregadas if r.rowcount == 1 else rechazadas).append(act)
         quitadas = sorted(actuales - set(nuevas))
         for act in quitadas:
+            # PND-194: las miniaturas que la copia subió a R2 salen de las filas de sus anuncios: se leen antes.
+            from meta_rendimiento import datos  # noqa: PLC0415 — datos importa cuentas en sus pruebas
+            miniaturas += datos.anuncios_con_miniatura_r2(cliente, act, con=con)
             copiadas += _borrar_copias(con, cliente, act) or []
             con.execute(db.meta_cuenta.delete().where(_C.cliente == cliente, _C.ad_account_id == act))
     fallos_r2 = []
@@ -141,6 +144,9 @@ def elegir(cliente, elegidas, usuario=None):
         # anota lo que R2 no borró en `storage.r2_pendientes` para el reintento diario.
         from meta_rendimiento import creativo  # noqa: PLC0415 — tardío: creativo carga Graph, R2 y triple_whale
         _, fallos_r2 = creativo.borrar_copias(cliente, copiadas)
+    if miniaturas:
+        from meta_rendimiento import miniaturas as copias_miniaturas  # noqa: PLC0415 — tardío, como creativo
+        fallos_r2 = list(fallos_r2) + copias_miniaturas.borrar(cliente, miniaturas)
     return {"agregadas": agregadas, "quitadas": quitadas, "rechazadas": rechazadas, "fallos_r2": fallos_r2}
 
 
