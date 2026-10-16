@@ -82,8 +82,13 @@ Nada del spec chocó con el código. Se agregó, por las rondas de guardian-gast
 - **El video se sube una vez por cuenta** (un video de una cuenta no sirve en otra) y `meta_detalle` pide cada campaña
   en su cuenta.
 
-Límites conocidos, para Daniel: el tope de cada campaña queda fijo al lanzar mientras «Cambiar presupuesto» y escalar
-usan el saldo de todo el experimento (Meta corta la campaña de un país al llegar a su parte, sin gastar de más); el
-Pixel (compras) y la app anunciada no se comprueban por cuenta antes de crear (si no están compartidos con la cuenta,
-Meta rechaza el conjunto y el experimento queda en error); un país sin `ad_account_id` sigue la cuenta que tenga
-`meta.json` en cada momento.
+Segunda ronda (decisiones de quien orquesta, 2026-10-16):
+
+- **Reparto vivo del tope:** cambiar el diario de un país (a mano o al escalar) en un experimento con varias cuentas
+  reparte otra vez el tope y actualiza el `spend_cap` de cada campaña antes del diario: cada parte = max(lo ya gastado
+  hacia arriba, su parte proporcional); un tope que ya está en Meta no baja del mínimo de su cuenta; la suma nunca pasa
+  el tope. Si no cabe, subir se niega en palabras y bajar sigue sin tocar los topes. Cada tope se lee de vuelta.
+- **Pixel y app por cuenta** antes de crear nada (`act_…/adspixels`, `act_…/advertisable_applications`).
+- `meta_detalle` junta los errores de varias campañas.
+
+Límite que queda: un país sin `ad_account_id` sigue la cuenta que tenga `meta.json` en cada momento.

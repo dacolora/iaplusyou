@@ -321,7 +321,8 @@ def test_cambiar_el_diario_de_un_pais_lee_su_cuenta(dos):
     lz.cambiar_estado("acme", eid, "ACTIVE")
     meta.leidas.clear()
     lz.cambiar_presupuesto_pais("acme", eid, "SE", 90.0)
-    assert meta.leidas == [SUECIA]
+    # primero la cuenta del país; con el reparto vivo del tope, también cada cuenta que recibe un tope nuevo
+    assert meta.leidas[0] == SUECIA and set(meta.leidas) == {DEF, SUECIA}
     meta.cuentas[SUECIA] = {**meta.cuenta, "currency": "EUR"}
     with pytest.raises(lz.PresupuestoNoCoincide):
         lz.cambiar_presupuesto_pais("acme", eid, "SE", 80.0)
@@ -846,3 +847,236 @@ def test_el_reparto_del_tope_en_js_da_lo_mismo_que_el_lanzador():
         esperado = [lz.monedas_meta.desde_unidad_meta(x, moneda)
                     for x in lz._repartir_tope(tope, [[{"presupuesto_dia": d} for d in g] for g in grupos], moneda)]
         assert js == pytest.approx(esperado, abs=1e-9), (tope, grupos, moneda)
+
+
+# ---------- reparto vivo del tope (decisión de quien orquesta, 2026-10-16) ----------
+# Con varias cuentas, cambiar el diario de un país (a mano o al escalar) recalcula el reparto del tope y actualiza el
+# spend_cap de cada campaña: cada parte = max(lo ya gastado hacia arriba, su parte proporcional), un tope que ya está en
+# Meta no baja del mínimo de su cuenta y la suma nunca pasa el tope del experimento; si no cabe, no se sube el diario.
+
+def _holgado(dos, min_suecia=None):
+    """Experimento con margen: 300 + 100 SEK al día por 7 días (2 800) con un tope de 4 200, lanzado y activo.
+    Partes al lanzar: 3 150 (Noruega) y 1 050 (Suecia)."""
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    if min_suecia is not None:
+        meta.cuentas[SUECIA] = {**meta.cuenta, "min_campaign_group_spend_cap": str(min_suecia)}
+    eid = ex.crear("acme", "Holgado", PAISES, "OUTCOME_TRAFFIC", 7, 4200.0, URL, "SEK")
+    ex.agregar_pieza("acme", eid, dos["clon"], "NO")
+    ex.agregar_pieza("acme", eid, dos["clon"], "SE")
+    lz.lanzar("acme", eid)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    meta.llamadas.clear()
+    meta.posts.clear()
+    meta.leidas.clear()
+    p = _por_pais(ex, eid)
+    return eid, p["NO"]["meta_campaign_id"], p["SE"]["meta_campaign_id"]
+
+
+def _topes_mandados(meta):
+    return [(edge, pl["spend_cap"]) for edge, pl in meta.posts if "spend_cap" in pl]
+
+
+def _diarios_mandados(meta):
+    return [kw["centavos"] for t, kw in meta.llamadas if t == "presupuesto"]
+
+
+def test_subir_el_diario_de_un_pais_reparte_otra_vez_el_tope(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    assert meta.topes[c_no] == 315000 and meta.topes[c_se] == 105000
+    lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    # 4 200 repartido 300 : 200; primero baja el que baja (en cada paso la suma no pasa el tope), después sube el otro
+    assert _topes_mandados(meta) == [(c_no, 252000), (c_se, 168000)]
+    assert meta.topes[c_no] + meta.topes[c_se] <= lz.centavos(4200.0, "SEK")
+    assert _diarios_mandados(meta) == [20000]
+    assert _por_pais(ex, eid)["SE"]["presupuesto_dia"] == 200.0
+    # cada cuenta a la que se le manda un tope pasa por comprobar_moneda
+    assert sorted(set(meta.leidas)) == [DEF, SUECIA]
+    assert any("HappyFlops Sweden" in e["mensaje"] and "HappyFlops Norway" in e["mensaje"]
+               for e in ex.eventos("acme", eid) if e["tipo"] == "presupuesto")
+
+
+def test_escalar_un_pais_tambien_reparte_el_tope(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    assert lz.escalar_pais("acme", eid, "SE", 100) == 200.0
+    assert _topes_mandados(meta) == [(c_no, 252000), (c_se, 168000)]
+
+
+def test_si_lo_gastado_no_deja_repartir_no_se_sube_el_diario(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    meta.gastos[c_no] = (3000.0, 0.0)     # Noruega ya gastó más que su parte nueva (2 520)
+    with pytest.raises(ValueError, match="no alcanza"):
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    assert _topes_mandados(meta) == [] and _diarios_mandados(meta) == []
+    assert _por_pais(ex, eid)["SE"]["presupuesto_dia"] == 100.0
+
+
+def test_bajar_un_diario_cuando_no_cabe_baja_el_diario_y_deja_los_topes(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    meta.gastos[c_no] = (3200.0, 0.0)     # la parte nueva de Noruega sería 3 000
+    lz.cambiar_presupuesto_pais("acme", eid, "NO", 250.0)
+    assert _topes_mandados(meta) == [] and _diarios_mandados(meta) == [25000]
+    assert _por_pais(ex, eid)["NO"]["presupuesto_dia"] == 250.0
+    assert meta.topes[c_no] == 315000 and meta.topes[c_se] == 105000
+    assert any("se dejó como estaba" in e["mensaje"] for e in ex.eventos("acme", eid))
+
+
+def test_un_tope_que_quedaria_bajo_el_minimo_de_su_cuenta_no_deja_subir(dos):
+    """El tope de Suecia (1 050) ya está en Meta y su mínimo es 1 000: subir Noruega a 400 lo dejaría en 840."""
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos, min_suecia=100000)
+    assert meta.topes[c_se] == 105000
+    with pytest.raises(ValueError, match="no alcanza"):
+        lz.cambiar_presupuesto_pais("acme", eid, "NO", 400.0)
+    assert _topes_mandados(meta) == [] and _diarios_mandados(meta) == []
+
+
+def test_una_campana_sin_tope_que_llega_al_minimo_estrena_su_tope(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos, min_suecia=120000)
+    assert meta.topes[c_se] is None              # 1 050 < 1 200: lanzó sin tope
+    lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    assert _topes_mandados(meta) == [(c_no, 252000), (c_se, 168000)]
+
+
+def test_una_campana_sin_tope_que_sigue_bajo_el_minimo_sigue_sin_tope(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos, min_suecia=200000)
+    lz.cambiar_presupuesto_pais("acme", eid, "SE", 150.0)
+    assert _topes_mandados(meta) == [(c_no, 280000)]     # Suecia: 1 400 < 2 000, sigue con fecha de fin y vigilancia
+    assert _diarios_mandados(meta) == [15000]
+
+
+def test_un_tope_que_meta_guarda_distinto_pausa_la_campana_y_no_cambia_el_diario(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    meta.tope_distinto = True
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.cambiar_presupuesto_pais("acme", eid, "SE", 200.0)
+    assert ("estado", {"oid": c_no, "status": "PAUSED"}) in meta.llamadas
+    assert _diarios_mandados(meta) == [] and _por_pais(ex, eid)["SE"]["presupuesto_dia"] == 100.0
+
+
+def test_el_reparto_no_manda_un_tope_a_una_cuenta_que_cambio_de_moneda(dos):
+    """Subir Noruega toca el tope de Suecia: Suecia también pasa por comprobar_moneda antes de recibirlo."""
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid, c_no, c_se = _holgado(dos)
+    meta.cuentas[SUECIA] = {**meta.cuenta, "currency": "EUR"}
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.cambiar_presupuesto_pais("acme", eid, "NO", 350.0)
+    assert _topes_mandados(meta) == [] and _diarios_mandados(meta) == []
+
+
+def test_un_experimento_de_una_sola_cuenta_no_reparte_nada(dos):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    viejo = ex.crear("acme", "Viejo", [{k: v for k, v in p.items() if k != "ad_account_id"} for p in PAISES],
+                     "OUTCOME_TRAFFIC", 7, 4200.0, URL, "SEK")
+    ex.agregar_pieza("acme", viejo, dos["clon"], "NO")
+    ex.agregar_pieza("acme", viejo, dos["clon"], "SE")
+    lz.lanzar("acme", viejo)
+    lz.cambiar_estado("acme", viejo, "ACTIVE")
+    meta.posts.clear()
+    gets = []
+    original = meta._llamar
+
+    def llamar(metodo, edge, payload=None, params=None, dry_run=False):
+        if metodo == "GET":
+            gets.append(edge)
+        return original(metodo, edge, payload, params, dry_run)
+    meta._llamar = llamar
+    _parchar(lz, meta, dos["monkeypatch"])
+    lz.cambiar_presupuesto_pais("acme", viejo, "SE", 200.0)
+    assert _topes_mandados(meta) == [] and not [g for g in gets if g.endswith("/insights")]
+
+
+# ---------- Pixel y app: usables desde cada cuenta antes de crear nada ----------
+
+def _ventas(dos, monkeypatch):
+    ex, lz = dos["ex"], dos["lz"]
+    monkeypatch.setattr(lz.meta_conexion, "estado_pixel", lambda c, solo_cache=False: {"estado": "ok", "pixel_id": "px_9"})
+    eid = ex.crear("acme", "Ventas", PAISES, "OUTCOME_SALES", 7, 2800.0, URL, "SEK", atribucion="pixel")
+    ex.agregar_pieza("acme", eid, dos["clon"], "NO")
+    ex.agregar_pieza("acme", eid, dos["clon"], "SE")
+    return eid
+
+
+def test_compras_con_un_pixel_que_otra_cuenta_no_ve_no_lanza_nada(dos, monkeypatch):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    eid = _ventas(dos, monkeypatch)
+    meta.pixeles = {DEF: ["px_9"], SUECIA: ["px_1"]}
+    with pytest.raises(ValueError) as e:
+        lz.lanzar("acme", eid)
+    assert "HappyFlops Sweden" in str(e.value) and "px_9" in str(e.value) and "Business" in str(e.value)
+    assert not [t for t, _ in meta.llamadas if t in ("campaign", "adset", "ad")]
+    assert ex.obtener("acme", eid)["estado"] == "error"
+    meta.pixeles[SUECIA] = ["px_1", "px_9"]
+    lz.lanzar("acme", eid)
+    assert {kw["promoted_object"]["pixel_id"] for _, kw, _ in _creados(meta, "adset")} == {"px_9"}
+
+
+def test_compras_en_una_sola_cuenta_no_pregunta_nada_mas(dos, monkeypatch):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    monkeypatch.setattr(lz.meta_conexion, "estado_pixel", lambda c, solo_cache=False: {"estado": "ok", "pixel_id": "px_9"})
+    eid = ex.crear("acme", "Ventas", [{k: v for k, v in p.items() if k != "ad_account_id"} for p in PAISES],
+                   "OUTCOME_SALES", 7, 2800.0, URL, "SEK", atribucion="pixel")
+    ex.agregar_pieza("acme", eid, dos["clon"], "NO")
+    ex.agregar_pieza("acme", eid, dos["clon"], "SE")
+    gets = []
+    original = meta._llamar
+
+    def llamar(metodo, edge, payload=None, params=None, dry_run=False):
+        gets.append(edge)
+        return original(metodo, edge, payload, params, dry_run)
+    meta._llamar = llamar
+    _parchar(lz, meta, dos["monkeypatch"])
+    lz.lanzar("acme", eid)
+    assert not [g for g in gets if g.endswith(("/adspixels", "/advertisable_applications"))]
+
+
+def test_una_app_que_otra_cuenta_no_puede_anunciar_no_lanza_nada(dos, monkeypatch):
+    ex, lz, meta = dos["ex"], dos["lz"], dos["meta"]
+    monkeypatch.setattr(lz.meta_conexion, "cargar_app_anunciada", lambda c: "12345")
+    datos = dict(nombre="App", paises=PAISES, objetivo_meta="OUTCOME_APP_PROMOTION", dias=7, tope_total=2800.0,
+                 destino_url="https://play.google.com/store/apps/details?id=com.hf", moneda="SEK",
+                 app={"android_url": "https://play.google.com/store/apps/details?id=com.hf", "app_id": "12345"})
+    eid = ex.crear_con_piezas("acme", datos, [(dos["clon"], "NO"), (dos["clon"], "SE")])
+    meta.apps = {DEF: ["12345"]}
+    with pytest.raises(ValueError) as e:
+        lz.lanzar("acme", eid)
+    assert "HappyFlops Sweden" in str(e.value) and "12345" in str(e.value)
+    assert not [t for t, _ in meta.llamadas if t in ("campaign", "adset", "ad")]
+    meta.apps[SUECIA] = ["12345"]
+    lz.lanzar("acme", eid)
+    assert ex.obtener("acme", eid)["estado"] == "pausado"
+
+
+# ---------- el detalle de Meta: los errores de dos campañas se juntan ----------
+
+def test_el_detalle_junta_los_errores_de_las_dos_campanas(monkeypatch, base_temporal):
+    import json as _json
+
+    import experimentos as ex
+    import lanzador
+    import meta_detalle as md
+    monkeypatch.setattr(lanzador.meta_conexion, "credenciales_ads",
+                        lambda c: {"token": "TOKEN", "ad_account_id": DEF, "page_id": "2"})
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    eid = ex.crear("acme", "Chanclas", PAISES, "OUTCOME_TRAFFIC", 7, 2800.0, URL, "SEK")
+    for pais, ad, cmp in (("NO", "ad_1", "cmp_1"), ("SE", "ad_2", "cmp_2")):
+        ep = ex.agregar_pieza("acme", eid, clon, pais)
+        ex.actualizar_pieza("acme", ep, meta_ad_id=ad)
+        ex.actualizar_pais("acme", eid, pais, meta_campaign_id=cmp)
+    ex.actualizar("acme", eid, meta_campaign_id="cmp_1")
+
+    def llamar(metodo, edge, payload=None, params=None, dry_run=False):
+        campana = _json.loads(params["filtering"])[0]["value"]
+        if "time_increment" in params:
+            raise RuntimeError(f"Meta falló en el diario de {campana}")
+        return {"data": []}
+    monkeypatch.setattr(md.auth, "llamar", llamar)
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 16))
+    assert "cmp_1" in r["errores"]["diario"] and "cmp_2" in r["errores"]["diario"]
+    assert set(r["errores"]) == {"diario"}

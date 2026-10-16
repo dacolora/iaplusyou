@@ -190,6 +190,41 @@ def _exigir_cuentas(cliente, defecto, cuentas_, moneda):
     return nombres
 
 
+def _ids_de(edge):
+    """Los ids de un listado de Meta (`act_…/adspixels`, `act_…/advertisable_applications`), como texto."""
+    datos = meta_auth.llamar("GET", edge, params={"fields": "id", "limit": 500}) or {}
+    return {str(f.get("id")) for f in datos.get("data") or [] if f.get("id")}
+
+
+def _comprobar_activos_por_cuenta(promoted_object, cuentas_, nombres):
+    """Antes de crear nada en Meta (decisión de quien orquesta, 2026-10-16): con compras, el Pixel del experimento
+    tiene que poder usarse desde CADA cuenta (`act_…/adspixels`); con instalaciones de la app, la app tiene que estar
+    asociada a cada cuenta (`act_…/advertisable_applications`). Si no, Meta rechazaría el conjunto de esa cuenta con la
+    campaña ya creada y cada reintento fallaría igual: no se lanza nada y se dice cuál cuenta y qué compartir. Solo
+    corre cuando el experimento usa una cuenta además de la de la conexión (el Pixel de esa ya lo mira
+    `_promoted_object_para`): un experimento de una sola cuenta hace las mismas llamadas que antes."""
+    if not promoted_object:
+        return
+    if promoted_object.get("pixel_id"):
+        pixel = str(promoted_object["pixel_id"])
+        for act in cuentas_:
+            if pixel not in _ids_de(f"{act}/adspixels"):
+                raise ValueError(gettext(
+                    "La cuenta publicitaria %(cuenta)s no tiene acceso al Pixel %(pixel)s: compártelo con esa cuenta "
+                    "en Meta Business (Configuración del negocio › Orígenes de datos › Píxeles › Asignar cuentas "
+                    "publicitarias) y vuelve a lanzar. No se creó nada en Meta.",
+                    cuenta=nombres.get(act) or act, pixel=pixel))
+    elif promoted_object.get("application_id"):
+        app = str(promoted_object["application_id"])
+        for act in cuentas_:
+            if app not in _ids_de(f"{act}/advertisable_applications"):
+                raise ValueError(gettext(
+                    "La cuenta publicitaria %(cuenta)s no puede anunciar la app %(app)s: autoriza esa cuenta en Meta "
+                    "for Developers (Configuración › Avanzada › Cuentas publicitarias autorizadas) o asígnale la app en "
+                    "Meta Business, y vuelve a lanzar. No se creó nada en Meta.",
+                    cuenta=nombres.get(act) or act, app=app))
+
+
 def _repartir_tope(tope, grupos, moneda):
     """El tope del experimento en la unidad de Meta repartido entre sus campañas (una por cuenta; `grupos` = los
     países de cada una) en proporción a la suma de los diarios de sus países, hacia abajo: la suma de las partes nunca
@@ -266,6 +301,65 @@ def _dias_que_alcanza(ex):
     if tope <= 0 or diario <= 0:
         return dias
     return max(1, min(dias, int(tope // diario)))
+
+
+def _reparto_vivo(tope, grupos, moneda, gastado, minimos, con_tope):
+    """El reparto del tope cuando cambia un diario (decisión de quien orquesta, 2026-10-16): por campaña, en la unidad
+    de Meta, max(lo ya gastado hacia arriba, su parte proporcional con los diarios nuevos); una campaña que ya tiene
+    tope en Meta no baja del mínimo de su cuenta (Meta no lo aceptaría). La suma nunca pasa el tope: si no cabe,
+    devuelve None. Si cabe, la lista de topes a dejar en Meta: None = la campaña sigue sin tope (su parte queda bajo el
+    mínimo de su cuenta: la frenan la fecha de fin y la vigilancia, como al lanzar)."""
+    partes = _repartir_tope(tope, grupos, moneda)
+    objetivo = []
+    for parte, ya, minimo, tiene in zip(partes, gastado, minimos, con_tope):
+        p = max(int(parte), int(ya))
+        if tiene and p < minimo:
+            p = minimo
+        objetivo.append(p)
+    if sum(objetivo) > centavos(tope, moneda):
+        return None
+    return [p if (tiene or p >= minimo) else None for p, minimo, tiene in zip(objetivo, minimos, con_tope)]
+
+
+def _unidades_arriba(monto, moneda):
+    """Un monto ya gastado (en la moneda) en la unidad de Meta, redondeado hacia ARRIBA."""
+    return int(math.ceil(round(float(monto or 0) * monedas_meta.factor(moneda), 6)))
+
+
+def _plan_reparto(cliente, ex, creds, pais, nuevo, moneda):
+    """Lee lo necesario para repartir otra vez el tope con el diario nuevo de `pais` (solo lecturas: gasto, tope actual
+    y mínimo de cada campaña). Antes de leer los mínimos, cada cuenta que va a recibir un tope sigue en el proyecto y
+    pasa su `comprobar_moneda`. Devuelve {campanas, actuales, objetivo (None si no cabe), nombres}."""
+    defecto = creds["ad_account_id"]
+    campanas = campanas_por_cuenta(ex, defecto)
+    cuentas_ = _sin_repetir(a for a, _ in campanas)
+    nombres = _exigir_cuentas(cliente, defecto, cuentas_, moneda)
+    info = {}
+    for act in cuentas_:
+        info[act] = _cuenta_meta_de(act)
+        comprobar_moneda(info[act], moneda)
+    paises_nuevos = [{**q, "presupuesto_dia": nuevo} if q["pais"] == pais else q for q in ex["paises"]]
+    grupos = [[q for q in paises_nuevos if _campana_de_pais(ex, q) == cid] for _, cid in campanas]
+    gastado = [_unidades_arriba(_gasto_campana(cid, "maximum"), moneda) for _, cid in campanas]
+    actuales = [_entero((meta_auth.llamar("GET", cid, params={"fields": "spend_cap"}) or {}).get("spend_cap")) or 0
+                for _, cid in campanas]
+    minimos = [_entero(info[act].get("min_campaign_group_spend_cap")) or centavos(minimo_tope_campana(moneda), moneda)
+               for act, _ in campanas]
+    objetivo = _reparto_vivo(float(ex["tope_total"] or 0), grupos, moneda, gastado, minimos, [a > 0 for a in actuales])
+    return {"campanas": campanas, "actuales": actuales, "objetivo": objetivo, "nombres": nombres}
+
+
+def _aplicar_reparto(plan):
+    """Manda los topes nuevos, cada uno leído de vuelta (`_confirmar_tope`: si Meta guardó otro, la campaña queda en
+    pausa y sale `PresupuestoNoCoincide`). Primero los que aprietan (bajan o estrenan tope) y al final los que suben: en
+    cada paso la suma de los topes en Meta no pasa el tope del experimento. Devuelve [(cuenta, tope)] mandados."""
+    cambios = [(act, cid, antes, despues) for (act, cid), antes, despues
+               in zip(plan["campanas"], plan["actuales"], plan["objetivo"]) if despues is not None and despues != antes]
+    cambios.sort(key=lambda c: bool(c[2]) and c[3] > c[2])
+    for _act_, cid, _antes, despues in cambios:
+        meta_auth.llamar("POST", cid, payload={"spend_cap": int(despues)})
+        _confirmar_tope(cid, despues)
+    return [(act, despues) for act, _cid, _antes, despues in cambios]
 
 
 def _tope_y_dias_meta(ex, cuenta, moneda, parte=None):
@@ -643,6 +737,8 @@ def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
         for act, _ in grupos:
             cuentas_meta[act] = _cuenta_meta_de(act)
             comprobar_moneda(cuentas_meta[act], moneda)
+        if [a for a, _ in grupos] != [defecto]:
+            _comprobar_activos_por_cuenta(promoted_object, [a for a, _ in grupos], nombres)
         tope = float(ex["tope_total"] or 0)
         partes = _repartir_tope(tope, [ps for _, ps in grupos], moneda) if tope > 0 else [None] * len(grupos)
         from tablero import dinero as _dinero
@@ -1322,11 +1418,30 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     # si no, el panel diría un presupuesto y Meta gastaría otro.
     centavos_antes = centavos(p.get("presupuesto_dia") or 0, moneda) // len(ids)
 
+    subir = float(presupuesto_dia) > float(p.get("presupuesto_dia") or 0)
+    reparto = {}
+
     def _correr(creds):
         # PND-322: ningún monto sin comprobar la unidad. PND-148: la de la cuenta de ESTE país, que sigue en el proyecto.
         cuenta = _cuenta_de_pais(p, creds["ad_account_id"])
         _exigir_cuentas(cliente, creds["ad_account_id"], [cuenta], moneda)
         comprobar_moneda(_cuenta_meta_de(cuenta), moneda)
+        # Decisión de quien orquesta (2026-10-16): con varias cuentas, el tope se reparte otra vez con los diarios nuevos
+        # y el spend_cap de cada campaña se actualiza ANTES del diario. Si lo gastado no deja repartir, subir se niega
+        # en palabras; bajar sigue (bajar nunca gasta más) y los topes quedan como estaban. Una sola cuenta: como antes.
+        if _varias_campanas(ex) and float(ex.get("tope_total") or 0) > 0:
+            plan = _plan_reparto(cliente, ex, creds, pais, float(presupuesto_dia), moneda)
+            if plan["objetivo"] is None:
+                if subir:
+                    raise ValueError(gettext(
+                        "No se subió el diario de %(pais)s: con lo que ya gastó cada cuenta y el mínimo de Meta para el "
+                        "tope de cada campaña, el tope del experimento (%(tope)s) no alcanza para repartirlo con el diario "
+                        "nuevo. Baja antes el diario de otro país o deja este como está.",
+                        pais=pais, tope=_dinero(float(ex["tope_total"] or 0), moneda)))
+                reparto["sin_cambio"] = True
+            else:
+                reparto["mandados"] = _aplicar_reparto(plan)
+                reparto["nombres"] = plan["nombres"]
         cambiados = []
         try:
             for adset_id in ids:
@@ -1373,6 +1488,17 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
     for pz in _piezas_de(ex, pais):
         experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
+    if reparto.get("mandados"):
+        detalle = ", ".join(f"{reparto['nombres'].get(a) or a}: "
+                            f"{_dinero(monedas_meta.desde_unidad_meta(t, moneda), moneda)}" for a, t in reparto["mandados"])
+        experimentos.registrar_evento(cliente, experimento_id, "presupuesto",
+                                      gettext("Tope del experimento repartido otra vez entre las cuentas: %(detalle)s",
+                                              detalle=detalle),
+                                      {"topes": [[a, t] for a, t in reparto["mandados"]]})
+    elif reparto.get("sin_cambio"):
+        experimentos.registrar_evento(cliente, experimento_id, "presupuesto", gettext(
+            "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: con lo que ya "
+            "gastó cada una no alcanza para repartirlo otra vez.", pais=pais))
     experimentos.registrar_evento(cliente, experimento_id, "presupuesto",
                                   gettext("Presupuesto diario de %(pais)s: %(presupuesto)s %(moneda)s",
                                           pais=pais, presupuesto=presupuesto_dia, moneda=moneda),

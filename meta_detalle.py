@@ -311,13 +311,17 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
         r["desde"] = desde_para(list(ep_por_ad.values()), ex.get("creado_en"), hoy)
         desde_total = desde_creacion(ex.get("creado_en"), hoy)   # desgloses y rankings: de la creación a hoy
 
-        def _parte(nombre, fn):
+        def _parte(nombre, fn, campana=None):
             try:
                 _comprobar_plazo()
                 fn()
             except Exception as e:  # noqa: BLE001 — una parte no tumba las otras
                 texto = cola.sin_token(str(e))
-                r["errores"][nombre] = cola.recortar(texto)
+                # PND-148: con una campaña por cuenta, el error de una parte en una campaña no pisa el de otra: se juntan,
+                # cada uno con su campaña.
+                propio = f"{campana}: {texto}" if campana else texto
+                previo = r["errores"].get(nombre)
+                r["errores"][nombre] = cola.recortar(f"{previo} | {propio}" if previo else propio)
                 log.warning("Detalle de Meta (%s, exp %s, %s): %s", cliente, experimento_id, nombre, texto)
                 if isinstance(e, _Corte):
                     raise
@@ -333,17 +337,18 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
             plazo_token = _PLAZO.set(time.monotonic() + PLAZO_S)
             try:
                 # PND-148: una campaña por cuenta; cada una se pide en su cuenta (`act_<cuenta>/insights`).
-                for act, campana in lanzador.campanas_por_cuenta(ex, _creds["ad_account_id"]):
+                campanas = lanzador.campanas_por_cuenta(ex, _creds["ad_account_id"])
+                for act, campana in campanas:
                     lanzador._usar_cuenta(_creds, act)
-                    _pasada(campana)
+                    _pasada(campana, campana if len(campanas) > 1 else None)
             finally:
                 _PLAZO.reset(plazo_token)
 
-        def _pasada(campana):
-            _parte("diario", lambda: r.__setitem__("dias", r["dias"] + guardar_dias(ep_por_ad, pedir_diario(campana, r["desde"], hoy.isoformat()))))
+        def _pasada(campana, etiqueta=None):
+            _parte("diario", lambda: r.__setitem__("dias", r["dias"] + guardar_dias(ep_por_ad, pedir_diario(campana, r["desde"], hoy.isoformat()))), etiqueta)
             for dim in DIMENSIONES:
-                _parte(dim, lambda dim=dim: r.__setitem__("desgloses", r["desgloses"] + guardar_desglose(ep_por_ad, dim, pedir_desglose(campana, dim, desde_total, hoy.isoformat()))))
-            _parte("rankings", lambda: r.__setitem__("rankings", r["rankings"] + guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana, desde_total, hoy.isoformat()))))
+                _parte(dim, lambda dim=dim: r.__setitem__("desgloses", r["desgloses"] + guardar_desglose(ep_por_ad, dim, pedir_desglose(campana, dim, desde_total, hoy.isoformat()))), etiqueta)
+            _parte("rankings", lambda: r.__setitem__("rankings", r["rankings"] + guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana, desde_total, hoy.isoformat()))), etiqueta)
 
         try:
             lanzador._con_credenciales(cliente, _correr)

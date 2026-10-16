@@ -6629,6 +6629,10 @@ msgstr "The Meta details were left incomplete by the time limit."
 msgid "El diagnóstico no se pudo hacer: %(error)s"
 msgstr "The diagnosis couldn't be made: %(error)s"
 
+#, python-format
+msgid "El diario de %(pais)s bajó, pero el reparto del tope entre las cuentas se dejó como estaba: con lo que ya gastó cada una no alcanza para repartirlo otra vez."
+msgstr "The daily budget for %(pais)s went down, but the split of the cap among the accounts was left as it was: what each one has already spent doesn't allow splitting it again."
+
 msgid "El documento no tiene la forma esperada."
 msgstr "The document doesn't have the expected shape."
 
@@ -11152,6 +11156,14 @@ msgid "La cuenta publicitaria %(cuenta)s no está entre las que ve el Business d
 msgstr "The ad account %(cuenta)s isn't among the ones the agency's Business can see."
 
 #, python-format
+msgid "La cuenta publicitaria %(cuenta)s no puede anunciar la app %(app)s: autoriza esa cuenta en Meta for Developers (Configuración › Avanzada › Cuentas publicitarias autorizadas) o asígnale la app en Meta Business, y vuelve a lanzar. No se creó nada en Meta."
+msgstr "The ad account %(cuenta)s can't advertise the app %(app)s: authorize that account in Meta for Developers (Settings › Advanced › Authorized ad accounts) or assign the app to it in Meta Business, then launch again. Nothing was created on Meta."
+
+#, python-format
+msgid "La cuenta publicitaria %(cuenta)s no tiene acceso al Pixel %(pixel)s: compártelo con esa cuenta en Meta Business (Configuración del negocio › Orígenes de datos › Píxeles › Asignar cuentas publicitarias) y vuelve a lanzar. No se creó nada en Meta."
+msgstr "The ad account %(cuenta)s has no access to the Pixel %(pixel)s: share it with that account in Meta Business (Business settings › Data sources › Pixels › Assign ad accounts), then launch again. Nothing was created on Meta."
+
+#, python-format
 msgid "La cuenta publicitaria %(cuentas)s ya no se puede usar en este proyecto (salió de sus cuentas de Meta, perdió el permiso para anunciar o factura en otra moneda): no se manda nada a Meta."
 msgstr "The ad account %(cuentas)s can no longer be used in this project (it left its Meta accounts, lost permission to advertise or bills in another currency): nothing is sent to Meta."
 
@@ -14392,6 +14404,10 @@ msgstr "It won't renew or be charged again. Until then you keep the member price
 
 msgid "No se subió"
 msgstr "Not uploaded"
+
+#, python-format
+msgid "No se subió el diario de %(pais)s: con lo que ya gastó cada cuenta y el mínimo de Meta para el tope de cada campaña, el tope del experimento (%(tope)s) no alcanza para repartirlo con el diario nuevo. Baja antes el diario de otro país o deja este como está."
+msgstr "The daily budget for %(pais)s wasn't raised: given what each account has already spent and Meta's minimum for each campaign's cap, the experiment's cap (%(tope)s) isn't enough to split it with the new daily budget. Lower another country's daily budget first or leave this one as it is."
 
 msgid "No son referencia del producto: asígnalas a un color para que el modelo las use."
 msgstr "They are not product references: assign them to a color so the model uses them."
@@ -19141,6 +19157,10 @@ msgstr "Included cap (cost/month)"
 
 msgid "Tope de lo incluido en US$ de costo por mes"
 msgstr "Included cap in US$ of cost per month"
+
+#, python-format
+msgid "Tope del experimento repartido otra vez entre las cuentas: %(detalle)s"
+msgstr "Experiment cap split again among the accounts: %(detalle)s"
 
 msgid "Tope del presupuesto diario al escalar (en la moneda de la cuenta)"
 msgstr "Daily budget cap when scaling (in the account currency)"
