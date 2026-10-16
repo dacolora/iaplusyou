@@ -308,7 +308,7 @@ def _anotar_espera_rendida(cliente, cf_id, pred, entry, modelo, duracion, calida
         pass
 
 
-def _trasladar_lo_pendiente(cliente, cf_id, pred, ref_origen, ref_entrega, costo, modelo, detalle):
+def _trasladar_lo_pendiente(cliente, cf_id, pred, ref_origen, ref_entrega, costo, modelo, detalle, tipo="video"):
     """PND-331: la pieza recuperada se lleva lo que el proveedor cobró y al cliente no se le cobró (lo anotado al
     rendirse, al fallar la descarga o como posible cobro de un lanzamiento incierto): la fila de origen baja y la de
     esta entrega lo suma y lo cobra (`gastos.registrar_trasladando`, como «Recuperar el resultado» de un swap). True
@@ -317,7 +317,7 @@ def _trasladar_lo_pendiente(cliente, cf_id, pred, ref_origen, ref_entrega, costo
     la próxima recuperación lo encuentra ahí."""
     usd_modelo = round(float((costo or {}).get("usd") or 0.0), 4)
     _, movido = gastos.registrar_trasladando_seguro(
-        cliente, "video", 0, ref_entrega, [{"referencia": ref_origen}], detalle=detalle,
+        cliente, tipo, 0, ref_entrega, [{"referencia": ref_origen}], detalle=detalle,
         proveedor=flowplus_modelos.proveedor_de(modelo),
         extra={"modelo": modelo, "usd_modelo": usd_modelo, "usd_musica": 0.0, "credits": (costo or {}).get("credits")})
     if not movido:
@@ -515,13 +515,19 @@ def _avisar_fase_de(job_id, cliente, cf_id=None, modelo=None):
     return avisar_fase
 
 
-def _mensaje_error(e, cliente):
+def _mensaje_error(e, cliente, tipo="video"):
     """Lo que la tarjeta muestra cuando la generación falla, en el idioma del
     proyecto (mensaje de fondo, spec 2026-09-26 §B8). Un rechazo del
     proveedor se cuenta en palabras (antes salía el JSON crudo de Kling); el
-    tiempo agotado dice que el video suele terminar igual y cómo recuperarlo."""
+    tiempo agotado dice que el video (o la imagen, `tipo="imagen"`, PND-332)
+    suele terminar igual y cómo recuperarlo."""
     proveedor = saldo.nombre_proveedor(getattr(e, "proveedor", None) or "wavespeed")
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        if tipo == "imagen" and isinstance(e, wavespeed_common.EsperaAgotada):
+            return gettext("%(proveedor)s seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). "
+                           "La imagen suele terminar igual y se cobra: espera unos minutos y toca «Recuperar la "
+                           "imagen» — no se paga de nuevo.", proveedor=proveedor, modelo=e.nombre_modelo,
+                           min=int(e.timeout_seconds // 60), id=e.prediction_id)
         if isinstance(e, wavespeed_common.SinSaldo):
             # Incidente 2026-09-30: antes salía el JSON crudo de WaveSpeed.
             return saldo.mensaje_tarjeta(e.proveedor)
@@ -710,7 +716,9 @@ def ejecutar_imagen(tarea):
     out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.png")
-    avisar_fase = _avisar_fase_de(job_id, cliente)
+    # PND-332: también la imagen guarda el id de su predicción (`prediccion`): si la espera se agota o la descarga
+    # falla, «Recuperar la imagen» vuelve a preguntar por ese id sin pagar de nuevo.
+    avisar_fase = _avisar_fase_de(job_id, cliente, cf_id=cf_id, modelo=modelo)
     costo = None
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
@@ -741,7 +749,15 @@ def ejecutar_imagen(tarea):
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         if isinstance(e, wavespeed_common.SinSaldo):
             saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
-        campos = {"estado": "error", "error": _mensaje_error(e, cliente)}
+        campos = {"estado": "error", "error": _mensaje_error(e, cliente, tipo="imagen")}
+        pred = (_sesion_o_vacia(cliente, cf_id).get("prediccion") or {})
+        if pred.get("id") and (costo is not None or isinstance(e, wavespeed_common.EsperaAgotada)):
+            # PND-332: la imagen existe (o va a existir) en WaveSpeed y ya se anotó lo cobrado en `ref`:
+            # «Recuperar la imagen» la trae por su id y traslada esa línea a la entrega.
+            campos["prediccion"] = dict(pred, referencia_gasto=ref)
+        else:
+            # Un rechazo o un fallo del proveedor no deja nada que recuperar.
+            campos["prediccion"] = None
         if isinstance(e, wavespeed_common.LanzamientoIncierto):
             # R5 (revisión del guardián de gasto): la imagen pudo cobrarse. Queda el posible
             # cobro y «Reintentar» lo avisa con el precio antes de pagar otra vez.
@@ -759,12 +775,15 @@ def ejecutar_imagen(tarea):
         imagen_url = r2_uploader.upload_image(out_path, f"clientes/{cliente}/flowplus/{cf_id}.png")
     except Exception:
         imagen_url = url_prov
+    pred_id = (_sesion_o_vacia(cliente, cf_id).get("prediccion") or {}).get("id")
     creative_flow.actualizar(
         cliente, cf_id, estado="video_listo", video_url=imagen_url, video_local=out_path,
         credits=costo.get("credits"), usd=costo.get("usd"),
         # Bloque 3, revisión final (I5): una imagen nueva en la misma sesión
         # deja obsoleta la revisión (y el error) de la doctrina anterior.
         revision_doctrina=None, revision_doctrina_error=None,
+        # PND-332: ya no hay nada que recuperar; el id queda como de esta pieza (PND-214).
+        prediccion=None, **({"prediccion_entregada": pred_id} if pred_id else {}),
     )
     saldo.limpiar("wavespeed")   # salió bien: hay saldo
     if isinstance(entry.get("animar_despues"), dict):
@@ -894,6 +913,8 @@ def recuperar_video(tarea):
     except SesionDescartada:
         # R4: lo que pudo cobrarse ya quedó anotado al descartar (`anotar_posible_cobro_al_descartar`).
         return gettext("La pieza se descartó antes de recuperar; lo que pudo cobrarse quedó anotado en Gasto.")
+    if (entry.get("tipo") or "video") == "imagen":
+        return _recuperar_imagen(tarea, cliente, cf_id, job_id, entry, modelo, referencias)
     pred = entry.get("prediccion") or {}
     if not pred.get("id") and lanzamiento_pendiente(entry):
         # PND-214: el lanzamiento quedó incierto; la predicción se busca en el historial.
@@ -955,6 +976,77 @@ def recuperar_video(tarea):
         raise
     return _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, prompt_texto, platforms,
                            modelo, calidad, outputs[0], recuperado=True)
+
+
+def _recuperar_imagen(tarea, cliente, cf_id, job_id, entry, modelo, referencias):
+    """«Recuperar la imagen» (PND-332, decisión 2026-10-15, lote 2): como el video, vuelve a preguntar a WaveSpeed
+    por la predicción que la sesión guardó y, si terminó, la baja y cierra la pieza. Nunca genera ni paga de nuevo.
+    Lo que se anotó sin cobrar cuando la espera se agotó (o la descarga falló) pasa a la fila de esta entrega y ahí
+    se cobra (`_trasladar_lo_pendiente`); sin nada anotado, se anota la entrega con su estimado."""
+    ref = f"imagen:{cf_id}{ref_sufijo(tarea)}"
+    pred = entry.get("prediccion") or {}
+    if not pred.get("id"):
+        creative_flow.actualizar(cliente, cf_id, estado="error",
+                                 error=entry.get("error") or gettext("No hay nada que recuperar: genera de nuevo."))
+        return gettext("No hay nada que recuperar en esta pieza.")
+    if pred.get("modelo") in flowplus_modelos.IMAGEN:
+        modelo = pred["modelo"]
+    nombre = flowplus_modelos.nombre_modelo(modelo) or modelo
+    trabajos.reportar(job_id, etapa=ETAPA_MODELO)
+    try:
+        resultado = wavespeed_common.poll_hasta_listo(pred["id"], nombre, timeout_seconds=TIEMPO_RECUPERAR,
+                                                      on_progreso=_avisar_fase_de(job_id, cliente), interval_seconds=5)
+        outputs = resultado.get("outputs") or []
+        if not outputs:
+            raise wavespeed_common.ErrorProveedor(nombre, resultado.get("status") or "completed",
+                                                  detalle=gettext("terminó sin ninguna salida"),
+                                                  prediction_id=pred["id"], datos=resultado)
+    except wavespeed_common.EsperaAgotada as e:
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(e, cliente, tipo="imagen"))
+        return gettext("%(proveedor)s sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos.",
+                       proveedor=saldo.nombre_proveedor("wavespeed"), id=pred["id"])
+    except Exception as e:
+        bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
+        campos = {"estado": "error", "error": _mensaje_error(e, cliente, tipo="imagen")}
+        if isinstance(e, wavespeed_common.ErrorProveedor):
+            # Terminó sin imagen: nada que recuperar. Solo «failed» dice que no la cobró (como el video y el swap).
+            if pred.get("referencia_gasto") and str(getattr(e, "estado", "") or "").lower() == "failed":
+                gastos.registrar_seguro(cliente, "imagen", 0.0, pred["referencia_gasto"], entregado=False,
+                                        detalle=gettext("%(modelo)s no terminó la imagen; no la cobró", modelo=nombre))
+            campos["prediccion"] = None
+        creative_flow.actualizar(cliente, cf_id, **campos)
+        raise
+    costo = flowplus_modelos.estimate_imagen(modelo, n_referencias=len(referencias))
+    out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
+    out_path = os.path.join(out_dir, f"{cf_id}.png")
+    trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
+    try:
+        resp = requests.get(outputs[0], timeout=120)
+        resp.raise_for_status()
+        os.makedirs(out_dir, exist_ok=True)
+        with open(out_path, "wb") as f:
+            f.write(resp.content)
+    except Exception as e:
+        # Ya está en WaveSpeed: la predicción (y lo anotado) se conservan; se puede volver a recuperar.
+        bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e)[:300])
+        raise
+    detalle = gettext("%(modelo)s · %(n)s referencia(s) · recuperada", modelo=modelo, n=len(referencias))
+    ref_origen = pred.get("referencia_gasto")
+    trasladado = bool(ref_origen and ref_origen != ref) and _trasladar_lo_pendiente(
+        cliente, cf_id, pred, ref_origen, ref, costo, modelo, detalle, tipo="imagen")
+    if not trasladado:
+        _registrar_gasto(cliente, "imagen", costo, ref_origen or ref, modelo, detalle)
+    trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
+    try:
+        imagen_url = r2_uploader.upload_image(out_path, f"clientes/{cliente}/flowplus/{cf_id}.png")
+    except Exception:
+        imagen_url = outputs[0]
+    creative_flow.actualizar(cliente, cf_id, estado="video_listo", video_url=imagen_url, video_local=out_path,
+                             credits=costo.get("credits"), usd=costo.get("usd"), error=None, prediccion=None,
+                             prediccion_entregada=pred["id"], revision_doctrina=None, revision_doctrina_error=None)
+    bitacora.registrar(cliente, cf_id, "generacion", "recuperada", out_path)
+    return N_("Imagen de FlowPlus lista.")
 
 
 def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, prompt_texto, platforms, modelo,

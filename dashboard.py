@@ -8664,7 +8664,8 @@ def cf_recuperar(cliente, cf_id):
     # PND-214: también un lanzamiento incierto (el pedido salió sin respuesta):
     # la tarea lo busca en el historial de WaveSpeed.
     recuperable = pred.get("id") or lanzamiento_pendiente(entry)
-    if not entry or entry.get("estado") != "error" or not recuperable or (entry.get("tipo") or "video") == "imagen":
+    # PND-332: también una imagen con su predicción guardada (la espera se agotó o la descarga falló).
+    if not entry or entry.get("estado") != "error" or not recuperable:
         flash(gettext("Esa pieza no tiene nada que recuperar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # PND-331: lo que el proveedor cobró y no se le cobró se cobra al llegar (gastos.registrar_trasladando), con el
@@ -8680,8 +8681,12 @@ def cf_recuperar(cliente, cf_id):
     if encolado:
         proveedor = saldo.nombre_proveedor(flowplus_modelos.proveedor_de((entry.get("prediccion") or {}).get("modelo")
                                                                         or entry.get("modelo")))
-        flash(gettext("Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo.",
-                      proveedor=proveedor), "ok")
+        if (entry.get("tipo") or "video") == "imagen":
+            flash(gettext("Preguntando a %(proveedor)s por la imagen… si ya terminó, aparece aquí sin pagar de nuevo.",
+                          proveedor=proveedor), "ok")
+        else:
+            flash(gettext("Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo.",
+                          proveedor=proveedor), "ok")
     else:
         flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))

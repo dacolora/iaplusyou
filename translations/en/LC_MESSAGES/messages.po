@@ -481,6 +481,10 @@ msgid "%(modelo)s no terminó el video; no lo cobró"
 msgstr "%(modelo)s didn't finish the video; it didn't charge"
 
 #, python-format
+msgid "%(modelo)s no terminó la imagen; no la cobró"
+msgstr "%(modelo)s didn't finish the image; it didn't charge"
+
+#, python-format
 msgid "%(modelo)s rechazó el contenido por sensible (el texto o las imágenes): cambia la escena y vuelve a generar. No se cobró. Detalle: %(detalle)s"
 msgstr "%(modelo)s rejected the content as sensitive (the text or the images): change the scene and generate again. Nothing was charged. Detail: %(detalle)s"
 
@@ -515,6 +519,10 @@ msgstr "%(modelo)s · %(n)s reference(s)"
 #, python-format
 msgid "%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró"
 msgstr "%(modelo)s · %(n)s reference(s) · download failed; the model already charged"
+
+#, python-format
+msgid "%(modelo)s · %(n)s referencia(s) · recuperada"
+msgstr "%(modelo)s · %(n)s reference(s) · recovered"
 
 #, python-format
 msgid "%(modelo)s · %(n)s referencia(s) · se agotó la espera; el modelo la cobra igual"
@@ -1859,6 +1867,10 @@ msgstr "%(proveedor)s ran out of credit."
 #, python-format
 msgid "%(proveedor)s seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» — no se paga de nuevo."
 msgstr "%(proveedor)s was still working on %(modelo)s after %(min)s min (prediction %(id)s). The video usually finishes anyway and is charged: wait a few minutes and tap “Recover the video” — you don't pay again."
+
+#, python-format
+msgid "%(proveedor)s seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). La imagen suele terminar igual y se cobra: espera unos minutos y toca «Recuperar la imagen» — no se paga de nuevo."
+msgstr "%(proveedor)s was still working on %(modelo)s after %(min)s min (prediction %(id)s). The image usually finishes anyway and is charged: wait a few minutes and tap “Recover the image” — you don't pay again."
 
 #, python-format
 msgid "%(proveedor)s sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos."
@@ -15471,6 +15483,10 @@ msgstr "Sound preferences saved."
 msgid "Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo."
 msgstr "Asking %(proveedor)s for the video… if it already finished, it shows up here without paying again."
 
+#, python-format
+msgid "Preguntando a %(proveedor)s por la imagen… si ya terminó, aparece aquí sin pagar de nuevo."
+msgstr "Asking %(proveedor)s for the image… if it already finished, it shows up here without paying again."
+
 msgid "Preguntando a WaveSpeed por el resultado… si ya terminó, aparece aquí y se cobra al llegar."
 msgstr "Asking WaveSpeed for the result… if it's done, it shows up here and is charged when it arrives."
 
@@ -16528,6 +16544,13 @@ msgstr "Recover the video (charged ≈ %(precio)s)"
 
 msgid "Recuperar el video (sin pagar de nuevo)"
 msgstr "Recover the video (without paying again)"
+
+msgid "Recuperar la imagen"
+msgstr "Recover the image"
+
+#, python-format
+msgid "Recuperar la imagen (se cobra ≈ %(precio)s)"
+msgstr "Recover the image (charged ≈ %(precio)s)"
 
 #, python-format
 msgid "Recuperaste «%(nombre)s»: vuelve a salir en la galería y al elegir producto."

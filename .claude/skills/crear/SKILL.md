@@ -216,8 +216,8 @@ que no filtró, un cruce) o historial caído → en palabras, posible cobro en G
 (`lanzamiento_pendiente`): «Recuperar el video» sí, «Reintentar» y «Rearmar» no (`cf_generar_video`, `cf_rearmar`,
 `flowplus_lanzar.lanzar` devuelven sin cobrar), y mientras está `buscando` tampoco «Descartar»; descartar en otro estado
 anota el posible cobro (`anotar_posible_cobro_al_descartar`) y `creative_flow.eliminar` guarda en `kv` la predicción y
-el lanzamiento. `duplicar` no copia `prediccion`, `prediccion_entregada` ni `lanzamiento_incierto`. Imagen (no se
-recupera): posible cobro anotado, `lanzamiento_incierto.estado = "imagen"` y «Reintentar» pide confirmar con el precio
+el lanzamiento. `duplicar` no copia `prediccion`, `prediccion_entregada` ni `lanzamiento_incierto`. Imagen con
+lanzamiento incierto (sin id, no se recupera): posible cobro anotado, `lanzamiento_incierto.estado = "imagen"` y «Reintentar» pide confirmar con el precio
 (`confirmo_posible_cobro`); tras confirmar queda `imagen_reintentada`. fal sigue contándolo como su 5xx. Riesgo que
 queda: una predicción hecha con la misma llave fuera de esta base (web de WaveSpeed, pruebas locales) con una ruta de la
 app no se distingue; como nunca se entrega sin la entrada, solo puede volver dudosa una búsqueda. Pruebas:
@@ -333,3 +333,12 @@ como antes: se corrige la fila de origen. Solo «failed» del proveedor pone la 
 el video (se cobra ≈ X)» (`costo_estimado` de la sesión) y `cf_recuperar` pasa por `libro.exigir(..., job_id=)` antes de
 tocar la pieza; la recuperación automática de la cadena (`Continuar`) usa la reserva del lanzamiento. Pruebas:
 `tests/test_crear_recuperar_cobro.py`.
+
+**«Recuperar la imagen» (PND-332, decisión 2026-10-15, lote 2).** Antes una imagen con la espera agotada decía
+«Recuperar» pero el botón se ocultaba y `cf_recuperar` la rechazaba. Ahora `ejecutar_imagen` guarda el id de su
+predicción como el video (`_avisar_fase_de(..., cf_id=)`); si la espera se agota o la descarga falla, la sesión conserva
+`prediccion` con su `referencia_gasto` (la línea anotada sin cobrar); un rechazo del proveedor la borra, y una imagen
+lista la pasa a `prediccion_entregada`. `flowplus_recuperar` con una imagen va a `_recuperar_imagen`: una sola pregunta
+(`TIEMPO_RECUPERAR`), sin la espera de 2 h del video; si llegó, la baja, la sube y cobra trasladando lo anotado
+(`_trasladar_lo_pendiente(..., tipo="imagen")`). El botón es «Recuperar la imagen (se cobra ≈ X)» y la ruta pasa por el
+mismo freno. Pruebas: `tests/test_crear_recuperar_imagen.py`.
