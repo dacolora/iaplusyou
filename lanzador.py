@@ -81,11 +81,18 @@ def _act(ad_account_id):
     return a if a.startswith("act_") else f"act_{a}"
 
 
-def _cuenta_meta(creds):
+def _cuenta_meta(creds, cliente=None):
     """La moneda y los mínimos de la cuenta publicitaria, leídos de Meta: `currency`, `min_daily_budget` y
-    `min_campaign_group_spend_cap` (los dos últimos en la unidad de Meta)."""
-    return meta_auth.llamar("GET", _act(creds["ad_account_id"]),
-                            params={"fields": "currency,min_daily_budget,min_campaign_group_spend_cap"}) or {}
+    `min_campaign_group_spend_cap` (los dos últimos en la unidad de Meta). Con `cliente`, el mínimo de tope queda
+    guardado con la conexión para el texto de «Nuevo experimento» (PND-323); si no se puede guardar, sigue igual."""
+    cuenta = meta_auth.llamar("GET", _act(creds["ad_account_id"]),
+                              params={"fields": "currency,min_daily_budget,min_campaign_group_spend_cap"}) or {}
+    if cliente:
+        try:
+            meta_conexion.guardar_tope_minimo(cliente, creds["ad_account_id"], cuenta)
+        except Exception:  # noqa: BLE001 — es para la pantalla; el lanzamiento usa lo recién leído
+            log.warning("No se pudo guardar el mínimo de tope de la cuenta de %s", cliente)
+    return cuenta
 
 
 def _minimo_diario_esperado(moneda):
@@ -210,10 +217,25 @@ def _confirmar_tope(campaign_id, esperado):
 
 
 def minimo_tope_campana(moneda):
-    """Desde qué total Creatv manda el tope (`spend_cap`) a la campaña de Meta: por debajo, Meta no lo acepta y el
-    límite lo dan solo el presupuesto diario de cada país y la fecha de cierre. «Nuevo experimento» lo dice en
-    palabras, así que se lee de aquí y no se repite."""
+    """Respaldo de `_tope_y_dias_meta` cuando al lanzar no se pudo leer el `min_campaign_group_spend_cap` de la
+    cuenta: una estimación por moneda. Desde PND-323 la pantalla ya no la muestra (ver `minimo_tope_de_cuenta`)."""
     return _MIN_POR_MONEDA.get(moneda, SPEND_CAP_MINIMO_USD)
+
+
+def minimo_tope_de_cuenta(datos_meta, moneda):
+    """Desde qué total Creatv manda el tope (`spend_cap`) a la campaña, para el texto de «Nuevo experimento»
+    (PND-323, decisión 2026-10-13): el mínimo REAL de la cuenta (`min_campaign_group_spend_cap`), leído de Meta una
+    vez y guardado con la conexión (`meta_conexion.CAMPO_TOPE_MINIMO`), pasado a `moneda`. None sin esa lectura (o
+    con una moneda fuera de la tabla de Meta): la pantalla dice «el mínimo de tu cuenta de Meta» y no inventa una
+    cifra. Al lanzar se vuelve a leer de Meta (`_tope_y_dias_meta`), así que esto solo decide el texto."""
+    valor = meta_conexion.tope_minimo_de({"min_campaign_group_spend_cap": (datos_meta or {}).get(
+        meta_conexion.CAMPO_TOPE_MINIMO)})
+    if not valor or not moneda:
+        return None
+    try:
+        return monedas_meta.desde_unidad_meta(valor, moneda)
+    except monedas_meta.MonedaNoSoportada:
+        return None
 
 
 def url_destino(base, ep_id):
@@ -498,7 +520,7 @@ def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
     def _correr(creds):
         etapa(ETAPAS_LANZAR[0][0])
         # PND-322: la moneda y su unidad se comprueban contra la cuenta ANTES de mandar ningún monto.
-        cuenta = _cuenta_meta(creds)
+        cuenta = _cuenta_meta(creds, cliente)
         comprobar_moneda(cuenta, moneda)
         cap, dias_meta = _tope_y_dias_meta(ex, cuenta, moneda)
         campaign_id = ex["meta_campaign_id"]

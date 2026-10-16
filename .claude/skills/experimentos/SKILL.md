@@ -54,7 +54,8 @@ Cerrar…» y llega `error_lanzamiento`); `lanzador.cerrar` pausa en Meta campa�
 (`_pausar_todo_en_meta`) en CUALQUIER estado con campaña, y `exp_cerrar` deja cerrar un «lanzando» sin tarea viva.
 Pruebas: `tests/test_lanzar_activa.py`. `exp_estado`
 activates/pauses the whole experiment or one country inline. Metrics: `lanzador.refrescar`
-appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) —
+appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) only when something changed
+(PND-066, below) —
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
@@ -80,8 +81,9 @@ proveedor), `validar` (la comprobación del servidor, que no se fía del navegad
 `tests/test_presupuesto_experimentos.py` corre los dos con los mismos casos (prueba de paridad, como el editor). El POST
 no cambió (`presupuesto_<país>`, `tope_total` = el total, `dias`…), y el servidor rechaza un reparto cuya suma × días
 supere el total × 1,01 (el 1 % es el margen por redondeo): así «Máximo que puede gastar» es verdad aunque alguien arme el
-POST a mano. El titular dice **«Máximo que puede gastar» solo cuando Meta recibe `spend_cap`** (total ≥
-`lanzador.minimo_tope_campana(moneda)`); con un total menor dice «Presupuesto planeado» y una línea de que Meta no pone un
+POST a mano. El titular dice **«Máximo que puede gastar» solo cuando Meta recibe `spend_cap`** (total ≥ el mínimo
+real de la cuenta, `lanzador.minimo_tope_de_cuenta`, PND-323 abajo); con un total menor —o sin ese mínimo leído— dice
+«Presupuesto planeado» y una línea de que Meta no pone un
 tope duro y que el límite lo dan los diarios por país y la fecha de cierre (ronda 1 de R4, 2026-10-03: decir «máximo»
 sin tope duro prometía de más). Los días cuentan desde la PRIMERA activación (desde 2026-10-08, la que hace el propio lanzamiento si sale bien; ver PND-039/044/113
 al final). Llegadas a la página: Crear, Final edition, los anuncios sueltos y «Probar en otro experimento» del panel de
@@ -110,8 +112,8 @@ está guardada); sin tasa (el BCE no publica TWD, CRC…, o la última tiene má
 tienen su mínimo propio y no consultan tasas (`tests/test_monedas_meta.py`); (2) cada diario y cada `spend_cap` se lee de vuelta
 (`_confirmar_presupuesto`/`_confirmar_tope`): si Meta guardó otro, se pausa y lanza `PresupuestoNoCoincide`; activar
 (`cambiar_estado`, `activar_pieza`) también lo lee, así un conjunto viejo con ×100 nunca se enciende; (3) el tope va a
-la campaña desde el `min_campaign_group_spend_cap` de la cuenta (Forja: 200 000 COP; `minimo_tope_campana` queda como
-respaldo y para el texto de «Nuevo experimento»); por debajo, los conjuntos se crean con la fecha de fin a la que
+la campaña desde el `min_campaign_group_spend_cap` de la cuenta (Forja: 200 000 COP; `minimo_tope_campana` queda solo como
+respaldo si al lanzar no se pudo leer; el texto de «Nuevo experimento» usa el mínimo real desde PND-323); por debajo, los conjuntos se crean con la fecha de fin a la que
 alcanza el tope (`_dias_que_alcanza`, al menos 1 día) y queda un evento que lo dice; la primera activación
 (`_preparar_fin_primera_activacion`) usa los MISMOS días (antes devolvía los del experimento y deshacía el freno), y
 activar se niega si el gasto en Meta ya llegó al tope; (4) la periódica `exp_vigilar_gasto` (10 min, en su PROPIO
@@ -392,3 +394,31 @@ R3 (2026-10-08, revisión lote 6B): test_derivaciones.py::test_r3_hermanas_de_la
 
 
 PND-160 (2026-10-09, decisión del lote 8): el encolador comprueba la tarea viva y relee el experimento antes de escribir lanzando, bajo _LANZAMIENTO_LOCK; solo admite armando/error. Enmienda 2026-10-10: este candado propio no espera _ENV_LOCK, que una publicación sostiene durante minutos; una lectura vieja no puede relanzar un corriendo. El segundo POST de la tarjeta responde Ya se está lanzando por JSON o flash sin restaurar el estado anterior ni encolar otra tarea. activar_tras_lanzar conserva su guarda; tests/test_lote8_lanzamiento.py prueba dos POST con una lectura anterior, cola real y Meta falso.
+
+**Una foto solo si cambió algo (PND-066, decisión 2026-10-13; 2026-10-15).** `experimentos.snapshot` compara la foto
+nueva con la última de la pieza (todas las columnas, con los `default` de la tabla para las que faltan, y todo el
+`extra`): si es igual, no agrega fila y anota en la última `extra.confirmado_en` (la hora de esa consulta); con la hora
+anterior a la última (un backfill) agrega como siempre. Toma el lock de la pieza antes de leer. Por qué no cambia ninguna
+cuenta: el Tablero, «Mes a mes» (`_cierres_de_mes`), la serie de 30 días, `snapshots(desde=)` y `snapshots_de` leen «la
+última foto con `tomado_en` <= instante», y la omitida era igual a esa; la primera foto con impresiones o con ventas
+(horas de evidencia del decisor, `_horas_activo`, `_dias_transcurridos`, `primera_venta`) siempre es un cambio. Lo
+único que miraba la hora de la última fila era la frescura: `experimentos.datos_viejos` y la alerta de 6 h
+(`tablero._ultimo_snapshot_experimento`) leen ahora `experimentos.consultado_en(metricas)` = la más nueva entre
+`tomado_en` y `confirmado_en`. Quien agregue un lector de la hora de la última foto para decir «al día» usa
+`consultado_en`, no `tomado_en`. El escritor legado de `ads.py` (Anuncios sueltos, que `exp_refrescar_todos` no
+refresca) sigue insertando siempre. Pruebas: `tests/test_snapshot_solo_si_cambia.py` (dos proyectos con la misma serie
+cada 2 h, uno guardado fila por fila como antes: Tablero, mes a mes, serie, deltas con base y decisor dan lo mismo).
+
+**El mínimo de tope que dice «Nuevo experimento» es el de la cuenta (PND-323, decisión 2026-10-13; 2026-10-15).** Antes
+decía 400 000 COP (`minimo_tope_campana`, una estimación por moneda) cuando colorado_forja acepta 200 000 COP y happyflops
+1 000 SEK. El `min_campaign_group_spend_cap` (unidad de Meta) se lee una vez y se guarda con la conexión en `meta.json`
+(`meta_conexion.CAMPO_TOPE_MINIMO` = `tope_minimo_meta`): al conectar en modo propia (`listar_activos` lo pide y
+`_guardar_conexion_propia` lo guarda), al asignar en agencia (`meta_agencia.CAMPOS_CUENTA`, `asignar`) y en cada
+lanzamiento (`lanzador._cuenta_meta(creds, cliente)` → `meta_conexion.guardar_tope_minimo`, que solo escribe si
+`meta.json` sigue siendo esa cuenta y el valor cambió, bajo el candado; sin conexión no crea nada). La pantalla lo lee con
+`lanzador.minimo_tope_de_cuenta(datos_meta, moneda)` (pasado a la moneda con `monedas_meta.desde_unidad_meta`). Sin esa
+lectura (conexiones de antes de PND-323 hasta su próximo lanzamiento) `data-tope-campana` va vacío, la nota dice «si llega
+al mínimo de tu cuenta de Meta» sin cifra y el JS dice «Presupuesto planeado» con `AVISO_SIN_TOPE_CUENTA` (nunca promete
+un máximo que no sabe). Lanzar no cambia: `_tope_y_dias_meta` vuelve a leer la cuenta. Pruebas:
+`tests/test_minimo_tope_cuenta.py`, `test_rutas_exp_nuevo_presupuesto.py` (sus arneses de Node toman el tope que pintó el
+servidor) y `test_meta_agencia.py::test_asignar_guarda_el_minimo_de_tope_de_la_cuenta`.

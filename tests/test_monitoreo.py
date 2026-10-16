@@ -157,7 +157,8 @@ def test_cada_peticion_queda_medida(base_temporal):
     c.get("/no-existe")
     r = monitoreo.METRICAS.resumen()
     rutas = {x["ruta"]: x for x in r["rutas"]}
-    assert rutas["login"]["n"] == 1 and "(sin ruta)" in rutas
+    # PND-280: un 404 se guarda con la clave neutra; la etiqueta se traduce al pintar.
+    assert rutas["login"]["n"] == 1 and monitoreo.SIN_RUTA in rutas and "(sin ruta)" not in rutas
     assert r["en_vuelo"] == 0
 
 

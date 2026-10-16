@@ -44,7 +44,13 @@ CONVERTIR_A_MP3 = (".aac", ".ogg")
 MAX_NOMBRE = 40
 MIN_DESCRIPCION, MAX_DESCRIPCION = 10, 500
 VERSION_MUESTRA = 1
-TEXTO_CONSENTIMIENTO = idiomas.N_("Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios.")
+# PND-041 (decisión 2026-10-13): el permiso dice también que la voz clonada queda
+# en la cuenta del proveedor y que de ahí no se puede borrar (Borrar solo la quita
+# de Mis voces). El texto se guarda tal cual con el consentimiento.
+TEXTO_CONSENTIMIENTO = idiomas.N_(
+    "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios. "
+    "Entiendo que la voz clonada queda en la cuenta del proveedor (MiniMax, vía fal) y que "
+    "no se puede borrar de ahí, aunque la quite de Mis voces.")
 # msgids: la ruta los traduce con idiomas.traducir al responder.
 MENSAJES = {
     "no_encontrada": idiomas.N_("Esa voz ya no está en Mis voces. Elige otra voz."),

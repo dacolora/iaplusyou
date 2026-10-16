@@ -282,6 +282,9 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
     assert 'id="au-vp-wrap"' in html and f'data-voz="vp:{v["id"]}"' in html and 'id="au-vp-panel"' in html
     assert 'data-vp-pestana="clonar"' in html and 'data-vp-pestana="disenar"' in html
     assert 'id="au-vp-permiso"' in html and "tengo permiso escrito de la persona" in html
+    # PND-041: la casilla dice que la voz queda en la cuenta del proveedor y no se borra de ahí.
+    permiso = html.split('id="au-vp-permiso"')[1].split("</label>")[0]
+    assert "queda en la cuenta del proveedor" in permiso and "no se puede borrar" in permiso
     assert 'id="au-vp-descripcion"' in html and "US$ 1,52" in html and "US$ 3,01" in html
     assert "data-url-vp-clonar=" in html and "data-url-vp-lista=" in html
     sel = html.split('id="au-idioma"')[1].split("</select>")[0]

@@ -12,7 +12,7 @@
 {% for f in filas %}
 <tr>
   <td class="gasto-fecha">{{ f.creado_en[:16] | replace("T", " ") }}</td>
-  <td>{{ f.concepto }}{% if f.detalle %}<small class="saldo-detalle">{{ f.detalle }}</small>{% endif %}</td>
+  <td>{{ f.concepto }}{% if f.detalle %}<small class="saldo-detalle">{{ f.detalle|detalle_gasto }}</small>{% endif %}</td>
   <td class="num saldo-monto-{{ 'mas' if f.milesimas > 0 else ('menos' if f.milesimas < 0 else 'cero') }}">{% if f.milesimas > 0 %}+{% endif %}{{ (f.milesimas / 1000) | usd }}</td>
   <td class="num">{{ (f.saldo_despues / 1000) | usd }}</td>
 </tr>

@@ -67,6 +67,10 @@ _EP_COLS = ("estado", "error", "meta_adset_id", "meta_ad_id", "meta_creative_id"
 _SNAP_COLS = ("impresiones", "alcance", "frecuencia", "clics", "clics_enlace", "ctr", "cpc", "cpm", "thruplay",
               "thruplay_rate", "gasto", "compras", "ingresos", "roas", "cpa", "fuente_ventas")
 _SNAP_INT = {"impresiones", "alcance", "clics", "clics_enlace", "thruplay", "compras"}
+# Lo que vale una columna cuando la foto no la trae (los `default` de db.metrica_snapshot).
+_SNAP_DEFECTO = {c: ("ninguna" if c == "fuente_ventas" else 0 if c in _SNAP_INT else 0.0) for c in _SNAP_COLS}
+# PND-066: en `extra` de la última foto, la hora de la consulta más reciente que la encontró igual.
+CONFIRMADO_EN = "confirmado_en"
 _TIPOS_CLON = ("video", "clon_limpio")
 # Experimentos "vivos" para la galería (etiqueta «en prueba»): `decidido`
 # cuenta — los ganadores siguen entregando y exp_refrescar_todos lo refresca.
@@ -556,10 +560,35 @@ def _snapshot_a_dict_crudo(m):
     return out
 
 
+def _misma_foto(fila, valores, extra):
+    """¿La foto nueva (`valores` + `extra`) es igual a la fila guardada? Toda columna y todo `extra` cuentan
+    (menos la marca `confirmado_en`); un `extra` que no pasa por JSON igual cuenta como distinto."""
+    ms = db.metrica_snapshot
+    m = fila._mapping
+    if any(m[ms.c[c]] != valores.get(c, _SNAP_DEFECTO[c]) for c in _SNAP_COLS):
+        return False
+    try:
+        nuevo = json.loads(json.dumps(extra))
+    except (TypeError, ValueError):
+        return False
+    return {k: v for k, v in (m[ms.c.extra] or {}).items() if k != CONFIRMADO_EN} == nuevo
+
+
 def snapshot(ep_id, metricas, tomado_en=None):
     """Guarda una foto ACUMULADA de las métricas de una pieza. `tomado_en`
     (ISO naive, como db.ahora()) solo lo fijan los tests y un backfill: en
-    producción siempre es «ahora»."""
+    producción siempre es «ahora».
+
+    Solo si cambió algo (PND-066, decisión 2026-10-13: el refresco de cada 2 h
+    guardaba una fila aunque nada cambiara). Si la foto es igual a la última de
+    la pieza, no se agrega otra: en la última se anota `extra.confirmado_en`, la
+    hora de esta consulta. Las cuentas del Tablero no cambian, porque todas leen
+    «la última foto con tomado_en <= instante» (deltas, cierres de mes, serie
+    diaria, `snapshots(desde=)`) y la foto omitida era igual a esa; la primera
+    con impresiones o con ventas siempre es un cambio, así que se guarda. La
+    frescura («datos viejos», alerta de 6 h) lee `consultado_en`, que cuenta la
+    confirmación. Una foto con `tomado_en` anterior a la última (un backfill)
+    se agrega como siempre. Devuelve el id de la fila nueva o de la confirmada."""
     valores, extra = {}, {}
     for k, v in (metricas or {}).items():
         if k in _SNAP_COLS:
@@ -567,12 +596,33 @@ def snapshot(ep_id, metricas, tomado_en=None):
                 valores[k] = v or "ninguna"
             else:
                 valores[k] = int(float(v or 0)) if k in _SNAP_INT else float(v or 0)
-        else:
+        elif k != CONFIRMADO_EN:
             extra[k] = v
+    cuando = tomado_en or db.ahora()
+    ms, ep = db.metrica_snapshot, db.experimento_pieza
     with db.conectar() as con:
-        return con.execute(db.metrica_snapshot.insert().values(
-            experimento_pieza_id=ep_id, tomado_en=tomado_en or db.ahora(), extra=extra,
+        # El lock antes de leer la última foto (ver `_bloquear`): dos refrescos a
+        # la vez no guardan dos fotos iguales ni se pisan la confirmación.
+        con.execute(ep.update().where(ep.c.id == ep_id).values(actualizado_en=ep.c.actualizado_en))
+        ultima = con.execute(sa.select(ms).where(ms.c.experimento_pieza_id == ep_id)
+                             .order_by(ms.c.tomado_en.desc(), ms.c.id.desc()).limit(1)).first()
+        if ultima is not None and cuando >= ultima._mapping[ms.c.tomado_en] and _misma_foto(ultima, valores, extra):
+            previo = ultima._mapping[ms.c.extra] or {}
+            confirmado = max(cuando, previo.get(CONFIRMADO_EN) or cuando)
+            con.execute(ms.update().where(ms.c.id == ultima._mapping[ms.c.id])
+                        .values(extra={**previo, CONFIRMADO_EN: confirmado}))
+            return ultima._mapping[ms.c.id]
+        return con.execute(ms.insert().values(
+            experimento_pieza_id=ep_id, tomado_en=cuando, extra=extra,
             **valores)).inserted_primary_key[0]
+
+
+def consultado_en(metricas):
+    """Cuándo se consultaron por última vez las métricas de una pieza (las de
+    `ultima_metrica`/`_ultimas_metricas`): la hora de su última foto o, si una
+    consulta posterior la encontró igual, la de esa consulta (PND-066). None sin foto."""
+    m = metricas or {}
+    return max((t for t in (m.get("tomado_en"), m.get(CONFIRMADO_EN)) if t), default=None)
 
 
 def _ultimas_metricas(con, cliente, experimento_ids):
@@ -872,14 +922,15 @@ def _experimentos_vivos_por_pieza(con, cliente):
 
 
 def datos_viejos(ex, ahora=None):
-    """La última foto del experimento excede 6 h."""
+    """La última consulta de métricas del experimento excede 6 h (la última
+    foto o la confirmación de que no cambió, `consultado_en`)."""
     from datetime import datetime
     ahora = ahora or datetime.now()
     if isinstance(ahora, str):
         ahora = datetime.fromisoformat(ahora)
     fechas = []
     for pz in ex.get("piezas") or []:
-        texto = (pz.get("metricas") or {}).get("tomado_en")
+        texto = consultado_en(pz.get("metricas"))
         try:
             if texto:
                 fechas.append(datetime.fromisoformat(texto))

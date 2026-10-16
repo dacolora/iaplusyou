@@ -8,6 +8,9 @@
    nombres_estado, tamano (formateador de bytes), nombres (proyectos). Cada
    parte puede venir en None si no se pudo leer. #}
 {% set m = metricas %}
+{# Una petición sin endpoint (un 404) se mide con la clave neutra «-»
+   (monitoreo.SIN_RUTA); su etiqueta se traduce aquí, al pintar (PND-280). #}
+{% macro ruta_visible(ruta) %}{% if ruta == '-' %}{{ _('(sin ruta)') }}{% else %}{{ ruta }}{% endif %}{% endmacro %}
 <section class="hero aparece">
   <div class="hero-texto">
     <span class="eyebrow">{{ _('Panel de administrador') }}</span>
@@ -182,7 +185,7 @@
       <tbody>
       {% for r in m.rutas %}
       <tr>
-        <td><code>{{ r.ruta }}</code></td>
+        <td><code>{{ ruta_visible(r.ruta) }}</code></td>
         <td class="num">{{ r.n }}</td>
         <td class="num">{{ r.errores or '—' }}</td>
         <td class="num">≤ {{ r.p50 }} ms</td>
@@ -205,7 +208,7 @@
       {% for l in m.lentas %}
       <tr>
         <td>{{ l.cuando | replace('T', ' ') }}</td>
-        <td><code>{{ l.ruta }}</code></td>
+        <td><code>{{ ruta_visible(l.ruta) }}</code></td>
         <td class="admin-detalle"><code>{{ l.url }}</code></td>
         <td class="num">{{ l.estado }}</td>
         <td class="num">{{ l.ms }}</td>

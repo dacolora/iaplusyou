@@ -221,6 +221,7 @@ app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
 Babel(app, locale_selector=idiomas.de_peticion)
 idiomas.instalar_gettext_rapido(app)  # mismo resultado que el de Flask-Babel, sin su costo por `_()`
 app.jinja_env.filters["traducir"] = idiomas.traducir
+app.jinja_env.filters["detalle_gasto"] = gastos.detalle_visible  # PND-307: filas importadas, traducidas al pintar
 # NVP (spec 2026-10-09-nvp-visitantes-nuevos §4): la macro `nvp` de _componentes.html los usa en todas las pantallas.
 app.jinja_env.globals["resumen_nvp"] = tw_visitantes.resumen
 app.jinja_env.globals["explicacion_nvp"] = tw_visitantes.EXPLICACION
@@ -254,7 +255,7 @@ def _medir_fin(estado):
     # El usuario solo se anota en las lentas, y nunca en un estático: leer la
     # sesión agrega «Vary: Cookie» y un CSS dejaría de ser cacheable igual para todos.
     usuario = session.get("usuario") if ms >= monitoreo.LENTA_MS and request.endpoint != "static" else None
-    monitoreo.METRICAS.terminar(request.endpoint or "(sin ruta)", estado, ms, monitoreo.consultas_del_hilo(),
+    monitoreo.METRICAS.terminar(request.endpoint or monitoreo.SIN_RUTA, estado, ms, monitoreo.consultas_del_hilo(),
                                 url=request.path, usuario=usuario)
 
 
@@ -2072,7 +2073,8 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
             jid = tareas_exp.job_id_refrescar(cliente, e["id"])
             if trabajos.en_curso(jid):
                 trabajos_exp[e["id"]] = {"job_id": jid}
-    moneda_exp = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    datos_meta_exp = meta_conexion.cargar(cliente) or {}
+    moneda_exp = datos_meta_exp.get("moneda") or "USD"
     # Bloque 4: propuestas pendientes por experimento (una consulta por
     # experimento con contador > 0), reglas y modos para los formularios.
     propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in gestion if e["propuestas_pendientes"]}
@@ -2092,7 +2094,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
         "limites_diarios_exp": {e["id"]: {p["pais"]: presupuesto_experimentos.limite_diario(e, p["pais"])
                                            for p in e["paises"]} for e in gestion},
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
-        "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
+        "tope_campana_min_exp": lanzador.minimo_tope_de_cuenta(datos_meta_exp, moneda_exp),   # PND-323
         "moneda_exp": moneda_exp,
         "propuestas_exp": propuestas_exp,
         "reglas_defecto_exp": decisor.REGLAS_DEFECTO,
@@ -3902,6 +3904,7 @@ def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina=None):
         "ad_account_id": cuenta["id"],
         "ad_account_nombre": cuenta.get("name"),
         "moneda": cuenta.get("currency"),
+        meta_conexion.CAMPO_TOPE_MINIMO: meta_conexion.tope_minimo_de(cuenta),   # PND-323
         "page_id": pagina.get("id"),
         "page_nombre": pagina.get("name"),
         "page_access_token": pagina.get("access_token"),

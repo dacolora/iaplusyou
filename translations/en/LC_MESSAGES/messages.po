@@ -2044,6 +2044,9 @@ msgstr "(not chosen)"
 msgid "(sin país)"
 msgstr "(no country)"
 
+msgid "(sin ruta)"
+msgstr "(no route)"
+
 msgid "(sin señales)"
 msgstr "(no signals)"
 
@@ -3915,8 +3918,11 @@ msgid "Cada marca necesita un nombre."
 msgstr "Each brand needs a name."
 
 #, python-format
-msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
-msgstr "Each country has its own daily budget. The total is also sent to Meta as the campaign cap from %(minimo)s up, the minimum Meta accepts for a cap; with a smaller total, the limit comes from the daily budgets and the end date."
+msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que tu cuenta de Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
+msgstr "Each country has its own daily budget. The total is also sent to Meta as the campaign cap from %(minimo)s up, the minimum your Meta account accepts for a cap; with a smaller total, the limit comes from the daily budgets and the end date."
+
+msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña si llega al mínimo de tu cuenta de Meta; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
+msgstr "Each country has its own daily budget. The total is also sent to Meta as the campaign cap if it reaches your Meta account's minimum; with a smaller total, the limit comes from the daily budgets and the end date."
 
 #, python-format
 msgid "Cada perdedora se diagnostica sola (%(precio)s) y deja su línea aquí."
@@ -4272,6 +4278,9 @@ msgstr "Use cases: <em>Create and manage ads (Marketing API)</em>, <em>Measure p
 
 msgid "Casting (personajes por crear)"
 msgstr "Casting (characters to create)"
+
+msgid "Categorías del catálogo"
+msgstr "Catalog categories"
 
 msgid "Catálogo"
 msgstr "Catalog"
@@ -7825,8 +7834,8 @@ msgstr "It's the product's only photo. If you want to remove it, upload another 
 msgid "Es lo que se descontó de tu saldo (el detalle de cada movimiento está en Saldo y recargas); la pauta se cobra en tu cuenta de Meta y no entra en este total."
 msgstr "This is what was deducted from your balance (each movement is listed in Balance and top-ups); ad spend is charged to your Meta account and is not part of this total."
 
-msgid "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios."
-msgstr "This is my voice, or I have the person's written permission to clone it and use it in ads."
+msgid "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios. Entiendo que la voz clonada queda en la cuenta del proveedor (MiniMax, vía fal) y que no se puede borrar de ahí, aunque la quite de Mis voces."
+msgstr "This is my voice, or I have the person's written permission to clone it and use it in ads. I understand that the cloned voice stays in the provider's account (MiniMax, through fal) and cannot be deleted from there, even if I remove it from My voices."
 
 #, python-format
 msgid "Es pospago: genera sin frenos y lo que pase de cero queda por pagar. Vuelve a avisar con cada %(tramo)s de deuda nueva; cóbrale o pásalo a prepago en /admin/cobros."
@@ -17554,6 +17563,10 @@ msgstr "If you cancel, it will not be charged again. Your plan stays active unti
 msgid "Si el botón no funciona, copia este enlace en tu navegador:"
 msgstr "If the button doesn't work, copy this link into your browser:"
 
+#, python-format
+msgid "Si el total no llega al mínimo de tu cuenta de Meta, Meta no pone un tope duro a la campaña: Creatv reparte %(total)s en presupuestos diarios por país (≈ %(dia)s al día)."
+msgstr "If the total doesn't reach your Meta account's minimum, Meta puts no hard cap on the campaign: Creatv splits %(total)s into daily budgets per country (≈ %(dia)s a day)."
+
 msgid "Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS (no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma."
 msgstr "If it's Gmail: in myaccount.google.com › Security turn on “2-Step Verification” and then, in “App passwords”, create one for “Creatv”: the 16 characters it gives you are SMTP_PASS (not the account's normal password). SMTP_USER is the full address and SMTP_FROM the same one."
 
@@ -18740,6 +18753,9 @@ msgstr "Invalid season type: %(tipo)s"
 #, python-format
 msgid "Tipo de temporada inválido: %(tipo)s. Opciones: %(opciones)s"
 msgstr "Invalid season type: %(tipo)s. Options: %(opciones)s"
+
+msgid "Tipo de tienda"
+msgstr "Store type"
 
 #, python-format
 msgid "Tipo de variante no soportado: %(tipo)s. Opciones: %(opciones)s"
@@ -22522,6 +22538,12 @@ msgstr "image"
 #, python-format
 msgid "imita: %(marcas)s"
 msgstr "imitates: %(marcas)s"
+
+msgid "importado del historial de piezas"
+msgstr "imported from the piece history"
+
+msgid "importado del historial de swaps"
+msgstr "imported from the swap history"
 
 msgid "impr."
 msgstr "impr."

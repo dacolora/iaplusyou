@@ -108,3 +108,10 @@ falla no frena a los demás y el registro lleva solo el tipo del error. Alertas 
 hasta el …» con «Renovar el acceso» (la ruta `meta_conectar`: reconectar reemplaza el token sin pasar por
 `_soltar_cuentas_meta`). Pruebas: `tests/test_meta_acceso_datos.py`. No cubre el modo agencia: el token del usuario
 del sistema de Creatv vive en `kv` y no se revisa aquí.
+
+**`meta.json` guarda el mínimo de tope de la cuenta (PND-323, 2026-10-15).** `tope_minimo_meta`
+(`meta_conexion.CAMPO_TOPE_MINIMO`, el `min_campaign_group_spend_cap` en la unidad de Meta) entra al conectar (propia:
+`listar_activos` pide el campo y `_guardar_conexion_propia` lo copia; agencia: `CAMPOS_CUENTA` y `asignar`) y lo refresca
+el lanzador con `meta_conexion.guardar_tope_minimo` (único escritor fuera de la conexión: merge bajo el candado, solo si
+es la misma cuenta; también en modo agencia, porque es un dato de la cuenta y no pisa la asignación). Lo usa «Nuevo
+experimento» (skill `experimentos`).

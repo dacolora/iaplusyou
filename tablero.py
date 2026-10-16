@@ -637,7 +637,8 @@ def _horas_desde(iso, ahora_iso):
 
 
 def _ultimo_snapshot_experimento(ex):
-    fechas = [(pz.get("metricas") or {}).get("tomado_en") for pz in ex.get("piezas") or []]
+    # La última CONSULTA: una foto igual a la anterior ya no agrega fila, solo la confirma (PND-066).
+    fechas = [experimentos.consultado_en(pz.get("metricas")) for pz in ex.get("piezas") or []]
     fechas = [f for f in fechas if f]
     return max(fechas) if fechas else None
 

@@ -599,7 +599,7 @@ def listar_activos(token):
     usuario del sistema y, si no, cambia a los edges del negocio
     (/{business_id}/owned_ad_accounts, /owned_pages)."""
     cuentas = _graph_get("me/adaccounts", token, {
-        "fields": "id,name,account_status,currency", "limit": 100,
+        "fields": "id,name,account_status,currency,min_campaign_group_spend_cap", "limit": 100,
     }).get("data", [])
     paginas_raw = _graph_get("me/accounts", token, {
         "fields": "id,name,access_token,instagram_business_account{id,username}", "limit": 100,
@@ -612,6 +612,50 @@ def listar_activos(token):
             "ig_user_id": ig.get("id"), "ig_username": ig.get("username"),
         })
     return {"ad_accounts": cuentas, "pages": paginas}
+
+
+# PND-323 (decisión 2026-10-13): el mínimo que la cuenta publicitaria acepta como tope de campaña
+# (`min_campaign_group_spend_cap`, en la unidad de Meta), leído una vez y guardado con la conexión. Lo leen
+# «Nuevo experimento» (`lanzador.minimo_tope_de_cuenta`) y, al lanzar, el lanzador lo vuelve a leer de Meta.
+CAMPO_TOPE_MINIMO = "tope_minimo_meta"
+
+
+def tope_minimo_de(cuenta):
+    """El `min_campaign_group_spend_cap` de una cuenta leída de Meta (entero en la unidad de Meta) o None."""
+    try:
+        valor = int(float((cuenta or {}).get("min_campaign_group_spend_cap")))
+    except (TypeError, ValueError):
+        return None
+    return valor if valor > 0 else None
+
+
+def _misma_cuenta(a, b):
+    def limpia(x):
+        x = str(x or "")
+        return x[4:] if x.startswith("act_") else x
+    return bool(limpia(a)) and limpia(a) == limpia(b)
+
+
+def guardar_tope_minimo(cliente, ad_account_id, cuenta):
+    """Guarda con la conexión el mínimo de tope que Meta dijo para la cuenta (`cuenta` = lo leído de Meta). Solo si
+    meta.json sigue siendo la conexión de ESA cuenta (una reconexión o un cambio de cuenta en medio no se pisa) y
+    si cambió. Escribe bajo el candado y sobre lo que haya en disco, sin tocar nada más (sirve también en modo
+    agencia: es un dato de la cuenta, no una credencial). True si escribió."""
+    valor = tope_minimo_de(cuenta)
+    if not valor:
+        return False
+    previo = _cargar_crudo(cliente)       # sin conexión (o ya guardado) ni se toma el candado: no crea archivos
+    if not previo or not _misma_cuenta(previo.get("ad_account_id"), ad_account_id) or previo.get(CAMPO_TOPE_MINIMO) == valor:
+        return False
+    with _candado(cliente):
+        actual = _cargar_crudo(cliente)
+        if not actual or not _misma_cuenta(actual.get("ad_account_id"), ad_account_id):
+            return False
+        if actual.get(CAMPO_TOPE_MINIMO) == valor:
+            return False
+        _escribir_atomico(_path(cliente), {**actual, CAMPO_TOPE_MINIMO: valor})
+    _cache_estado.pop(cliente, None)
+    return True
 
 
 def _detalle(datos):

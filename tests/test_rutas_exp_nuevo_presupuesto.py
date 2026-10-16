@@ -17,6 +17,17 @@ def _proyectos_en_tmp(monkeypatch, tmp_path):
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
 
 
+@pytest.fixture(autouse=True)
+def _cuenta_con_minimo_leido(request, monkeypatch):
+    """PND-323: la pantalla usa el mínimo REAL de la cuenta para el tope de campaña, leído de Meta y guardado con la
+    conexión (`tope_minimo_meta`, en la unidad de Meta). Estas pruebas usan una cuenta en COP cuyo mínimo leído es
+    400 000 COP, el umbral que ya probaban; la cuenta sin lectura se prueba aparte (y en test_minimo_tope_cuenta)."""
+    if "app" in request.fixturenames:
+        app = request.getfixturevalue("app")
+        monkeypatch.setattr(app["dashboard"].meta_conexion, "cargar",
+                            lambda c: {"moneda": "COP", "tope_minimo_meta": 400000})
+
+
 def _datos(base_temporal, **cambios):
     clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
     return dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO", f"{clon}:MX"], **cambios), clon
@@ -180,7 +191,7 @@ def test_la_pantalla_dice_que_los_dias_cuentan_desde_la_primera_activacion_y_has
         p = _paso(html, paso)
         assert "empiezan a contar cuando el experimento empieza a gastar por primera vez" in p
         assert "la fecha de cierre no se mueve" in p
-        assert "tope de la campaña desde 400.000 COP" in p       # lanzador.minimo_tope_campana('COP')
+        assert "tope de la campaña desde 400.000 COP" in p       # lanzador.minimo_tope_de_cuenta (el leído de la cuenta)
     assert "no desde la activación" not in html and "desde el lanzamiento, no" not in html
 
 
@@ -215,7 +226,7 @@ const nodo = () => { const hijos = {}, oyentes = {};
           querySelector: (s) => hijos[s] || (hijos[s] = nodo()), querySelectorAll: () => []}; };
 const campos = {}, ids = {};
 const campo = (s, v) => campos[s] || (campos[s] = Object.assign(nodo(), {value: v === undefined ? '4000' : v}));
-const form = {querySelector: (s) => campo(s), querySelectorAll: () => [], dataset: {minimo: '4000', moneda: 'COP'}};
+const form = {querySelector: (s) => campo(s), querySelectorAll: () => [], dataset: {minimo: '4000', moneda: 'COP', topeCampana: %(tope)s}};
 const document = {getElementById: (i) => ids[i] || (ids[i] = nodo()), createElement: () => ({innerHTML: 'a'}), documentElement: {lang: 'es'}};
 const pais = (value) => Object.assign(nodo(), {value, checked: true, dataset: {bandera: value, nombre: value === 'CO' ? 'Colombia' : 'México'}});
 const paises = [pais('CO'), pais('MX')];
@@ -236,7 +247,9 @@ def _en_la_pagina(app, base_temporal, guion):
     html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
     codigo = html.split("    var MESES =", 1)[1].split("    abrir.addEventListener", 1)[0]
     import json
-    programa = _ARNES_PAGINA % {"cuenta": json.dumps(os.path.join(RAIZ, "static", "presupuesto_exp.js")), "codigo": codigo, "guion": guion}
+    tope = re.search(r'data-tope-campana="([^"]*)"', html).group(1)     # como lo pintó el servidor (PND-323)
+    programa = _ARNES_PAGINA % {"cuenta": json.dumps(os.path.join(RAIZ, "static", "presupuesto_exp.js")), "codigo": codigo,
+                                "guion": guion, "tope": json.dumps(tope)}
     r = subprocess.run([shutil.which("node"), "-e", programa], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr[-1500:]
 
@@ -280,7 +293,9 @@ assert.notStrictEqual(problema(), '');
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="sin Node no se corre el JS (el VPS no lo tiene)")
-def test_la_pagina_recalcula_el_total_al_ajustar_el_reparto_a_mano_y_pide_cifras_enteras_en_cop(app, base_temporal):
+def test_la_pagina_recalcula_el_total_al_ajustar_el_reparto_a_mano_y_pide_cifras_enteras_en_cop(app, base_temporal, monkeypatch):
+    # Una cuenta como la de colorado_forja, que acepta tope desde 200 000 COP (PND-323): 315 000 sí lleva tope duro.
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "cargar", lambda c: {"moneda": "COP", "tope_minimo_meta": 200000})
     _en_la_pagina(app, base_temporal, r"""
 refrescarCuenta();
 manual = true;                                                                       // la persona editó el diario de un país
@@ -325,7 +340,7 @@ const paisesNodos = [co, mx];
 const galeria = nodo('exp-galeria');
 galeria.listas['input[name=piezas]'] = piezas; galeria.listas['.exp-tarjeta'] = []; galeria.listas['[data-filtro]'] = [];
 const form = nodo('exp-probar');
-form.hidden = true; form.dataset = {minimo: '4000', moneda: 'COP', topeCampana: '400000'};
+form.hidden = true; form.dataset = {minimo: '4000', moneda: 'COP', topeCampana: %(tope)s};
 const total = con(new Nodo('tope_total'), {value: ''}), dias = con(new Nodo('dias'), {value: '7'});
 const campoCO = con(new Nodo('presupuesto_CO'), {value: '4000'}), campoMX = con(new Nodo('presupuesto_MX'), {value: '4000'});
 form.hijos['[name=tope_total]'] = total; form.hijos['[name=dias]'] = dias;
@@ -370,8 +385,10 @@ def _script_de_la_pagina(app, base_temporal, guion, busqueda="''"):
     html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
     scripts = [m for m in re.findall(r"<script>(.*?)</script>", html, re.S) if "exp-abrir-pasos" in m]
     assert len(scripts) == 1
+    # El tope de campaña llega como lo pintó el servidor (PND-323: vacío si la cuenta no tiene el mínimo leído).
+    tope = re.search(r'data-tope-campana="([^"]*)"', html).group(1)
     programa = _DOM % {"cuenta": json.dumps(os.path.join(RAIZ, "static", "presupuesto_exp.js")), "script": json.dumps(scripts[0]),
-                       "guion": guion, "busqueda": busqueda}
+                       "guion": guion, "busqueda": busqueda, "tope": json.dumps(tope)}
     r = subprocess.run([shutil.which("node"), "-e", programa], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, (r.stderr or r.stdout)[-2500:]
 
@@ -417,7 +434,7 @@ assert.strictEqual(nodo('exp-barra-texto').textContent, '0 piezas marcadas');
 
 @_NODE
 def test_por_debajo_del_minimo_de_tope_de_campana_dice_planeado_y_no_maximo_y_el_confirm_lo_repite(app, base_temporal):
-    """G1: sin tope duro en Meta (total < lanzador.minimo_tope_campana) no se puede decir «Máximo que puede gastar»."""
+    """G1: sin tope duro en Meta (total < el mínimo de la cuenta) no se puede decir «Máximo que puede gastar»."""
     _script_de_la_pagina(app, base_temporal, r"""
 marcar(piezas[0]); abrirPasos(); clic(ir2);
 // total bajo: 100.000 COP < 400.000 (lo que Meta acepta como tope de campaña en COP)
@@ -449,6 +466,24 @@ assert(texto('exp-resumen', '.exp-maximo').startsWith('Presupuesto planeado'), t
 escribir(total, 1400000);
 clic(ir3); form.disparar('submit');
 assert(confirmaciones[0].includes('Máximo que puede gastar: 1.400.000 COP en 7 días') && !confirmaciones[0].includes('planeado'), confirmaciones[0]);
+""")
+
+
+@_NODE
+def test_pnd323_sin_el_minimo_leido_dice_planeado_y_el_minimo_de_la_cuenta_sin_cifra(app, base_temporal, monkeypatch):
+    """PND-323: sin la lectura del mínimo de la cuenta no se inventa una cifra ni se promete un máximo: «Presupuesto
+    planeado» y que el tope depende del mínimo de la cuenta de Meta, también con un total grande y en el confirm."""
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "cargar", lambda c: {"moneda": "COP"})
+    _script_de_la_pagina(app, base_temporal, r"""
+marcar(piezas[0]); abrirPasos(); clic(ir2);
+escribir(total, 5000000);
+const titular = texto('exp-resumen', '.exp-maximo');
+assert.strictEqual(titular, 'Presupuesto planeado: 5.000.000 COP en 7 días');
+const linea = texto('exp-resumen', '.exp-aviso-tope');
+assert(linea.startsWith('Si el total no llega al mínimo de tu cuenta de Meta') && linea.includes('5.000.000 COP'), linea);
+assert(!linea.includes('400.000') && !linea.includes('NaN'), linea);
+clic(ir3); form.disparar('submit');
+assert(confirmaciones[0].includes(titular) && confirmaciones[0].includes(linea) && !confirmaciones[0].includes('Máximo'), confirmaciones[0]);
 """)
 
 
@@ -506,7 +541,7 @@ def test_solo_un_resumen_anuncia_sus_cambios_al_lector_de_pantalla(app, base_tem
 
 
 def test_la_pantalla_manda_a_la_pagina_desde_que_total_hay_tope_de_campana(app, base_temporal):
-    """G1: la página decide «máximo» o «planeado» con el mismo umbral que usa lanzar (lanzador.minimo_tope_campana)."""
+    """G1: la página decide «máximo» o «planeado» con el mínimo de la cuenta, el mismo que lee lanzar (PND-323)."""
     html = _pagina(app, base_temporal)
     assert 'data-tope-campana="400000.0"' in html
     assert "Presupuesto planeado: {total} en {n} días" not in html     # va como JSON (con \u00e9…): se mira por su forma

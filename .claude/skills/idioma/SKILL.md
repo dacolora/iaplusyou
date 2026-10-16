@@ -111,3 +111,14 @@ PND-243 (2026-10-15): el nombre de un modelo de `flowplus_modelos` es un msgid (
 con `m.nombre|traducir` (selectores del lote de Sprints); `nombre_modelo` devuelve el msgid. «Seedance 2.5 · varias
 referencias» salía sin traducir en inglés. Pruebas `*pnd243*` en `test_rutas_crear_director.py` y
 `test_sprints_tablero_entrega2.py`.
+
+PND-280 (2026-10-15, decisión 2026-10-13): una petición sin endpoint (un 404) se mide en `monitoreo.METRICAS` con la
+clave neutra `monitoreo.SIN_RUTA` («-»), nunca con un texto en español; `admin_salud.html` pinta la etiqueta
+traducida «(sin ruta)» con su macro `ruta_visible`. Antes `/admin/salud` fallaba la barrida en inglés según el orden de
+las pruebas. Pruebas: `test_salud_con_un_404_medido_sigue_en_ingles` y `test_monitoreo.py::test_cada_peticion_queda_medida`.
+
+PND-307 (2026-10-15, decisión 2026-10-13): las filas de `gasto` que copió `gastos.importar_historico` (2026-09) guardaron
+su `detalle` en español («importado del historial de piezas» / «… de swaps», hoy `gastos.DETALLE_IMPORTADO_*`, `N_`).
+No se reescribe la base: el filtro `|detalle_gasto` (`gastos.detalle_visible`) traduce esos dos prefijos al pintar y
+deja cualquier otro detalle tal cual. Lo usan Spend (`_gasto_filas.html`), el Saldo (`_saldo_panel.html`) y el panel de
+admin (`panel.html`); los CSV siguen sacando el detalle guardado. Pruebas `test_pnd307_*` en `test_gastos_historico.py`.

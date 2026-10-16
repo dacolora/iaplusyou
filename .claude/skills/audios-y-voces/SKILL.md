@@ -129,3 +129,10 @@ que pagó la voz falló después (el worker devolvió el cobro), Mis voces la re
 (`voces_propias.crear` con la ficha de la misma referencia), con el precio que la persona vio al lanzarla, se cobra con
 `gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`). Pendiente propuesto: un botón con su precio para
 cobrar la recuperada por el GET.
+
+**El permiso del clon dice que la voz no se borra del proveedor (PND-041, decisión 2026-10-13).** La casilla de
+«Clonar una voz» (`_crear_audios.html`, `voces_propias.TEXTO_CONSENTIMIENTO`) dice además que la voz clonada queda en
+la cuenta del proveedor (MiniMax, vía fal) y que de ahí no se puede borrar, aunque se quite de Mis voces (`borrar`
+solo quita la fila, sus muestras y la grabación). Ese texto se guarda tal cual en `extra.consentimiento` y la tarea lo
+compara antes de pagar: cambiarlo hace que una tarea encolada con el texto viejo falle sin cobrar (el despliegue
+reinicia el worker con la cola vacía). Prueba: `test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas`.
