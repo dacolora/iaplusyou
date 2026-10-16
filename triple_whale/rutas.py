@@ -278,6 +278,12 @@ def analisis_aprendizaje(cliente, aid):
         flash(gettext("Ese análisis no dejó un aprendizaje."), "warn")
         return _volver(cliente)
     proyectos.agregar_aprendizaje(cliente, item)
+    if item.get("origen") == "meta" and datos.analisis_anuncio(cliente, aid) is None:
+        # PND-295 (auditoría de seguridad, 2026-10-15): si Meta se desconectó entre leer el análisis y guardar (la
+        # desconexión borró el análisis y ya pasó por los aprendizajes), el que acaba de entrar tampoco se queda con el
+        # nombre del anuncio.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            proyectos.reescribir_aprendizajes(cliente, doctrina_aprendizajes.sin_nombre_de_meta)
     flash(gettext("Aprendizaje guardado: las próximas ideas y guiones lo tendrán en cuenta."), "ok")
     return _volver(cliente)
 

@@ -137,6 +137,19 @@ def test_pnd295_sin_nombre_de_meta_conserva_la_leccion(veredicto, inicio):
         assert ap.sin_nombre_de_meta(otro) is otro                       # lo que no es de Meta, tal cual
 
 
+def test_pnd295_la_leccion_tampoco_se_queda_con_el_nombre_del_anuncio():
+    """Auditoría de seguridad (2026-10-15): la lección la escribe Claude mirando el anuncio y puede citarlo."""
+    from doctrina import aprendizajes as ap
+    fila = {"id": 3, "foto": {"fuente": "meta", "nombre": "UGC Verano Rosado", "veredicto": "ganador"},
+            "resultado": {"aprendizaje": "En esta cuenta, ugc verano rosado funciona porque abre con el dolor."}}
+    limpio = ap.sin_nombre_de_meta(ap.desde_analisis_tw(fila))
+    assert "verano rosado" not in limpio["texto"].lower() and "verano rosado" not in limpio["aprendizaje"].lower()
+    assert "este anuncio funciona porque abre con el dolor" in limpio["texto"]
+    corto = {"id": 4, "foto": {"fuente": "meta", "nombre": "A1", "veredicto": "ganador"},
+             "resultado": {"aprendizaje": "La A1 de Agua funciona."}}
+    assert "La A1 de Agua funciona." in ap.sin_nombre_de_meta(ap.desde_analisis_tw(corto))["texto"]   # muy corto
+
+
 def test_pnd295_desconectar_meta_quita_el_nombre_en_el_idioma_del_proyecto(tmp_path, monkeypatch, base_temporal):
     import meta_conexion as mc
     import proyectos

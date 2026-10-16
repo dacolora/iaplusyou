@@ -158,14 +158,25 @@ def desde_analisis_tw(fila, ahora=None):
             "origen": "meta" if de_meta else "triple_whale", "analisis_id": analisis_id}
 
 
+_RE_NOMBRE_GUARDADO = re.compile(r"[«“\"]([^»”\"]+)[»”\"]")
+MIN_NOMBRE_A_QUITAR = 4     # un nombre más corto («A1», «v2») aparece dentro de otras palabras: no se reemplaza
+
+
 def sin_nombre_de_meta(item):
     """PND-295 (decisión 2026-10-13): al desconectar Meta, un aprendizaje guardado desde un análisis de un anuncio de
     Meta (`origen` "meta": «Ganó en Meta: «nombre». Diagnóstico: …») conserva la lección pero pierde el nombre del
-    anuncio, que es dato copiado de Meta. Devuelve el aprendizaje con el texto rehecho (en el idioma activo: quien
-    llama elige el del proyecto) y `sin_nombre` True; cualquier otro, tal cual."""
+    anuncio, que es dato copiado de Meta, también dentro de la lección (pasa a «este anuncio»). Devuelve el
+    aprendizaje con el texto rehecho (en el idioma activo: quien llama elige el del proyecto) y `sin_nombre` True;
+    cualquier otro, tal cual."""
     if not isinstance(item, dict) or item.get("origen") != "meta" or item.get("sin_nombre"):
         return item
     leccion = _limpio(item.get("aprendizaje"), 220)
+    # La lección la escribió Claude mirando el anuncio y puede citar su nombre (auditoría de seguridad, 2026-10-15):
+    # el nombre es el primer texto entre comillas de la línea guardada («…» en español, “…” en inglés).
+    nombre = _RE_NOMBRE_GUARDADO.search(str(item.get("texto") or ""))
+    nombre = nombre.group(1).strip() if nombre else ""
+    if len(nombre) >= MIN_NOMBRE_A_QUITAR and leccion:
+        leccion = re.sub(re.escape(nombre), gettext("este anuncio"), leccion, flags=re.IGNORECASE)
     if item.get("tipo") == "ganador":
         texto = gettext("Ganó en Meta un anuncio")
     elif item.get("tipo") == "perdedor":
@@ -173,7 +184,8 @@ def sin_nombre_de_meta(item):
     else:
         texto = gettext("Un anuncio analizado en Meta")
     texto += gettext(". Diagnóstico: %(a)s", a=leccion) if leccion else "."
-    return {**item, "texto": _limpio(texto, MAX_TEXTO_MOTOR), "sin_nombre": True}
+    return {**item, "texto": _limpio(texto, MAX_TEXTO_MOTOR), "aprendizaje": leccion or item.get("aprendizaje"),
+            "sin_nombre": True}
 
 
 def manual(texto, ahora=None):

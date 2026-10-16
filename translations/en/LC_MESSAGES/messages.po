@@ -22225,6 +22225,9 @@ msgstr "seasonality"
 msgid "estado"
 msgstr "status"
 
+msgid "este anuncio"
+msgstr "this ad"
+
 #, python-brace-format
 msgid "este modelo acepta videos de hasta {max} s: recórtalo o elige otro modelo"
 msgstr "this model accepts videos up to {max} s: trim it or choose another model"

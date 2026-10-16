@@ -484,6 +484,28 @@ def test_dos_guardados_del_mismo_aprendizaje_dejan_uno(app):  # noqa: F811
     assert len(proyectos.aprendizajes("acme")) == 2
 
 
+def test_pnd295_si_meta_se_desconecta_mientras_se_guarda_el_aprendizaje_no_queda_el_nombre(app, monkeypatch):  # noqa: F811
+    """Auditoría de seguridad (2026-10-15): la ruta lee el análisis y después guarda. Si Meta se desconecta en medio
+    (borra el análisis y ya pasó por los aprendizajes), el que entra después no puede quedarse con el nombre."""
+    from triple_whale import rutas as tw_rutas
+    _conectar()
+    _sembrar()
+    aid = _lista(app)
+    datos.actualizar_analisis(aid, foto={**datos.analisis_anuncio("acme", aid)["foto"], "fuente": "meta",
+                                         "nombre": "Video Noruega Verano"})
+    armar = tw_rutas._aprendizaje_de
+
+    def _y_se_desconecta(cliente, fila):
+        item = armar(cliente, fila)
+        with db.conectar() as con:          # lo que hace `soltar`: el análisis de fuente Meta se va
+            con.execute(db.tw_analisis.delete().where(db.tw_analisis.c.id == aid))
+        return item
+    monkeypatch.setattr(tw_rutas, "_aprendizaje_de", _y_se_desconecta)
+    app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/aprendizaje")
+    [item] = proyectos.aprendizajes("acme")
+    assert item["origen"] == "meta" and item["sin_nombre"] is True and "Noruega" not in str(item)
+
+
 def test_el_aprendizaje_se_guarda_en_el_idioma_del_proyecto(app):  # noqa: F811
     """Regla 3: lo que se guarda va en el idioma del proyecto, no en el de quien hace el clic."""
     import idiomas
