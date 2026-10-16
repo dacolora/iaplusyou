@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import threading
 import time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -371,7 +372,8 @@ TOPE_ALTAS_HORA = 10        # altas y cambios de tarjeta por proyecto y hora (ca
 TOPE_NEQUI_HORA = 6         # pedidos a Nequi por proyecto y hora (cada uno manda una notificación al celular)
 MAX_CAMPOS_FORMULARIO = 40
 _TOKEN_TARJETA = re.compile(r"tok_(?:test|prod)_[A-Za-z0-9_-]{1,190}")
-_SESION_NEQUI = "plan_nequi"   # los tokens de Nequi que pidió ESTA sesión (solo esos se sondean y se aceptan)
+_SESION_NEQUI = "plan_nequi"   # los tokens de Nequi que pidió ESTA sesión, por proyecto y por pedido (los únicos
+                                # que se sondean y se aceptan): {cliente: [[pedido, token], …]}, los 5 últimos
 
 
 @bp.app_template_filter("fecha_larga")
@@ -561,21 +563,39 @@ def _token_tarjeta(form):
     return None
 
 
-def _medio(form):
+def _pedidos_nequi(cliente):
+    """[[pedido, token], …] de Nequi que pidió ESTA sesión para ESTE proyecto (decisión de quien orquesta,
+    2026-10-15: con la lista de toda la sesión, una pestaña de otro proyecto podía ver el «aprobado» de otra). Una
+    sesión vieja con la lista suelta de antes no trae ninguno."""
+    guardados = session.get(_SESION_NEQUI)
+    lista = guardados.get(cliente) if isinstance(guardados, dict) else None
+    return [list(p) for p in (lista or []) if isinstance(p, (list, tuple)) and len(p) == 2]
+
+
+def _guardar_pedidos_nequi(cliente, pedidos):
+    guardados = session.get(_SESION_NEQUI)
+    guardados = dict(guardados) if isinstance(guardados, dict) else {}
+    if pedidos:
+        guardados[cliente] = pedidos[-5:]
+    else:
+        guardados.pop(cliente, None)
+    session[_SESION_NEQUI] = guardados
+
+
+def _medio(form, cliente):
     """(tipo, token): tarjeta con el token del widget, o Nequi con un token que
-    pidió ESTA sesión (`plan_nequi`). Sin token válido, (tipo, None)."""
+    pidió ESTA sesión para ESTE proyecto (`plan_nequi`). Sin token válido, (tipo, None)."""
     tipo = (form.get("tipo") or "CARD").strip().upper()
     if tipo == "NEQUI":
         token = (form.get("token") or "").strip()
-        return "NEQUI", token if token and token in (session.get(_SESION_NEQUI) or []) else None
+        return "NEQUI", token if token and token in [t for _p, t in _pedidos_nequi(cliente)] else None
     if tipo != "CARD":
         return tipo, None
     return "CARD", _token_tarjeta(form)
 
 
-def _olvidar_nequi(token):
-    lista = [t for t in (session.get(_SESION_NEQUI) or []) if t != token]
-    session[_SESION_NEQUI] = lista
+def _olvidar_nequi(cliente, token):
+    _guardar_pedidos_nequi(cliente, [p for p in _pedidos_nequi(cliente) if p[1] != token])
 
 
 def _entero_exacto(texto):
@@ -593,7 +613,7 @@ def _pedido_de_medio(cliente, volver):
         flash(gettext("Para suscribirte tienes que aceptar los términos de Wompi, el tratamiento de datos "
                       "y el cobro automático"), "error")
         return volver
-    tipo, token = _medio(f)
+    tipo, token = _medio(f, cliente)
     if token is None:
         flash(gettext("No recibimos los datos de tu medio de pago. Vuelve a ingresar la tarjeta o a aprobar en "
                       "Nequi."), "error")
@@ -652,7 +672,7 @@ def plan_suscribir(cliente):
         flash(cola.sin_token(str(e)), "error")
         return volver
     if tipo == "NEQUI":
-        _olvidar_nequi(token)
+        _olvidar_nequi(cliente, token)
     return _tras_cobro(cliente, r["estado"], r.get("motivo"), volver)
 
 
@@ -672,7 +692,7 @@ def plan_cambiar_tarjeta(cliente):
         flash(cola.sin_token(str(e)), "error")
         return volver
     if tipo == "NEQUI":
-        _olvidar_nequi(token)
+        _olvidar_nequi(cliente, token)
     if r.get("cobro") is None:
         flash(gettext("Listo: guardamos tu nuevo medio de pago para los próximos cobros del plan."), "ok")
         return _volver_plan(cliente)
@@ -736,22 +756,26 @@ def plan_nequi(cliente):
         token = wompi.token_nequi(celular, tiempo=wompi.TIEMPO_INTERACTIVO)
     except wompi.ErrorWompi as e:
         return jsonify({"ok": False, "error": cola.sin_token(str(e))}), 502
-    session[_SESION_NEQUI] = ([t for t in (session.get(_SESION_NEQUI) or []) if t != token] + [token])[-5:]
+    # Cada pedido tiene su id (no es secreto: sin esta sesión no sirve), así cada pestaña sondea SU token (2026-10-15).
+    pedido = secrets.token_hex(8)
+    _guardar_pedidos_nequi(cliente, [p for p in _pedidos_nequi(cliente) if p[1] != token] + [[pedido, token]])
     # El token va en el cuerpo (el formulario lo manda de vuelta al aprobar), nunca en una URL (PND-349).
-    return jsonify({"ok": True, "token": token, "estado_url": url_for("cobros.plan_nequi_estado", cliente=cliente)})
+    return jsonify({"ok": True, "token": token,
+                    "estado_url": url_for("cobros.plan_nequi_estado", cliente=cliente, pedido=pedido)})
 
 
 @bp.get("/cliente/<cliente>/plan/nequi/estado")
 def plan_nequi_estado(cliente):
-    """PENDING, APPROVED o DECLINED del último token de Nequi que pidió esta
-    sesión (como mucho una consulta cada 3 s por token y con cupo; si no,
-    PENDING). PND-349 (2026-10-15): el token ya no va en la ruta, que queda en
-    los registros de acceso de nginx y gunicorn; sale de la sesión."""
+    """PENDING, APPROVED o DECLINED del token de Nequi del pedido `?pedido=` que
+    hizo esta sesión para este proyecto (como mucho una consulta cada 3 s por
+    token y con cupo; si no, PENDING). PND-349 (2026-10-15): el token ya no va
+    en la ruta, que queda en los registros de acceso de nginx y gunicorn; sale
+    de la sesión, por proyecto y por pedido (cada pestaña ve el suyo)."""
     _exigir_plan(cliente)
-    tokens = session.get(_SESION_NEQUI) or []
-    if not tokens:
+    pedido = (request.args.get("pedido") or "").strip()
+    token = next((t for p, t in _pedidos_nequi(cliente) if p == pedido), None) if pedido else None
+    if not token:
         abort(404)
-    token = tokens[-1]
     estado = "PENDING"
     if _toca_verificar(f"nequi:{token}") and _SEMAFORO.acquire(blocking=False):
         try:
