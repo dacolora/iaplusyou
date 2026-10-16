@@ -742,7 +742,7 @@ def test_precios_en_botones_crear_y_catalogo(app, monkeypatch):
     cf_id = cf.crear("acme", [], ["Chancla"], [], "camina", 8, "", "A")
     cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", enfoque="producto", usd=0.85)
     ruta_detalle = f"/cliente/acme/creative_flow/{cf_id}/final/detalle"
-    assert "Preparar guion con IA ≈ US$ 0,13" in app["c"].get(ruta_detalle).data.decode()
+    assert "Preparar guion con IA ≈ US$ 0,09" in app["c"].get(ruta_detalle).data.decode()   # PND-110
     cf.guardar_guion_base("acme", cf_id, GUION_BASE)
     detalle = app["c"].get(ruta_detalle).data.decode()
     assert 'data-plantilla="Producir {n} finales ≈ US$ 0,20 c/u"' in detalle

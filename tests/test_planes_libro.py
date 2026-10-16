@@ -692,22 +692,22 @@ def _estimar_en_peticion(tipo, cliente="acme", **params):
 def test_lo_incluido_dice_incluido_en_tu_plan_mientras_quede_tope(base_temporal, libro, sin_avisos):
     import gastos
     libro.configurar("acme", usuario="admin", cobrar=True)
-    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,26 aprox."             # sin plan: a la carta (×2)
+    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,18 aprox."             # sin plan: a la carta (×2)
     _abrir(base_temporal, libro, tope=0.20)
     e = _estimar_en_peticion("guion")
-    assert e["texto"] == "Incluido en tu plan" and e["incluido"] is True and e["usd"] == 0.13
+    assert e["texto"] == "Incluido en tu plan" and e["incluido"] is True and e["usd"] == 0.09
     assert _estimar_en_peticion("reescribir_idea")["texto"] == "Incluido en tu plan"
     assert _estimar_en_peticion("video", modelo="nada", duracion=5).get("incluido") is None   # lo caro, nunca
-    gastos.registrar("acme", "guion", 0.10, "guion:1:t1")                           # quedan 0,10 de tope
-    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,16 aprox."             # 0,13 ya no cabe: miembro
+    gastos.registrar("acme", "guion", 0.12, "guion:1:t1")                           # quedan 0,08 de tope
+    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,11 aprox."             # 0,09 ya no cabe: miembro
     assert _estimar_en_peticion("regla_producto")["texto"] == "Incluido en tu plan"  # 0,01 sí cabe
-    assert _estimar_en_peticion("guion", cliente="otro")["texto"] == "US$ 0,13 aprox."   # otro proyecto: costo
+    assert _estimar_en_peticion("guion", cliente="otro")["texto"] == "US$ 0,09 aprox."   # otro proyecto: costo
 
 
 def test_la_etiqueta_no_aparece_en_un_proyecto_que_no_cobra(base_temporal, libro):
     libro.configurar("acme", usuario="admin", cobrar=False)
     _abrir(base_temporal, libro)
-    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,13 aprox."
+    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,09 aprox."
 
 
 def test_incluye_lee_una_vez_por_peticion(base_temporal, libro, planes, monkeypatch):

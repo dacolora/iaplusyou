@@ -52,12 +52,24 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    (2 × US$ 0,04) más ≈ 10 000 de entrada cada una (2 × US$ 0,02) y Whisper
 #    de la referencia (US$ 0,01) = US$ 0,13. Se redondea HACIA ARRIBA a un
 #    tope redondo: el estimado nunca queda por debajo del real.
+#    PND-110 (2026-10-15): calibrado con la tabla `gasto` de producción. `guion`
+#    tiene 6 filas con costo (2026-09-27 a 2026-10-10): promedio US$ 0,0398,
+#    máximo 0,0702 (desde el 2026-10-02: 5 filas, promedio 0,0457, mediana
+#    0,0464). Con tan pocas muestras la regla es el MÁXIMO real × 1,2,
+#    redondeado hacia arriba a 2 decimales (no el promedio: el precio a la vista
+#    no puede quedarse corto) → 0,0702 × 1,2 = 0,084 → US$ 0,09. Recalibrar con
+#    la misma regla cuando haya más filas.
 #  - fal.ai: ElevenLabs multilingual-v2 ~US$ 0,05 por pieza de 15-20 s de
 #    voz (por carácter); Stable Audio ~US$ 0,02 por pista (cacheada por
 #    estilo+duración, así que suele salir 0); whisper ~US$ 0,01 por clip.
 #  - final = guion localizado (peor caso US$ 0,12: dos llamadas al tope) + voz
 #    (0,05) + música (0,02, casi siempre en caché) + whisper (0,01) ≈ US$ 0,20
 #    por país (era 0,10 con el guion a 0,01 fijo; 2026-10-02).
+#    PND-110 (2026-10-15): se queda en 0,20. La tabla `gasto` de producción
+#    solo tiene 3 filas `final`, todas «importado del historial de piezas» de
+#    septiembre (0,0508; 0,0694; 0,0921), anteriores al camino actual (guion
+#    por su `usage` real + voz + música + whisper): no sirven para calibrarla.
+#    Con filas del camino actual, la misma regla del guion (máximo × 1,2).
 #    `derivaciones._avanzar_finales` encola un `final_producir` POR país
 #    (guion localizado, voz vía fal/ElevenLabs y whisper propios; solo la
 #    música se cachea y a veces sale gratis) — no hay descuento por país
@@ -83,7 +95,7 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    US$ 0,21; con el tope viejo de 16 000 no terminaba. Se estima 0,07 por
 #    cada 100 palabras sobre 0,06, sin pasar del peor caso del tope (48 000).
 TARIFAS = {
-    "guion": 0.13,
+    "guion": 0.09,   # PND-110: máximo real 0,0702 × 1,2, hacia arriba (ver arriba)
     "regla_producto": 0.01,
     # Texto orgánico («Escribir con IA», la publicación de una ganadora): la doctrina en el system y hasta 4 000
     # tokens de salida con el pensamiento. Peor caso con ese tope: 4 000 × US$ 10/M + ≈ 6 000 de entrada (la

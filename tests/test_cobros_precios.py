@@ -62,16 +62,16 @@ def test_estimar_dentro_de_una_peticion_trae_costo_y_precio():
         g.margen_precio = MARGEN
         e = gastos.estimar("guion")
     assert e["usd"] == gastos.TARIFAS["guion"]                   # el costo: lo usan reservas y el libro
-    assert e["usd_precio"] == round(0.13 * MARGEN, 4)
-    assert gastos.formatear(0.13 * MARGEN) in e["texto"]
-    assert gastos.formatear(0.13) not in e["texto"]
+    assert e["usd_precio"] == round(0.09 * MARGEN, 4)               # PND-110: el guion cuesta 0,09
+    assert gastos.formatear(0.09 * MARGEN) in e["texto"]
+    assert gastos.formatear(0.09) not in e["texto"]
 
 
 def test_fuera_de_una_peticion_no_hay_margen():
     import gastos
     e = gastos.estimar("guion")
     assert e["usd"] == e["usd_precio"] == gastos.TARIFAS["guion"]
-    assert gastos.formatear(0.13) in e["texto"]
+    assert gastos.formatear(0.09) in e["texto"]
     assert gastos.margen_vigente() == 1.0
 
 
@@ -199,7 +199,7 @@ def test_el_guion_y_las_finales_muestran_el_precio(libro, app_config, monkeypatc
     cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", enfoque="producto", usd=0.85)
     ruta = f"/cliente/acme/creative_flow/{cf_id}/final/detalle"
     detalle = app_config["c"].get(ruta).data.decode()
-    assert "Preparar guion con IA ≈ US$ 0,20" in detalle            # 0,13 × 1,5
+    assert "Preparar guion con IA ≈ US$ 0,14" in detalle            # 0,09 × 1,5 (PND-110)
     cf.guardar_guion_base("acme", cf_id, GUION_BASE)
     detalle = app_config["c"].get(ruta).data.decode()
     assert ">Producir finales ≈ US$ 0,30 c/u</button>" in detalle   # 0,20 × 1,5

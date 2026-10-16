@@ -182,7 +182,7 @@ def test_estimar_sin_tarifa_no_inventa(monkeypatch):
 
 def test_estimar_tarifas_fijas_y_final_por_pais():
     import gastos
-    assert gastos.estimar("guion") == {"usd": 0.13, "usd_precio": 0.13, "texto": "US$ 0,13 aprox.",
+    assert gastos.estimar("guion") == {"usd": 0.09, "usd_precio": 0.09, "texto": "US$ 0,09 aprox.",
                                        "detalle": "hasta dos llamadas a Claude y la transcripción de la referencia"}
     assert gastos.estimar("regla_producto")["usd"] == 0.01
     assert gastos.estimar("caption_organico")["usd"] == 0.06   # el peor caso con el pensamiento (revisión 2026-10-15)
