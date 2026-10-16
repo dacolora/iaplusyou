@@ -289,6 +289,44 @@ def _sin_posible_cobro(cliente, lanzamiento):
                                 detalle=gettext("WaveSpeed no creó el pedido: no se cobró"))
 
 
+def _anotar_espera_rendida(cliente, cf_id, pred, entry, modelo, duracion, calidad, ref):
+    """PND-331 (decisión 2026-10-15, lote 2): la recuperación deja de preguntar a las 2 h sin traer el video, y el
+    proveedor casi seguro lo terminó y lo cobró. Su estimado queda en Gasto con `entregado=False` (el costo a la
+    vista, nada cobrado al cliente) en la referencia del intento que lo pagó (la de la predicción si ya tenía una; si
+    no, la de esta tarea), y la predicción la recuerda: «Recuperar» la traslada a su entrega y ahí se cobra. Nunca
+    lanza: el gasto es un registro, no la pieza."""
+    ref_cobro = pred.get("referencia_gasto") or ref
+    try:
+        costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=entry.get("con_sonido", True) is not False,
+                                                calidad=calidad, **_kw_videos(modelo, entry))
+        detalle = gettext("%(modelo)s · %(n)s s · se dejó de esperar a las 2 h; el proveedor lo cobra igual",
+                          modelo=modelo, n=int(duracion or 0))
+        _registrar_gasto(cliente, "video", costo, ref_cobro, modelo, detalle, entregado=False)
+        if pred.get("referencia_gasto") != ref_cobro:
+            creative_flow.actualizar(cliente, cf_id, prediccion=dict(pred, referencia_gasto=ref_cobro))
+    except Exception:  # noqa: BLE001 — sin estimado no hay línea; la tarjeta igual ofrece «Recuperar»
+        pass
+
+
+def _trasladar_lo_pendiente(cliente, cf_id, pred, ref_origen, ref_entrega, costo, modelo, detalle):
+    """PND-331: la pieza recuperada se lleva lo que el proveedor cobró y al cliente no se le cobró (lo anotado al
+    rendirse, al fallar la descarga o como posible cobro de un lanzamiento incierto): la fila de origen baja y la de
+    esta entrega lo suma y lo cobra (`gastos.registrar_trasladando`, como «Recuperar el resultado» de un swap). True
+    si movió algo; si no (un proyecto que no cobra, o el origen ya estaba cobrado) quien llama corrige el origen como
+    siempre. La predicción pasa a nombrar la fila de la entrega: si esta tarea falla después y se devuelve su cobro,
+    la próxima recuperación lo encuentra ahí."""
+    usd_modelo = round(float((costo or {}).get("usd") or 0.0), 4)
+    _, movido = gastos.registrar_trasladando_seguro(
+        cliente, "video", 0, ref_entrega, [{"referencia": ref_origen}], detalle=detalle,
+        proveedor=flowplus_modelos.proveedor_de(modelo),
+        extra={"modelo": modelo, "usd_modelo": usd_modelo, "usd_musica": 0.0, "credits": (costo or {}).get("credits")})
+    if not movido:
+        return False
+    if pred.get("id"):
+        creative_flow.actualizar(cliente, cf_id, prediccion=dict(pred, referencia_gasto=ref_entrega))
+    return True
+
+
 def anotar_posible_cobro_al_descartar(cliente, cf_id, entry):
     """«Descartar» una pieza cuyo pedido pudo cobrarse sin que llegara el video
     (lanzamiento incierto sin resolver, o una predicción conocida que no se
@@ -891,7 +929,9 @@ def recuperar_video(tarea):
         edad = _edad_s(pred)
         if edad < ESPERA_MAXIMA:
             return _seguir_esperando(cliente, cf_id, pred["id"], modelo, entry)
-        # Más de 2 h: se deja de esperar solo; la tarjeta conserva el botón y el id.
+        # Más de 2 h: se deja de esperar solo; la tarjeta conserva el botón y el id. Lo que el proveedor casi
+        # seguro cobró queda anotado sin cobrarlo (PND-331).
+        _anotar_espera_rendida(cliente, cf_id, pred, entry, modelo, duracion, calidad, ref)
         agotada = wavespeed_common.EsperaAgotada(nombre, pred["id"], edad)
         agotada.proveedor = proveedor
         creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(agotada, cliente))
@@ -900,7 +940,12 @@ def recuperar_video(tarea):
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         if isinstance(e, wavespeed_common.ErrorProveedor):
-            # Terminó sin video (falló, se canceló): no queda nada que recuperar.
+            # Terminó sin video (falló, se canceló): no queda nada que recuperar. Solo «failed» dice que el
+            # proveedor no lo terminó (y no lo cobró): lo anotado como posible cobro vuelve a 0 (PND-331, como el
+            # swap); uno cancelado o borrado de su lado pudo cobrarse y no se toca.
+            if pred.get("referencia_gasto") and str(getattr(e, "estado", "") or "").lower() == "failed":
+                gastos.registrar_seguro(cliente, "video", 0.0, pred["referencia_gasto"], entregado=False,
+                                        detalle=gettext("%(modelo)s no terminó el video; no lo cobró", modelo=nombre))
             creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(e, cliente), prediccion=None)
             raise
         if _edad_s(pred) < ESPERA_MAXIMA:
@@ -932,6 +977,7 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     # descarga se cierre desde otra tarea (PND-109, 2026-10-02).
     ref_intento = ref
     costo = None
+    trasladado = False
     # El `detalle` del gasto se guarda (Configuración › Gasto): en el idioma del
     # proyecto, que ya puso worker.ejecutar.
     partes = [f"{modelo} · {int(duracion)} s"]
@@ -958,7 +1004,11 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         os.makedirs(out_dir, exist_ok=True)     # por si la limpieza diaria la borró mientras bajaba
         with open(out_path, "wb") as f:
             f.write(resp.content)
-        _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto)
+        if recuperado and ref != ref_intento:
+            # PND-331: lo que quedó anotado sin cobrar en el intento que pagó pasa a esta entrega y ahí se cobra.
+            trasladado = _trasladar_lo_pendiente(cliente, cf_id, pred, ref, ref_intento, costo, modelo, detalle_gasto)
+        if not trasladado:
+            _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto)
         bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
     except Exception as e:
         # El video existe en WaveSpeed y ya se cobró: la sesión conserva la
@@ -1059,7 +1109,10 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
                                extra={"usd_musica": usd_musica},
                                entregado=(capas.get("musica") or {}).get("estado") != "error")
         usd_musica = 0.0
-    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
+    if not trasladado:
+        # (Trasladado, el video ya quedó en la fila de esta entrega y la de origen en 0: re-anotarla lo contaría dos
+        # veces; una pista nueva va aparte, en `<ref_intento>:musica`.)
+        _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
 
     # El gasto de la pista ya quedó anotado si fallara persistir video_listo.
     # Las referencias hacen idempotente una recuperación de esta misma tarea.

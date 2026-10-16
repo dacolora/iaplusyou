@@ -8667,6 +8667,9 @@ def cf_recuperar(cliente, cf_id):
     if not entry or entry.get("estado") != "error" or not recuperable or (entry.get("tipo") or "video") == "imagen":
         flash(gettext("Esa pieza no tiene nada que recuperar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # PND-331: lo que el proveedor cobró y no se le cobró se cobra al llegar (gastos.registrar_trasladando), con el
+    # precio en el botón y el freno de saldo ANTES de tocar la pieza, como «Recuperar el resultado» de un swap.
+    libro_cobros.exigir(cliente, flowplus_lanzar.costo_estimado(entry), job_id=_job_id_creative_flow(cliente, cf_id))
     # Mismo orden que flowplus_lanzar.lanzar: el estado va ANTES de encolar.
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
     encolado = trabajos.encolar(

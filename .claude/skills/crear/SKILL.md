@@ -118,7 +118,8 @@ Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESP
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
 devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
 —el hilo queda libre entre vueltas— mientras la predicción tenga menos de `ESPERA_MAXIMA` (2 h); recién después
-queda el botón. El sondeo aguanta hasta `FALLOS_SEGUIDOS` (6) cortes de red o 5xx seguidos, y un error que no sea
+queda el botón, y al rendirse el estimado queda en Gasto con `entregado=False` en la referencia del intento
+(`_anotar_espera_rendida`; la predicción guarda esa `referencia_gasto`): WaveSpeed casi seguro lo cobró (PND-331). El sondeo aguanta hasta `FALLOS_SEGUIDOS` (6) cortes de red o 5xx seguidos, y un error que no sea
 `ErrorProveedor` (estado final fallido) nunca borra el id: se sigue esperando. Un reinicio del worker corta esas esperas enseguida
 (`wavespeed_common.fijar_detener` + `cortable()`, solo en las tareas que saben retomar; un swap o una imagen
 siguen como antes) y el gancho `interrumpida` retoma por la predicción un video que quedó a medias por un
@@ -321,3 +322,14 @@ de marca en el proyecto (`dashboard._revision_marca_swap`), `gastos.estimar("swa
 lo que cobra cada intento: la imagen (entregado), un `ReadTimeout` (Google pudo generarla y cobrarla) y una
 respuesta sin imagen (su `usageMetadata`). Al cliente solo se le cobra el intento que entregó; los otros van en
 `swap:<id>:t<tarea>:intentos` con `entregado=False`, también cuando el swap falla.
+
+**«Recuperar» cobra lo que el proveedor ya cobró (PND-331, decisión 2026-10-15, lote 2).** Lo anotado sin cobrar en el
+intento que pagó (al rendirse a las 2 h, al fallar la descarga, el posible cobro de un lanzamiento incierto) se corregía
+bajo la misma referencia y nunca se cobraba (`cobrar_gasto` con `nuevo=False` no estrena cobro). Ahora
+`_terminar_video(recuperado=True)` lo pasa a la fila de esta entrega con `gastos.registrar_trasladando`
+(`_trasladar_lo_pendiente`: el origen baja, la entrega lo suma y lo cobra, la predicción pasa a nombrar la entrega) y no
+re-anota el origen; una pista nueva va aparte en `<ref>:musica`. Un proyecto que no cobra (o un origen ya cobrado) sigue
+como antes: se corrige la fila de origen. Solo «failed» del proveedor pone la línea en 0. Por eso el botón dice «Recuperar
+el video (se cobra ≈ X)» (`costo_estimado` de la sesión) y `cf_recuperar` pasa por `libro.exigir(..., job_id=)` antes de
+tocar la pieza; la recuperación automática de la cadena (`Continuar`) usa la reserva del lanzamiento. Pruebas:
+`tests/test_crear_recuperar_cobro.py`.

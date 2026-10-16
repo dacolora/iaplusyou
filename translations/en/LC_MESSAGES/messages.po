@@ -477,6 +477,10 @@ msgid "%(modelo)s no terminó el swap; no cobró"
 msgstr "%(modelo)s didn't finish the swap; it didn't charge"
 
 #, python-format
+msgid "%(modelo)s no terminó el video; no lo cobró"
+msgstr "%(modelo)s didn't finish the video; it didn't charge"
+
+#, python-format
 msgid "%(modelo)s rechazó el contenido por sensible (el texto o las imágenes): cambia la escena y vuelve a generar. No se cobró. Detalle: %(detalle)s"
 msgstr "%(modelo)s rejected the content as sensitive (the text or the images): change the scene and generate again. Nothing was charged. Detail: %(detalle)s"
 
@@ -519,6 +523,10 @@ msgstr "%(modelo)s · %(n)s reference(s) · the wait ran out; the model charges 
 #, python-format
 msgid "%(modelo)s · %(n)s s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo confirmar"
 msgstr "%(modelo)s · %(n)s s · possible charge: WaveSpeed didn't respond at launch and it couldn't be confirmed"
+
+#, python-format
+msgid "%(modelo)s · %(n)s s · se dejó de esperar a las 2 h; el proveedor lo cobra igual"
+msgstr "%(modelo)s · %(n)s s · we stopped waiting after 2 h; the provider charges it anyway"
 
 #, python-format
 msgid "%(modelo)s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo confirmar"
@@ -16513,6 +16521,10 @@ msgstr "Recover the result"
 #, python-format
 msgid "Recuperar el resultado (se cobra ≈ %(precio)s)"
 msgstr "Recover the result (charged ≈ %(precio)s)"
+
+#, python-format
+msgid "Recuperar el video (se cobra ≈ %(precio)s)"
+msgstr "Recover the video (charged ≈ %(precio)s)"
 
 msgid "Recuperar el video (sin pagar de nuevo)"
 msgstr "Recover the video (without paying again)"
