@@ -189,6 +189,14 @@ msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde
 msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s). From now on those items are charged at the member price."
 
 #, python-format
+msgid "%(cliente)s: Wompi anuló un pago de plan (%(referencia)s) antes de que lo aplicáramos. No se acreditó nada y una aprobación que llegue después no lo suma. La renovación automática quedó detenida: no se volverá a cobrar la tarjeta."
+msgstr "%(cliente)s: Wompi voided a plan payment (%(referencia)s) before we applied it. Nothing was credited and an approval that arrives later will not add it. Automatic renewal is stopped: the card will not be charged again."
+
+#, python-format
+msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s) y su evento no llegó: lo encontramos revisando los pagos aprobados. La renovación automática quedó detenida y lo que quedaba de la bolsa de ese pago venció. Revisa en el panel de Wompi la URL de eventos."
+msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s) and its event never arrived: we found it while checking approved payments. Automatic renewal is stopped and what was left of that payment's plan balance expired. Check the events URL in the Wompi dashboard."
+
+#, python-format
 msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). La renovación automática quedó detenida hasta que actúes: no se volverá a cobrar la tarjeta. Lo que quedaba de la bolsa de ese pago venció y, si era anual, los meses que faltan ya no se abren. Si fue un contracargo, revisa lo que el proyecto ya había gastado de esa bolsa."
 msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). Automatic renewal is stopped until you act: the card will not be charged again. What was left of that payment's plan balance expired and, if it was yearly, the remaining months will not open. If it was a chargeback, check what the project had already spent from that balance."
 

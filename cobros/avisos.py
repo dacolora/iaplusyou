@@ -284,7 +284,8 @@ def plan(tipo, cliente, **datos):
                                           nota=datos.get("nota") or "—"),
                          }.get(motivo, gettext("%(cliente)s: se acabó lo pagado y no se renueva.", cliente=cliente)),
                 cliente=cliente)
-        if tipo in ("no_cuadra", "huerfano", "anulado", "aprobado_tras_final"):
+        if tipo in ("no_cuadra", "huerfano", "anulado", "aprobado_tras_final", "anulado_sin_acreditar",
+                    "anulado_sin_evento"):
             return plan_admin(tipo, cliente, referencia=datos.get("referencia") or "")
     except Exception:  # noqa: BLE001
         log.exception("aviso de plan %s a %s no salió", tipo, cliente)
@@ -306,6 +307,18 @@ def plan_admin(tipo, cliente, referencia=""):
                                    "meses que faltan ya no se abren. Si fue un contracargo, revisa lo que el "
                                    "proyecto ya había gastado de esa bolsa.",
                                    cliente=cliente, referencia=referencia),
+        # PND-340: anulado antes de aplicarse su aprobación (los eventos llegan en desorden).
+        "anulado_sin_acreditar": lambda: gettext("%(cliente)s: Wompi anuló un pago de plan (%(referencia)s) antes "
+                                                 "de que lo aplicáramos. No se acreditó nada y una aprobación que "
+                                                 "llegue después no lo suma. La renovación automática quedó "
+                                                 "detenida: no se volverá a cobrar la tarjeta.",
+                                                 cliente=cliente, referencia=referencia),
+        # PND-341: la periódica encontró la anulación de un pago aprobado cuyo evento no llegó.
+        "anulado_sin_evento": lambda: gettext("%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s) "
+                                              "y su evento no llegó: lo encontramos revisando los pagos aprobados. "
+                                              "La renovación automática quedó detenida y lo que quedaba de la bolsa "
+                                              "de ese pago venció. Revisa en el panel de Wompi la URL de eventos.",
+                                              cliente=cliente, referencia=referencia),
         "aprobado_tras_final": lambda: gettext("%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) que ya "
                                                "estaba rechazado, con error o anulado. No se acreditó nada: míralo en "
                                                "el panel de Wompi y devuélvelo si se cobró de más.",

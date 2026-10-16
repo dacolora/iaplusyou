@@ -92,7 +92,8 @@ Saldo › Movimientos. Pruebas: `tests/test_cobros_uso_previo.py`.
 | `cobros/rutas.py` | Blueprint: `/cliente/<c>/saldo/…`, `/pagos/bold/webhook`, `/pagos/wompi/eventos`, `/pagos/csp/tarjeta`, `/admin/cobros…` | nada directo: llama a los de arriba |
 | `tareas/cobros.py` | `cobros_verificar_recargas`, periódica cada 10 min (`worker.py`) | vía `recargas.verificar_pendientes` |
 | `cobros/planes.py` | planes, suscripciones, cobro de cada renovación, `aplicar_transaccion`, `renovar_todo`, cancelar/terminar/cambiar tarjeta/a mano, `estado_cliente` | **ÚNICO escritor** de `plan`, `suscripcion`, `periodo_plan`, `pago_plan` y de `kv` `planes:aceptacion:<suscripción>` (el libro escribe sus movimientos en la misma transacción) |
-| `tareas/planes.py` | `planes_renovar`, periódica cada 30 min (`worker.py`), exenta de cobro (ingreso, no gasto) | vía `planes.renovar_todo` |
+| `tareas/planes.py` | `planes_renovar`, periódica cada 30 min (`worker.py`), exenta de cobro (ingreso, no gasto) | vía `planes.renovar_todo` y `planes_revision.revisar_aprobados` |
+| `cobros/planes_revision.py` | PND-341: relee por id los pagos de plan de Wompi aprobados de los últimos 30 días; un VOIDED va por `planes.aplicar_transaccion(tx, sin_evento=True)` | solo `kv` `planes:revision:<pago>` (lo demás, vía `planes`) |
 
 Tablas (migración `0033_cobros`, `down_revision` 0032 = `0032_triple_whale_varias_tiendas` de main; era la 0032 en la rama y se renumeró al mezclar main el 2026-10-08): `cuenta_saldo` (cobrar, margen NULL = global, `umbral_aviso`), `movimiento_saldo` (el libro, `UNIQUE(tipo, gasto_id)`, `UNIQUE(tipo, recarga_id)` y, desde 0038, `periodo_id` con `UNIQUE(tipo, periodo_id)`), `reserva_saldo` (PK `(cliente, job_id)`; desde 0038 también `margen`, `incluido`, `periodo_id` y `costo_usd`: el precio visto al encolar), `recarga` (`referencia`, `pago_id` y, desde 0038, `pasarela_ref` únicos), `pago_evento` (cada notificación de Bold, `UNIQUE(proveedor, evento_id)`). Nadie más hace INSERT/UPDATE/DELETE en ellas. **Planes (migración `0038_planes_wompi`, `down_revision` 0037 = `0037_tw_gancho` de main; era la 0035 en la rama y se renumeró al mezclar main el 2026-10-10, porque allá ya existían `0035_meta_rendimiento`, `0036_tw_visitantes` y `0037_tw_gancho`; tablas `plan`, `suscripcion`, `periodo_plan`, `pago_plan`; las escribe `cobros/planes.py`)**: a lo más una suscripción no terminada por cliente (índice único parcial `uq_suscripcion_viva`); el plan «Pro» se siembra archivado. Los tests de cobros que suponen margen 1,5 lo fijan con el fixture `margen_1_5` (`tests/conftest.py`).
 
@@ -224,6 +225,16 @@ Una morosa no tiene periodo abierto, así que no mezcla renovación ni bolsa. Lo
 - **La bolsa de un periodo es la que compró su pago** (`pago_plan.precio_mes_usd`), no el precio del plan de ese día: un anual abre doce periodos con la misma foto. El `gastado` de la bolsa cuenta un reverso solo si su cobro también cayó en el periodo (si no, devolver un cobro del mes anterior inflaba la bolsa y el vencimiento se llevaba plata propia).
 - **Se cobra una hora antes de que termine lo pagado** (`ADELANTO_COBRO`): con la periódica cada 30 min, cobrar justo al vencer dejaba al cliente hasta media hora a precio a la carta o bloqueado. El crédito del mes nuevo aparece hasta una hora antes.
 - **Activar a mano SIEMPRE apaga la renovación con tarjeta** (`renovar=False`) y no toca el precio aceptado: un pago por transferencia no autoriza otro monto en la tarjeta. Una anulación (VOID) de un pago de plan aprobado deja la suscripción `cancelada` (no solo `renovar=False`): así cambiar de tarjeta no reactiva la renovación; el admin reactiva con una suscripción nueva. Desde 2026-10-12 además vence la bolsa de los periodos de ese pago.
+- **Pagos de plan anulados (PND-340 y PND-341, 2026-10-15; los gemelos de PND-328 y PND-304 b).** Los eventos llegan
+  en desorden: un `VOIDED` de un `pago_plan` todavía `pendiente` lo deja `anulado` con esa transacción y sin crédito
+  (`anulado_sin_acreditar`, aviso `plan_admin`), y la suscripción queda `cancelada` sin renovación (la tarjeta no se
+  vuelve a cobrar sola; un alta sin nada pagado termina en la periódica). El `APPROVED` de ese pago que llegue después,
+  aunque venga firmado, es `ya_anulada`: ni crédito, ni periodo, ni otro aviso (antes acreditaba un pago anulado). Y la
+  periódica `planes_renovar` corre `planes_revision.revisar_aprobados`: relee POR ID los pagos de plan aprobados de los
+  últimos 30 días (cada 2 h los dos primeros días, después una vez al día, 20 por vuelta, para con caída/429/401/403,
+  nada sin Wompi configurado); un `VOIDED` de ese pago se aplica como el evento (la bolsa de ese pago vence, la
+  suscripción se cancela, una sola vez por el UPDATE condicional) y el aviso `anulado_sin_evento` dice que el evento no
+  llegó. Pruebas: `tests/test_planes_anulaciones.py`.
 - **«No se cobró» y «Activar a mano»** (admin): «No se cobró» cuenta como cobro fallido y espera 30 min del último intento (`ESPERA_NO_COBRADO`), porque un pendiente en vuelo todavía puede aprobarse; «Activar a mano» exige «Cobrar» prendido; la nota del admin va solo al log (el motivo del pago lo ve el cliente).
 - **La constancia de aceptación vive en `kv` `planes:aceptacion:<suscripcion>`** (tokens y hora; la columna no existe). No hay limpieza de esa clave: es la prueba si Wompi o el cliente discuten el cobro.
 - **Las llaves de pruebas solo funcionan con host local**; con `PLATAFORMA_URL` real `configurado()` da False. Un valor falso de llave en una prueba lleva `llave-de-prueba` en la línea (la guarda del commit).
@@ -284,8 +295,8 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   `_aplicar_wompi` bajo el candado tomado antes de leer → `anulada` + `anulacion_wompi` (el reverso del saldo; el saldo
   puede quedar negativo) y aviso al admin que dice que el evento no llegó. Ningún reverso dos veces: el `UPDATE … WHERE estado = 'aprobada'
   AND pasarela_ref = <id>` y `UNIQUE(tipo, recarga_id)` del libro (el evento tardío queda `ignorada`). Una anulación
-  que no cuadra (otro comercio) no descuenta y avisa `wompi_no_cuadra`. Los pagos de PLAN no tienen esta revisión:
-  su anulación sigue llegando solo por el evento firmado.
+  que no cuadra (otro comercio) no descuenta y avisa `wompi_no_cuadra`. Los pagos de PLAN tienen su gemela desde
+  PND-341 (abajo, «Pagos de plan anulados»).
 - **Cobros de plan inciertos** (`planes._buscar_en_wompi`): antes de un «reintentar», tras un 422 de referencia usada
   y en una cancelada con el cobro en el aire, se busca la referencia; solo vale si la transacción salió de la fuente de
   pago de ESA suscripción (`payment_source_id`), por sus centavos exactos, en COP y de nuestro comercio (con ids
