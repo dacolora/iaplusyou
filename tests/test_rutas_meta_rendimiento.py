@@ -1044,6 +1044,32 @@ def test_evaluar_si_el_margen_cambio_desde_que_vio_el_precio_no_cobra(conectado)
     assert len(_evaluaciones()) == 1
 
 
+@pytest.mark.parametrize("como", ["sin_token", "sin_cuentas"])
+def test_pnd297_si_meta_se_desconecta_mientras_se_prepara_la_fila_no_queda(conectado, monkeypatch, como):
+    """PND-297 (decisión 2026-10-13): la muestra se arma antes de crear la fila; si Meta se desconecta en ese rato (el
+    borrado de evaluaciones ya pasó), la fila nueva con nombres y cifras de Meta no se queda, no se encola y no se
+    reserva nada. `sin_cuentas`: la desconexión soltó las cuentas pero hay token (volver de agencia a la app propia
+    restaura su conexión)."""
+    from meta_rendimiento import soltar
+    _sembrar()
+    _cobra(milesimas=50_000)
+    crear = datos.crear_evaluacion
+
+    def _se_desconecto_antes(*a, **k):
+        # Meta se desconecta entre la muestra y la fila: se va el token (o no) y `soltar` borra cuentas y evaluaciones.
+        if como == "sin_token":
+            monkeypatch.setattr(conectado["dashboard"].meta_conexion, "cargar", lambda c: {})
+        soltar.soltar("acme")
+        return crear(*a, **k)
+    monkeypatch.setattr(datos, "crear_evaluacion", _se_desconecto_antes)
+    r = conectado["c"].post(EVALUAR, data=_visto())
+    assert r.status_code == 302
+    assert _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.reserva_saldo)).scalar() == 0
+    assert any("Meta se desconectó mientras se preparaba la evaluación" in m for m in _flashes(conectado["c"]))
+
+
 def test_evaluar_si_encolar_falla_por_saldo_borra_la_fila(conectado, monkeypatch):
     from cobros import SaldoInsuficiente
     from tareas import meta_rendimiento as tmr

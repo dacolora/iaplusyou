@@ -12783,6 +12783,9 @@ msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once i
 msgid "Meta se desconectó en %(proyecto)s, pero no se pudieron borrar sus métricas copiadas (%(tipo)s). Avisa al administrador."
 msgstr "Meta was disconnected in %(proyecto)s, but its copied metrics could not be deleted (%(tipo)s). Let the administrator know."
 
+msgid "Meta se desconectó mientras se preparaba la evaluación: no se creó ni se cobró nada."
+msgstr "Meta was disconnected while the evaluation was being prepared: nothing was created or charged."
+
 msgid "Meta siguió pidiendo esperar después de varios intentos: el detalle quedó incompleto. Actualiza el experimento más tarde para completarlo."
 msgstr "Meta kept asking us to wait after several attempts: the detail is incomplete. Update the experiment later to complete it."
 
