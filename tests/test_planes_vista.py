@@ -407,8 +407,10 @@ def test_nequi_solo_con_un_token_que_pidio_esta_sesion(base, pagina, pro, falso,
     assert c.post("/cliente/acme/plan/nequi", data={"celular": "12345"}).status_code == 400
     d = c.post("/cliente/acme/plan/nequi", data={"celular": "300 123 4567"}).get_json()
     assert d["ok"] and d["token"] == "nequi_test_1"
+    assert "nequi_test" not in d["estado_url"]                            # PND-349: el token no va en la URL
     assert c.get(d["estado_url"]).get_json() == {"estado": "PENDING"}
     assert pagina().get(d["estado_url"]).status_code == 404               # otra sesión no lo sondea
+    assert c.get("/cliente/acme/plan/nequi/nequi_test_1/estado").status_code == 404   # la ruta vieja ya no existe
     pagina().post("/cliente/acme/plan/alta", data=_form_alta(pro, tipo="NEQUI", token="nequi_test_1"))
     assert falso.fuentes == []                                            # token de otra sesión: no
     falso.nequi["nequi_test_1"] = "APPROVED"
@@ -418,6 +420,22 @@ def test_nequi_solo_con_un_token_que_pidio_esta_sesion(base, pagina, pro, falso,
     c.post("/cliente/acme/plan/alta", data=_form_alta(pro, tipo="NEQUI", token="nequi_test_1"))
     assert [f[:2] for f in falso.fuentes] == [("NEQUI", "nequi_test_1")]
     assert planes.suscripcion("acme")["medio_fuente"] == "NEQUI"
+
+
+def test_pnd349_el_sondeo_de_nequi_sigue_el_ultimo_token_de_la_sesion(base, pagina, pro, falso, avisos):
+    """PND-349: sin el token en la ruta, el sondeo mira el ÚLTIMO que pidió esta sesión (el que la página espera)."""
+    from cobros import rutas
+    _cobra()
+    c = pagina()
+    uno = c.post("/cliente/acme/plan/nequi", data={"celular": "3001234567"}).get_json()
+    dos = c.post("/cliente/acme/plan/nequi", data={"celular": "3001234567"}).get_json()
+    assert uno["estado_url"] == dos["estado_url"] == "/cliente/acme/plan/nequi/estado"
+    falso.nequi["nequi_test_1"] = "APPROVED"                              # el viejo aprobado no cuenta
+    rutas._ULTIMA_VERIFICACION.clear()
+    assert c.get(dos["estado_url"]).get_json() == {"estado": "PENDING"}
+    falso.nequi["nequi_test_2"] = "DECLINED"
+    rutas._ULTIMA_VERIFICACION.clear()
+    assert c.get(dos["estado_url"]).get_json() == {"estado": "DECLINED"}
 
 
 # --- cancelar, cambiar tarjeta y otro proyecto ---------------------------------------------

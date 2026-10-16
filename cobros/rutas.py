@@ -737,17 +737,21 @@ def plan_nequi(cliente):
     except wompi.ErrorWompi as e:
         return jsonify({"ok": False, "error": cola.sin_token(str(e))}), 502
     session[_SESION_NEQUI] = ([t for t in (session.get(_SESION_NEQUI) or []) if t != token] + [token])[-5:]
-    return jsonify({"ok": True, "token": token,
-                    "estado_url": url_for("cobros.plan_nequi_estado", cliente=cliente, token=token)})
+    # El token va en el cuerpo (el formulario lo manda de vuelta al aprobar), nunca en una URL (PND-349).
+    return jsonify({"ok": True, "token": token, "estado_url": url_for("cobros.plan_nequi_estado", cliente=cliente)})
 
 
-@bp.get("/cliente/<cliente>/plan/nequi/<token>/estado")
-def plan_nequi_estado(cliente, token):
-    """PENDING, APPROVED o DECLINED de un token de Nequi que pidió esta sesión
-    (como mucho una consulta cada 3 s por token y con cupo; si no, PENDING)."""
+@bp.get("/cliente/<cliente>/plan/nequi/estado")
+def plan_nequi_estado(cliente):
+    """PENDING, APPROVED o DECLINED del último token de Nequi que pidió esta
+    sesión (como mucho una consulta cada 3 s por token y con cupo; si no,
+    PENDING). PND-349 (2026-10-15): el token ya no va en la ruta, que queda en
+    los registros de acceso de nginx y gunicorn; sale de la sesión."""
     _exigir_plan(cliente)
-    if token not in (session.get(_SESION_NEQUI) or []):
+    tokens = session.get(_SESION_NEQUI) or []
+    if not tokens:
         abort(404)
+    token = tokens[-1]
     estado = "PENDING"
     if _toca_verificar(f"nequi:{token}") and _SEMAFORO.acquire(blocking=False):
         try:
