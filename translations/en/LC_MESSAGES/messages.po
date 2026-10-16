@@ -2040,6 +2040,9 @@ msgstr "(not chosen)"
 msgid "(sin país)"
 msgstr "(no country)"
 
+msgid "(sin ruta)"
+msgstr "(no route)"
+
 msgid "(sin señales)"
 msgstr "(no signals)"
 

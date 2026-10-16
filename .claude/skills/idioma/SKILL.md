@@ -111,3 +111,8 @@ PND-243 (2026-10-15): el nombre de un modelo de `flowplus_modelos` es un msgid (
 con `m.nombre|traducir` (selectores del lote de Sprints); `nombre_modelo` devuelve el msgid. «Seedance 2.5 · varias
 referencias» salía sin traducir en inglés. Pruebas `*pnd243*` en `test_rutas_crear_director.py` y
 `test_sprints_tablero_entrega2.py`.
+
+PND-280 (2026-10-15, decisión 2026-10-13): una petición sin endpoint (un 404) se mide en `monitoreo.METRICAS` con la
+clave neutra `monitoreo.SIN_RUTA` («-»), nunca con un texto en español; `admin_salud.html` pinta la etiqueta
+traducida «(sin ruta)» con su macro `ruta_visible`. Antes `/admin/salud` fallaba la barrida en inglés según el orden de
+las pruebas. Pruebas: `test_salud_con_un_404_medido_sigue_en_ingles` y `test_monitoreo.py::test_cada_peticion_queda_medida`.

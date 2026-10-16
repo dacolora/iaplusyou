@@ -252,7 +252,7 @@ def _medir_fin(estado):
     # El usuario solo se anota en las lentas, y nunca en un estático: leer la
     # sesión agrega «Vary: Cookie» y un CSS dejaría de ser cacheable igual para todos.
     usuario = session.get("usuario") if ms >= monitoreo.LENTA_MS and request.endpoint != "static" else None
-    monitoreo.METRICAS.terminar(request.endpoint or "(sin ruta)", estado, ms, monitoreo.consultas_del_hilo(),
+    monitoreo.METRICAS.terminar(request.endpoint or monitoreo.SIN_RUTA, estado, ms, monitoreo.consultas_del_hilo(),
                                 url=request.path, usuario=usuario)
 
 

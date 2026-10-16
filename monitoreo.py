@@ -278,6 +278,11 @@ def limpiar(dias=DIAS_CONSERVAR, max_filas=MAX_FILAS):
 BORDES_MS = (10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000)
 
 
+# Clave neutra de una petición sin endpoint (un 404): la etiqueta «(sin ruta)»
+# se traduce al pintar /admin/salud, nunca se guarda en español (PND-280).
+SIN_RUTA = "-"
+
+
 class Metricas:
     """Peticiones del proceso web desde que arrancó. Un candado; cada petición
     cuesta unos microsegundos."""

@@ -52,6 +52,20 @@ def test_paginas_de_admin_en_ingles_sin_idioma_guardado(produccion, url):
     assert not fugas, (url, fugas[:15])
 
 
+def test_salud_con_un_404_medido_sigue_en_ingles(produccion):
+    """PND-280: si antes corrió una petición sin ruta (un 404), /admin/salud la lista
+    con su etiqueta traducida, no con «(sin ruta)» en español (fallaba según el orden)."""
+    import monitoreo
+    monitoreo.METRICAS.reiniciar()
+    c = _sesion(produccion, "admin", "admin", None)
+    assert c.get("/no-existe-pnd-280").status_code == 404
+    html = html_de(c, "/admin/salud")
+    assert "(sin ruta)" not in html and "(no route)" in html
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]
+    monitoreo.METRICAS.reiniciar()
+
+
 @pytest.mark.parametrize("url", ["/", "/login", "/recuperar", "/privacidad", "/terminos", "/eliminar-datos"])
 def test_paginas_publicas_en_ingles_sin_cookie(produccion, url):
     fugas = espanol_visible(html_de(produccion.app.test_client(), url))
