@@ -1546,9 +1546,79 @@ def _milesimas_manual(usd):
     return int(valor * 1000)
 
 
+# PND-347 (auditoría de seguridad de pagos 2026-10-12, decisión 2026-10-15): la cuenta de admin no tiene segundo factor
+# y con una sesión robada se creaba saldo a mano sin límite. Lo que se SUMA a mano en un día (recargas manuales y
+# ajustes positivos, todos los proyectos juntos) tiene un tope que el admin cambia en /admin/cobros pidiendo su clave
+# (`cuentas.confirmar_clave`). Los ajustes negativos y el saldo de bienvenida no cuentan.
+CLAVE_TOPE_MANUAL = "cobros:tope_manual_dia"   # kv, dólares (único escritor: este módulo)
+TOPE_MANUAL_DIA_DEFECTO = 2000
+
+
+def _tope_manual_milesimas(con):
+    crudo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == CLAVE_TOPE_MANUAL)).scalar()
+    try:
+        usd = Decimal(str(crudo)) if crudo is not None else Decimal(TOPE_MANUAL_DIA_DEFECTO)
+    except (InvalidOperation, ValueError):
+        usd = Decimal(TOPE_MANUAL_DIA_DEFECTO)
+    if not usd.is_finite() or usd < 0 or usd > MAX_MANUAL_USD:
+        usd = Decimal(TOPE_MANUAL_DIA_DEFECTO)
+    return int(usd * 1000)
+
+
+def _manual_de_hoy(con):
+    """Milésimas sumadas a mano desde las 00:00 de hoy (hora del servidor, la de `db.ahora`)."""
+    m = db.movimiento_saldo
+    hoy = datetime.now().strftime("%Y-%m-%dT00:00:00")
+    return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(m.c.milesimas), 0)).where(
+        m.c.creado_en >= hoy, m.c.milesimas > 0,
+        sa.or_(sa.and_(m.c.tipo == "recarga", m.c.concepto == "recarga_manual"),
+               sa.and_(m.c.tipo == "ajuste", m.c.concepto == "ajuste")))).scalar() or 0)
+
+
+def tope_manual():
+    """(lo sumado a mano hoy, el tope diario), en milésimas. Solo lee."""
+    with db.conectar() as con:
+        return _manual_de_hoy(con), _tope_manual_milesimas(con)
+
+
+def guardar_tope_manual(usd, usuario):
+    """El admin cambia el tope diario (la ruta ya pidió su clave). Dólares con hasta 2 decimales, de 0 (nada a mano)
+    a MAX_MANUAL_USD. Devuelve las milésimas guardadas; ValueError en palabras."""
+    mensaje = gettext("El tope diario va de %(min)s a %(max)s, con hasta 2 decimales.", min=_monto(0),
+                      max=_monto(MAX_MANUAL_USD * 1000))
+    try:
+        valor = Decimal(str(usd).strip().replace(",", "."))
+    except (InvalidOperation, ValueError):
+        raise ValueError(mensaje) from None
+    if (isinstance(usd, bool) or not valor.is_finite() or valor < 0 or valor > MAX_MANUAL_USD
+            or valor != valor.quantize(Decimal("0.01"))):
+        raise ValueError(mensaje)
+    texto = str(valor.quantize(Decimal("0.01")))
+    with db.conectar() as con:
+        if not con.execute(db.kv.update().where(db.kv.c.clave == CLAVE_TOPE_MANUAL)
+                           .values(valor=texto, actualizado_en=db.ahora())).rowcount:
+            con.execute(db.kv.insert().values(clave=CLAVE_TOPE_MANUAL, valor=texto, actualizado_en=db.ahora()))
+    log.info("tope diario de lo sumado a mano → %s (por %s)", texto, usuario)
+    return int(valor * 1000)
+
+
+def _dentro_del_tope(con, milesimas):
+    """Con el candado tomado ANTES de leer (dos clics a la vez no pasan juntos el tope): lo de hoy más esto no pasa
+    del tope diario. Lanza ValueError en palabras; quien llama no escribió nada todavía."""
+    if milesimas <= 0:
+        return
+    libro._candado(con)
+    hoy, tope = _manual_de_hoy(con), _tope_manual_milesimas(con)
+    if hoy + milesimas > tope:
+        raise ValueError(gettext("Con esto, lo sumado a mano hoy llegaría a %(total)s y el tope diario es %(tope)s. "
+                                 "Súbelo en /admin/cobros (te pedimos la clave) o espera a mañana.",
+                                 total=_monto(hoy + milesimas), tope=_monto(tope)))
+
+
 def manual(cliente, usd, usuario, nota, tipo="recarga"):
     """Recarga manual del admin (una transferencia, un pago por fuera) o un
-    ajuste (±, nota obligatoria). Devuelve el id del movimiento del libro."""
+    ajuste (±, nota obligatoria). Devuelve el id del movimiento del libro.
+    Lo que suma pasa por el tope diario (`_dentro_del_tope`, PND-347)."""
     if tipo not in ("recarga", "ajuste"):
         raise ValueError(gettext("El tipo tiene que ser recarga o ajuste."))
     milesimas = _milesimas_manual(usd)
@@ -1557,6 +1627,7 @@ def manual(cliente, usd, usuario, nota, tipo="recarga"):
         if not nota:
             raise ValueError(gettext("Un ajuste necesita una nota."))
         with db.conectar() as con:
+            _dentro_del_tope(con, milesimas)
             mov = libro.acreditar(con, cliente, "ajuste", milesimas, "ajuste", usuario=usuario, detalle=nota)
         if milesimas > 0:
             _en_segundo_plano(lambda: avisos.limpiar_aviso_bajo(cliente))
@@ -1565,6 +1636,7 @@ def manual(cliente, usd, usuario, nota, tipo="recarga"):
         raise ValueError(gettext("Una recarga manual es positiva; para descontar, usa un ajuste."))
     ahora = db.ahora()
     with db.conectar() as con:
+        _dentro_del_tope(con, milesimas)
         rid = int(con.execute(db.recarga.insert().values(
             cliente=cliente, creada_en=ahora, actualizada_en=ahora, medio="manual", estado="aprobada",
             milesimas=milesimas, referencia=f"tmp-{uuid.uuid4().hex[:20]}", usuario=usuario, nota=nota or None,

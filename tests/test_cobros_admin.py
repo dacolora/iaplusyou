@@ -11,6 +11,8 @@ from sqlalchemy import event
 
 pytestmark = pytest.mark.usefixtures("margen_1_5")   # estos tests suponen el margen 1,5 (el defecto ahora es 2,0)
 
+from tests.conftest import PASSWORD_PRUEBA  # noqa: E402 — la clave otra vez (PND-347)
+
 MISMO = {"Sec-Fetch-Site": "same-origin"}
 
 
@@ -192,8 +194,8 @@ def test_recarga_manual(http):
     from cobros import libro
     libro.configurar("acme", usuario="admin", cobrar=True)
     c = http.como("admin")
-    r = c.post("/admin/cobros/acme/recarga", data={"monto": "25", "nota": "transferencia", "tipo": "recarga"},
-               headers=MISMO)
+    r = c.post("/admin/cobros/acme/recarga", data={"monto": "25", "nota": "transferencia", "tipo": "recarga",
+                                                   "clave": PASSWORD_PRUEBA}, headers=MISMO)   # PND-347
     assert r.status_code == 302 and libro.saldo("acme") == 25_000
     assert not any("todavía no cobra" in m for m in _flashes(c))
 
@@ -201,7 +203,8 @@ def test_recarga_manual(http):
 def test_recarga_manual_a_un_proyecto_que_no_cobra_avisa(http):
     from cobros import libro
     c = http.como("admin")
-    c.post("/admin/cobros/otro/recarga", data={"monto": "10", "nota": "", "tipo": "recarga"}, headers=MISMO)
+    c.post("/admin/cobros/otro/recarga", data={"monto": "10", "nota": "", "tipo": "recarga", "clave": PASSWORD_PRUEBA},
+           headers=MISMO)
     assert libro.saldo("otro") == 10_000
     assert any("todavía no cobra" in m for m in _flashes(c))
 
@@ -209,7 +212,8 @@ def test_recarga_manual_a_un_proyecto_que_no_cobra_avisa(http):
 def test_ajuste_sin_nota_avisa_y_no_escribe(http):
     from cobros import libro
     c = http.como("admin")
-    c.post("/admin/cobros/acme/recarga", data={"monto": "-5", "nota": "  ", "tipo": "ajuste"}, headers=MISMO)
+    c.post("/admin/cobros/acme/recarga", data={"monto": "-5", "nota": "  ", "tipo": "ajuste", "clave": PASSWORD_PRUEBA},
+           headers=MISMO)
     assert libro.saldo("acme") == 0
     assert "Un ajuste necesita una nota." in _flashes(c)
     c.post("/admin/cobros/acme/recarga", data={"monto": "-5", "nota": "devolución", "tipo": "ajuste"}, headers=MISMO)
@@ -220,8 +224,10 @@ def test_ajuste_sin_nota_avisa_y_no_escribe(http):
 def test_recarga_manual_fuera_de_rango_avisa_sin_500(http, monto):
     from cobros import libro
     c = http.como("admin")
-    r = c.post("/admin/cobros/acme/recarga", data={"monto": monto, "nota": "x", "tipo": "ajuste"}, headers=MISMO)
+    r = c.post("/admin/cobros/acme/recarga", data={"monto": monto, "nota": "x", "tipo": "ajuste", "clave": PASSWORD_PRUEBA},
+               headers=MISMO)
     assert r.status_code == 302 and libro.saldo("acme") == 0 and _flashes(c)
+    assert not any("clave" in m for m in _flashes(c))       # el aviso es del monto, no de la clave (PND-347)
 
 
 @pytest.mark.parametrize("usd", ["1e20", 100_000.01, -100_000.01, "1e6"])
@@ -234,6 +240,7 @@ def test_manual_tiene_tope(entorno, usd):
 
 def test_manual_acepta_el_tope_justo(entorno):
     from cobros import libro, recargas
+    recargas.guardar_tope_manual("100000", "admin")          # PND-347: el tope diario también deja pasar 100 000
     recargas.manual("acme", "100000", "admin", "nota", tipo="recarga")
     recargas.manual("acme", -100_000, "admin", "nota", tipo="ajuste")
     assert libro.saldo("acme") == 0

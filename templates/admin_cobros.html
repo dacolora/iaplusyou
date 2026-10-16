@@ -47,9 +47,10 @@
 {% endif %}
 {% if trm_rechazada %}
 <div class="flash error" id="aviso-trm-rechazada">
-  {{ _('<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la última aceptada (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes).', hoy=trm_rechazada.valor_texto, antes=trm_rechazada.anterior_texto) }}
+  {{ _('<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la tasa de referencia (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes). Aceptarla la vuelve la referencia nueva.', hoy=trm_rechazada.valor_texto, antes=trm_rechazada.anterior_texto) }}
   <form method="post" action="{{ url_for('cobros.admin_trm_aceptar') }}">
     <input type="hidden" name="valor" value="{{ trm_rechazada.valor }}">
+    {% if not clave_reciente %}<label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
     <button type="submit" class="btn-sm">{{ _('Aceptar la tasa de hoy (%(hoy)s COP/USD)', hoy=trm_rechazada.valor_texto) }}</button>
   </form>
 </div>
@@ -169,6 +170,27 @@
       <input type="text" inputmode="decimal" name="bienvenida" value="{{ bienvenida_campo }}" required></label>
     <button type="submit" class="btn-generar">{{ _('Guardar saldo de bienvenida') }}</button>
   </form>
+  {# PND-347 y PND-348: los dos controles de plata piden la clave (vale 10 minutos) y avisan a todos los admins. #}
+  <div class="admin-cabecera" id="cobros-tope-manual">
+    <h2>{{ _('Tope diario de recargas manuales') }}</h2>
+    <span class="vacio">{{ _('lo que se puede sumar a mano en un día, entre recargas manuales y ajustes positivos de todos los proyectos. Hoy van %(hoy)s de %(tope)s.', hoy=tope_manual_hoy_texto, tope=tope_manual_texto) }}</span>
+  </div>
+  <form method="post" action="{{ url_for('cobros.admin_tope_manual') }}" class="cobros-admin-linea">
+    <label>{{ _('Dólares por día') }}
+      <input type="text" inputmode="decimal" name="tope" value="{{ tope_manual_campo }}" required></label>
+    {% if not clave_reciente %}<label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
+    <button type="submit" class="btn-generar">{{ _('Guardar tope diario') }}</button>
+  </form>
+  <div class="admin-cabecera" id="cobros-trm-ancla">
+    <h2>{{ _('Tasa de referencia de la TRM') }}</h2>
+    <span class="vacio">{% if trm_ancla %}{{ _('una TRM de datos.gov.co que se aleje más de 8 %% de esta no se usa hasta que la aceptes. Hoy: %(valor)s COP por dólar, fijada por %(usuario)s el %(fecha)s.', valor=trm_ancla.valor_texto, usuario=trm_ancla.usuario, fecha=trm_ancla.fijada_en) }}{% else %}{{ _('una TRM de datos.gov.co que se aleje más de 8 %% de esta no se usa hasta que la aceptes. Todavía no hay: la primera TRM aceptada queda como referencia.') }}{% endif %}</span>
+  </div>
+  <form method="post" action="{{ url_for('cobros.admin_trm_ancla') }}" class="cobros-admin-linea">
+    <label>{{ _('Pesos por dólar') }}
+      <input type="text" inputmode="decimal" name="ancla" value="{{ trm_ancla.campo if trm_ancla else '' }}" required></label>
+    {% if not clave_reciente %}<label>{{ _('Tu clave') }} <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
+    <button type="submit" class="btn-generar">{{ _('Guardar tasa de referencia') }}</button>
+  </form>
 </section>
 
 <section class="admin-bloque aparece" id="cobros-proyectos">
@@ -239,6 +261,8 @@
                   </select></label>
                 <label>{{ _('Nota (la ve el cliente en sus movimientos)') }}
                   <input type="text" name="nota" maxlength="300"></label>
+                {% if not clave_reciente %}<label>{{ _('Tu clave (la pedimos otra vez para mover saldo a mano; vale 10 minutos)') }}
+                  <input type="password" name="clave" autocomplete="current-password" required></label>{% endif %}
                 <button type="submit" class="btn-generar">{{ _('Anotar') }}</button>
               </form>
             </details>

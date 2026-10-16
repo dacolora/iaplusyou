@@ -1067,6 +1067,9 @@ NOMBRES_AVISO_PLATA = {
     "trm_sin_tasa": N_("Sin tasa de cambio"),
     "deuda_pospago": N_("Deuda de pospago"),
     "csp_tarjeta": N_("Política de la página de la tarjeta"),
+    # PND-347/348: cada recarga manual o ajuste, y cada cambio del tope diario o de la tasa de referencia.
+    "saldo_manual": N_("Saldo movido a mano"),
+    "control_plata": N_("Cambio de un control de plata"),
 }
 
 

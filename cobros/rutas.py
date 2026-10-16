@@ -915,7 +915,46 @@ def admin_cobros():
                            bienvenida_campo=_campo(libro.bienvenida_usd()),
                            bienvenida_max_texto=gastos.formatear(libro.BIENVENIDA_MAX),
                            margen_min_texto=idiomas.numero(libro.MARGEN_MIN, 2),
-                           margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2))
+                           margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2),
+                           **_controles_de_plata())
+
+
+def _controles_de_plata():
+    """PND-347 y PND-348: el tope diario de lo sumado a mano (con lo de hoy), la tasa de referencia de la TRM y si
+    la clave de quien mira sigue vigente (entonces los formularios no la vuelven a pedir)."""
+    hoy, tope = recargas.tope_manual()
+    a = trm.ancla()
+    return {"tope_manual_hoy_texto": gastos.formatear(hoy / 1000), "tope_manual_texto": gastos.formatear(tope / 1000),
+            "tope_manual_campo": _campo(tope / 1000),
+            "trm_ancla": None if a is None else {
+                "valor_texto": idiomas.numero(a["valor"], 2), "campo": _campo(a["valor"]),
+                "usuario": a["usuario"], "fijada_en": a["fijada_en"][:16].replace("T", " ")},
+            "clave_reciente": cuentas.clave_reciente(session)}
+
+
+# ----------------------------------------- la clave otra vez y el aviso (PND-347) ---
+
+def _clave_para_mover_plata():
+    """Antes de mover saldo a mano o un control de plata (el tope diario, la tasa de referencia): la clave de quien
+    tiene la sesión, otra vez, salvo que la haya escrito hace menos de 10 minutos (`cuentas.REAUTH_S`). Sin ella,
+    el aviso y False: quien llama no escribe nada."""
+    if cuentas.clave_reciente(session):
+        return True
+    resultado = cuentas.confirmar_clave(session, request.form.get("clave") or "", ip=request.remote_addr)
+    if resultado == "ok":
+        return True
+    flash({"falta": gettext("Para mover plata a mano escribe tu clave otra vez (vale 10 minutos)."),
+           "mala": gettext("Esa no es tu clave: no se cambió nada."),
+           "bloqueado": gettext("Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.")}
+          .get(resultado, gettext("Esa no es tu clave: no se cambió nada.")), "error")
+    return False
+
+
+def _avisar_a_los_admins(tipo, cliente, asunto, cuerpo):
+    """A TODOS los admins (correo a cada uno con correo verificado y la bitácora, que /admin/cobros muestra en
+    «Avisos de plata»), por la vía de siempre de cobros. Nunca lanza."""
+    from cobros import avisos  # noqa: PLC0415
+    avisos.admin(tipo, asunto, cuerpo, cliente=cliente or "")
 
 
 def _trm_rechazada():
@@ -930,15 +969,64 @@ def _trm_rechazada():
 @bp.post("/admin/cobros/trm/aceptar")
 @_solo_admin
 def admin_trm_aceptar():
-    """«Aceptar la tasa de hoy»: la TRM que se movió más de 8 % pasa a ser la aceptada y se vuelve a cobrar en
-    pesos. Solo el admin, del mismo sitio (la barrera CSRF de la app), y solo el valor exacto que se mostró."""
+    """«Aceptar la tasa de hoy»: la TRM que se movió más de 8 % pasa a ser la aceptada (y la referencia de la banda,
+    PND-348) y se vuelve a cobrar en pesos. Solo el admin, del mismo sitio (la barrera CSRF de la app), con su clave
+    y solo el valor exacto que se mostró."""
+    if not _clave_para_mover_plata():
+        return _volver_admin()
     try:
         valor = trm.aceptar(request.form.get("valor"), session.get("usuario"))
     except ValueError as e:
         flash(str(e), "error")
         return _volver_admin()
+    usuario, texto = str(session.get("usuario") or ""), idiomas.numero(valor, 2)
+    _avisar_a_los_admins("control_plata", "", lambda: gettext("Cambió la tasa de referencia de la TRM"),
+                         lambda: gettext("%(usuario)s aceptó la TRM de hoy (%(valor)s COP por dólar): es la referencia "
+                                         "nueva de la banda. Si no fuiste tú ni otro admin, cambia la clave.",
+                                         usuario=usuario, valor=texto))
     flash(gettext("Tasa de cambio aceptada: %(valor)s COP por dólar. Los cobros en pesos siguen.",
-                  valor=idiomas.numero(valor, 2)), "ok")
+                  valor=texto), "ok")
+    return _volver_admin()
+
+
+@bp.post("/admin/cobros/trm/ancla")
+@_solo_admin
+def admin_trm_ancla():
+    """PND-348: la tasa de referencia de la banda de la TRM (pesos por dólar), con la clave del admin y aviso a
+    todos los admins. Una lectura de datos.gov.co que se aleje más de 8 % de ella no se usa."""
+    if not _clave_para_mover_plata():
+        return _volver_admin()
+    try:
+        valor = trm.fijar_ancla(request.form.get("ancla"), session.get("usuario"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin()
+    usuario, texto = str(session.get("usuario") or ""), idiomas.numero(valor, 2)
+    _avisar_a_los_admins("control_plata", "", lambda: gettext("Cambió la tasa de referencia de la TRM"),
+                         lambda: gettext("%(usuario)s fijó la tasa de referencia de la TRM en %(valor)s COP por dólar. "
+                                         "Si no fuiste tú ni otro admin, cambia la clave.", usuario=usuario,
+                                         valor=texto))
+    flash(gettext("Tasa de referencia guardada: %(valor)s COP por dólar.", valor=texto), "ok")
+    return _volver_admin()
+
+
+@bp.post("/admin/cobros/tope-manual")
+@_solo_admin
+def admin_tope_manual():
+    """PND-347: el tope diario de lo que se suma a mano (recargas manuales y ajustes positivos de todos los
+    proyectos), con la clave del admin y aviso a todos los admins."""
+    if not _clave_para_mover_plata():
+        return _volver_admin()
+    try:
+        milesimas = recargas.guardar_tope_manual(request.form.get("tope"), session.get("usuario"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin()
+    usuario, texto = str(session.get("usuario") or ""), gastos.formatear(milesimas / 1000)
+    _avisar_a_los_admins("control_plata", "", lambda: gettext("Cambió el tope diario de recargas manuales"),
+                         lambda: gettext("%(usuario)s puso el tope diario de lo que se suma a mano en %(tope)s. Si no "
+                                         "fuiste tú ni otro admin, cambia la clave.", usuario=usuario, tope=texto))
+    flash(gettext("Tope diario de recargas manuales guardado: %(tope)s.", tope=texto), "ok")
     return _volver_admin()
 
 
@@ -1057,6 +1145,8 @@ def admin_recarga(cliente):
     con nota). A un proyecto que no cobra se le puede dejar saldo, y se avisa."""
     if not _existe(cliente):
         abort(404)
+    if not _clave_para_mover_plata():   # PND-347: la clave otra vez (vale 10 minutos)
+        return _volver_admin(cliente)
     tipo = request.form.get("tipo") or "recarga"
     try:
         recargas.manual(cliente, request.form.get("monto", ""), session.get("usuario"), request.form.get("nota", ""),
@@ -1066,6 +1156,7 @@ def admin_recarga(cliente):
         return _volver_admin(cliente)
     nombre = proyectos.nombre_visible(cliente)
     monto = gastos.formatear(float(_decimal(request.form.get("monto")) or 0))
+    _avisar_saldo_manual(cliente, nombre, tipo, monto, request.form.get("nota", ""))
     if tipo == "ajuste":
         flash(gettext("Ajuste de %(monto)s anotado en %(proyecto)s.", monto=monto, proyecto=nombre), "ok")
     else:
@@ -1074,6 +1165,28 @@ def admin_recarga(cliente):
         flash(gettext("%(proyecto)s todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar».",
                       proyecto=nombre), "warn")
     return _volver_admin(cliente)
+
+
+def _avisar_saldo_manual(cliente, nombre, tipo, monto, nota):
+    """PND-347: cada recarga manual o ajuste se avisa a TODOS los admins, con quién la hizo, la nota y cuánto va del
+    tope del día: una sesión de admin robada no crea saldo en silencio."""
+    usuario, nota = str(session.get("usuario") or ""), " ".join(str(nota or "").split())[:300] or "—"
+    hoy, tope = recargas.tope_manual()
+    hoy_texto, tope_texto = gastos.formatear(hoy / 1000), gastos.formatear(tope / 1000)
+    if tipo == "ajuste":
+        def cuerpo():
+            return gettext("%(usuario)s anotó un ajuste de %(monto)s en %(proyecto)s. Nota: %(nota)s. Hoy van "
+                           "%(hoy)s sumados a mano, con un tope diario de %(tope)s. Si no fuiste tú ni otro admin, "
+                           "cambia la clave.", usuario=usuario, monto=monto, proyecto=nombre, nota=nota,
+                           hoy=hoy_texto, tope=tope_texto)
+    else:
+        def cuerpo():
+            return gettext("%(usuario)s anotó una recarga manual de %(monto)s en %(proyecto)s. Nota: %(nota)s. Hoy "
+                           "van %(hoy)s sumados a mano, con un tope diario de %(tope)s. Si no fuiste tú ni otro "
+                           "admin, cambia la clave.", usuario=usuario, monto=monto, proyecto=nombre, nota=nota,
+                           hoy=hoy_texto, tope=tope_texto)
+    _avisar_a_los_admins("saldo_manual", cliente,
+                         lambda: gettext("Saldo movido a mano en %(proyecto)s", proyecto=nombre), cuerpo)
 
 
 # ------------------------------------------- /admin/cobros: planes (planes 7/8) ---

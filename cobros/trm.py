@@ -16,7 +16,16 @@ rango o un salto real del peso, y eso lo decide una persona. Nunca se acepta
 sola. La rechazada se guarda en `kv` `cobros:trm_rechazada` (con la anterior) y
 durante 1 h no se vuelve a pedir; el admin la ve en /admin/cobros y la acepta
 con «Aceptar la tasa de hoy» (`aceptar`). Sin tasa válida se avisa al admin una
-vez por día, y el día se da por avisado solo si el correo salió."""
+vez por día, y el día se da por avisado solo si el correo salió.
+
+Ancla (PND-348, auditoría de seguridad de pagos 2026-10-12, decisión
+2026-10-15): la banda ya no se compara con la última lectura buena, que se
+corría con cada lectura (quien controlara datos.gov.co podía bajarla de a ~8 %
+por vez), sino con una tasa de REFERENCIA que fija una persona: el admin en
+/admin/cobros (`fijar_ancla`, con su clave) o al aceptar una tasa rechazada
+(`aceptar` la vuelve la referencia). Sin ancla guardada (el primer arranque),
+la primera tasa aceptada queda como ancla (`_referencia`), y desde ahí no se
+mueve sola. Vive en `kv` `cobros:trm_ancla` (único escritor: este módulo)."""
 import datetime as dt
 import json
 import logging
@@ -40,10 +49,11 @@ CACHE_S = 6 * 3600
 RESPALDO_S = 3 * 86400
 DIAS_VIGENCIA = 3
 MINIMO, MAXIMO = 2500.0, 7000.0    # COP por USD: fuera de esto la fila está mal (ruling 2026-10-10)
-BANDA = 0.08                        # ±8 % frente a la última guardada (de ≤ 3 días): más que eso no se cobra
+BANDA = 0.08                        # ±8 % frente a la referencia (`ancla`, PND-348): más que eso no se cobra
 CLAVE_AVISO = "cobros:aviso_trm:{dia}"
 CLAVE_RECHAZADA = "cobros:trm_rechazada"   # la última leída fuera de la banda (único escritor: este módulo)
 RECHAZADA_S = 3600                          # durante 1 h no se vuelve a pedir a datos.gov.co
+CLAVE_ANCLA = "cobros:trm_ancla"            # la tasa de referencia de la banda (PND-348; único escritor: este módulo)
 
 
 class SinTasa(Exception):
@@ -213,9 +223,72 @@ def aceptar(valor, usuario):
     if not (MINIMO <= valor <= MAXIMO):
         raise ValueError(gettext("Esa tasa está fuera del rango posible y no se puede aceptar."))
     _guardar(valor, str(r.get("vigencia_desde") or "")[:30], str(r.get("vigencia_hasta") or "")[:30])
+    _guardar_ancla(valor, usuario)   # PND-348: la que una persona aceptó es la referencia nueva de la banda
     _borrar_rechazada()
     log.info("TRM %s aceptada a mano por %s (la anterior era %s)", valor, usuario, r.get("anterior"))
     return valor
+
+
+def ancla():
+    """La tasa de referencia de la banda: {valor, usuario, fijada_en} o None (todavía no se fijó). Solo lee; nunca
+    lanza."""
+    try:
+        with db.conectar() as con:
+            crudo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == CLAVE_ANCLA)).scalar()
+        a = json.loads(crudo) if crudo else None
+        if not isinstance(a, dict):
+            return None
+        valor = float(a["valor"])
+    except (ValueError, TypeError, KeyError):
+        return None
+    if not (math.isfinite(valor) and MINIMO <= valor <= MAXIMO):
+        return None
+    return {"valor": valor, "usuario": str(a.get("usuario") or ""), "fijada_en": str(a.get("fijada_en") or "")}
+
+
+def _guardar_ancla(valor, usuario):
+    texto = json.dumps({"valor": valor, "usuario": str(usuario or "")[:80], "fijada_en": db.ahora()})
+    with db.conectar() as con:
+        con.execute(insert_sqlite(db.kv).values(clave=CLAVE_ANCLA, valor=texto, actualizado_en=db.ahora())
+                    .on_conflict_do_update(index_elements=["clave"],
+                                           set_={"valor": texto, "actualizado_en": db.ahora()}))
+
+
+def fijar_ancla(valor, usuario):
+    """El admin fija la tasa de referencia de la banda (PND-348; la ruta ya pidió su clave). Pesos por dólar, con
+    coma o punto decimal y sin miles, dentro de MINIMO–MAXIMO. Borra una tasa rechazada pendiente: la próxima lectura
+    se compara con la referencia nueva. Devuelve el valor; ValueError en palabras."""
+    try:
+        valor = float(str(valor or "").strip().replace(",", "."))
+    except (TypeError, ValueError):
+        valor = None
+    if valor is None or not math.isfinite(valor) or not (MINIMO <= valor <= MAXIMO):
+        import idiomas  # noqa: PLC0415
+        raise ValueError(gettext("La tasa de referencia va de %(min)s a %(max)s pesos por dólar.",
+                                 min=idiomas.numero(MINIMO, 0), max=idiomas.numero(MAXIMO, 0)))
+    valor = round(valor, 2)
+    _guardar_ancla(valor, usuario)
+    try:
+        _borrar_rechazada()
+    except Exception:  # noqa: BLE001 — si queda, se vuelve a pedir en una hora
+        log.exception("TRM: no se pudo borrar la tasa rechazada al fijar la referencia")
+    log.info("TRM: referencia de la banda fijada en %s por %s", valor, usuario)
+    return valor
+
+
+def _referencia(guardada):
+    """La tasa contra la que se mide la banda: el ancla; sin ancla, la guardada (la última aceptada), que queda como
+    ancla desde ya (PND-348: así deja de correrse con cada lectura). None si no hay ninguna (la primera lectura)."""
+    a = ancla()
+    if a is not None:
+        return a["valor"]
+    if guardada:
+        try:
+            _guardar_ancla(guardada["valor"], "sistema")
+        except Exception:  # noqa: BLE001 — se vuelve a intentar en la próxima lectura
+            log.exception("TRM: no se pudo guardar la referencia de la banda")
+        return guardada["valor"]
+    return None
 
 
 def _sin_tasa(motivo):
@@ -247,13 +320,14 @@ def actual():
             return guardada["valor"]
         log.warning("TRM: datos.gov.co falló (%s) y no hay una guardada de ≤ 3 días", e)
         raise _sin_tasa(str(e)) from None
-    if guardada and abs(valor / guardada["valor"] - 1) > BANDA:
-        # Ni la nueva ni la vieja: una de las dos está mal por más de 8 % y eso lo decide una persona, sin
-        # importar cuánto hace que se aceptó la vieja (N3: nunca se acepta sola).
-        log.warning("TRM: la tasa leída (%s) se mueve más de ±8 %% frente a la aceptada (%s); no se cobra",
-                    valor, guardada["valor"])
-        _guardar_rechazada(valor, desde, hasta, guardada["valor"])
-        raise _sin_tasa(f"{valor} frente a {guardada['valor']}")
+    referencia = _referencia(guardada)
+    if referencia and abs(valor / referencia - 1) > BANDA:
+        # Ni la nueva ni la vieja: una de las dos está mal por más de 8 % y eso lo decide una persona (N3: nunca se
+        # acepta sola). PND-348: frente a la referencia que fijó una persona, no frente a la última lectura buena.
+        log.warning("TRM: la tasa leída (%s) se mueve más de ±8 %% frente a la referencia (%s); no se cobra",
+                    valor, referencia)
+        _guardar_rechazada(valor, desde, hasta, referencia)
+        raise _sin_tasa(f"{valor} frente a {referencia}")
     if previa:
         try:
             _borrar_rechazada()   # la de hoy volvió a la banda: ya no hay nada que aceptar
@@ -261,6 +335,8 @@ def actual():
             log.exception("TRM: no se pudo borrar la tasa rechazada")
     try:
         _guardar(valor, desde, hasta)
+        if referencia is None:
+            _guardar_ancla(valor, "sistema")   # la primera tasa aceptada queda como referencia (PND-348)
     except Exception:  # noqa: BLE001 — no poder guardarla no quita una tasa buena recién leída
         log.exception("TRM: no se pudo guardar la tasa leída; se usa igual")
     return valor

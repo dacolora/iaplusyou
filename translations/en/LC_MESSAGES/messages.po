@@ -1969,6 +1969,26 @@ msgid "%(traidos)s de %(tope)s"
 msgstr "%(traidos)s of %(tope)s"
 
 #, python-format
+msgid "%(usuario)s aceptó la TRM de hoy (%(valor)s COP por dólar): es la referencia nueva de la banda. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s accepted today's TRM (%(valor)s COP per dollar): it is the new reference for the band. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s anotó un ajuste de %(monto)s en %(proyecto)s. Nota: %(nota)s. Hoy van %(hoy)s sumados a mano, con un tope diario de %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s recorded an adjustment of %(monto)s in %(proyecto)s. Note: %(nota)s. Today %(hoy)s has been added by hand, with a daily cap of %(tope)s. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s anotó una recarga manual de %(monto)s en %(proyecto)s. Nota: %(nota)s. Hoy van %(hoy)s sumados a mano, con un tope diario de %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s recorded a manual top-up of %(monto)s in %(proyecto)s. Note: %(nota)s. Today %(hoy)s has been added by hand, with a daily cap of %(tope)s. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s fijó la tasa de referencia de la TRM en %(valor)s COP por dólar. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s set the TRM reference rate to %(valor)s COP per dollar. If it wasn't you or another admin, change the password."
+
+#, python-format
+msgid "%(usuario)s puso el tope diario de lo que se suma a mano en %(tope)s. Si no fuiste tú ni otro admin, cambia la clave."
+msgstr "%(usuario)s set the daily cap for what is added by hand to %(tope)s. If it wasn't you or another admin, change the password."
+
+#, python-format
 msgid "%(valor)s %(moneda)s por resultado"
 msgstr "%(valor)s %(moneda)s per result"
 
@@ -2282,8 +2302,8 @@ msgid "<strong>Faltan llaves de Bold.</strong> Sin BOLD_LLAVE_IDENTIDAD y BOLD_L
 msgstr "<strong>Bold keys are missing.</strong> Without BOLD_LLAVE_IDENTIDAD and BOLD_LLAVE_SECRETA in the server’s <code>.env</code> there are no online top-ups: projects can only be topped up manually from here."
 
 #, python-format
-msgid "<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la última aceptada (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes)."
-msgstr "<strong>Today's exchange rate was not used.</strong> The official rate (TRM) from datos.gov.co (%(hoy)s COP per dollar) moved more than 8 %% from the last accepted one (%(antes)s COP per dollar). Until you accept it, nothing is charged in pesos (neither Wompi top-ups nor plans)."
+msgid "<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la tasa de referencia (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes). Aceptarla la vuelve la referencia nueva."
+msgstr "<strong>Today's exchange rate was not used.</strong> The datos.gov.co TRM (%(hoy)s COP per dollar) moved more than 8 %% from the reference rate (%(antes)s COP per dollar). Until you accept it, nothing is charged in pesos (Wompi top-ups or plans). Accepting it makes it the new reference."
 
 msgid "<strong>Llaves de pruebas de Wompi en un servidor que no es local.</strong> Aquí no valen: no se cobran planes ni recargas con Wompi y sus eventos no se aceptan. Pon en el <code>.env</code> del servidor las llaves de producción de Wompi."
 msgstr "<strong>Wompi test keys on a server that is not local.</strong> They do not work here: no plans or top-ups are charged with Wompi and its events are not accepted. Put the Wompi production keys in the server <code>.env</code>."
@@ -4016,6 +4036,9 @@ msgstr "Changing it creates a new version with the same clips, without calling C
 msgid "Cambio de tarjeta"
 msgstr "Card change"
 
+msgid "Cambio de un control de plata"
+msgstr "A money control changed"
+
 msgid "Cambio del NVP en puntos porcentuales: días completos contra el mismo número de días anteriores"
 msgstr "Change in NVP in percentage points: full days against the same number of previous days"
 
@@ -4027,6 +4050,12 @@ msgstr "Unsaved changes…"
 
 msgid "Cambios sin producir →"
 msgstr "Unproduced changes →"
+
+msgid "Cambió el tope diario de recargas manuales"
+msgstr "The daily cap for manual top-ups changed"
+
+msgid "Cambió la tasa de referencia de la TRM"
+msgstr "The TRM reference rate changed"
 
 msgid "Camisa manga corta"
 msgstr "Short-sleeve shirt"
@@ -4820,6 +4849,10 @@ msgstr "With this split, Meta's daily minimum (%(minimo)s a day) is not reached 
 
 msgid "Con esto se publican los anuncios (cuenta publicitaria) y el contenido orgánico (Página y su Instagram). Se puede cambiar después con \"Desconectar\"."
 msgstr "This is what publishes the ads (ad account) and the organic content (Page and its Instagram). You can change it later with “Disconnect”."
+
+#, python-format
+msgid "Con esto, lo sumado a mano hoy llegaría a %(total)s y el tope diario es %(tope)s. Súbelo en /admin/cobros (te pedimos la clave) o espera a mañana."
+msgstr "With this, what was added by hand today would reach %(total)s and the daily cap is %(tope)s. Raise it in /admin/cobros (we ask for your password) or wait until tomorrow."
 
 msgid "Con imagen"
 msgstr "With an image"
@@ -6216,6 +6249,9 @@ msgstr "Days of its daily budget it must have spent"
 msgid "Dólares (hasta %(max)s)"
 msgstr "Dollars (up to %(max)s)"
 
+msgid "Dólares por día"
+msgstr "Dollars per day"
+
 msgid "Dónde"
 msgstr "Where"
 
@@ -7157,6 +7193,10 @@ msgstr "The token can't see the Business %(business)s (%(error)s). Check that th
 msgid "El tope de lo incluido debe ser 0 o más dólares"
 msgstr "The included cap must be 0 or more dollars"
 
+#, python-format
+msgid "El tope diario va de %(min)s a %(max)s, con hasta 2 decimales."
+msgstr "The daily cap goes from %(min)s to %(max)s, with up to 2 decimals."
+
 msgid "El umbral no puede ser negativo."
 msgstr "The threshold cannot be negative."
 
@@ -7932,6 +7972,9 @@ msgstr "That image isn't in this version."
 
 msgid "Esa marca no existe en Atria."
 msgstr "That brand doesn't exist in Atria."
+
+msgid "Esa no es tu clave: no se cambió nada."
+msgstr "That is not your password: nothing changed."
 
 msgid "Esa opción todavía no está disponible: Creatv está terminando de activarla."
 msgstr "That option isn't available yet: Creatv is still finishing activating it."
@@ -10240,6 +10283,12 @@ msgstr "Save welcome balance"
 msgid "Guardar sonido al crear"
 msgstr "Save sound when creating"
 
+msgid "Guardar tasa de referencia"
+msgstr "Save reference rate"
+
+msgid "Guardar tope diario"
+msgstr "Save daily cap"
+
 msgid "Guion"
 msgstr "Script"
 
@@ -11513,6 +11562,10 @@ msgstr "The task failed"
 
 msgid "La tarea se interrumpió antes de llegar a esta plataforma; reintenta desde el panel."
 msgstr "The task was interrupted before reaching this platform; retry from the panel."
+
+#, python-format
+msgid "La tasa de referencia va de %(min)s a %(max)s pesos por dólar."
+msgstr "The reference rate goes from %(min)s to %(max)s pesos per dollar."
 
 msgid "La temporada necesita un nombre."
 msgstr "The season needs a name."
@@ -14790,6 +14843,9 @@ msgstr "For app installs use “New experiment”."
 msgid "Para lanzar y probar piezas nuevas: Probar anuncios →"
 msgstr "To launch and test new pieces: Test ads →"
 
+msgid "Para mover plata a mano escribe tu clave otra vez (vale 10 minutos)."
+msgstr "To move money by hand, type your password again (it lasts 10 minutes)."
+
 msgid "Para probar ángulos nuevos cada semana y encontrar a tus ganadores."
 msgstr "To test new angles every week and find your winners."
 
@@ -15132,6 +15188,9 @@ msgstr "Development period"
 
 msgid "Perú"
 msgstr "Peru"
+
+msgid "Pesos por dólar"
+msgstr "Pesos per dollar"
 
 msgid "Peticiones"
 msgstr "Requests"
@@ -17157,6 +17216,13 @@ msgstr "Insufficient balance: this costs ≈ %(precio)s and you have %(disponibl
 msgid "Saldo insuficiente: tienes %(disponible)s disponibles. Recarga para seguir."
 msgstr "Insufficient balance: you have %(disponible)s available. Top up to continue."
 
+msgid "Saldo movido a mano"
+msgstr "Balance moved by hand"
+
+#, python-format
+msgid "Saldo movido a mano en %(proyecto)s"
+msgstr "Balance moved by hand in %(proyecto)s"
+
 msgid "Saldo propio"
 msgstr "Own balance"
 
@@ -18506,6 +18572,13 @@ msgstr "Exchange rate accepted: %(valor)s COP per dollar. Charges in pesos resum
 msgid "Tasa de conversión"
 msgstr "Conversion rate"
 
+msgid "Tasa de referencia de la TRM"
+msgstr "TRM reference rate"
+
+#, python-format
+msgid "Tasa de referencia guardada: %(valor)s COP por dólar."
+msgstr "Reference rate saved: %(valor)s COP per dollar."
+
 #, python-format
 msgid "Te avisamos cuando baje de %(umbral)s."
 msgstr "We will let you know when it drops below %(umbral)s."
@@ -19131,6 +19204,13 @@ msgstr "Included cap in US$ of cost per month"
 msgid "Tope del presupuesto diario al escalar (en la moneda de la cuenta)"
 msgstr "Daily budget cap when scaling (in the account currency)"
 
+msgid "Tope diario de recargas manuales"
+msgstr "Daily cap for manual top-ups"
+
+#, python-format
+msgid "Tope diario de recargas manuales guardado: %(tope)s."
+msgstr "Daily cap for manual top-ups saved: %(tope)s."
+
 #, python-format
 msgid "Tope usado: %(pct)s %%"
 msgstr "Cap used: %(pct)s %%"
@@ -19447,6 +19527,12 @@ msgstr "Your access expires after 60 days: when it does, this card will say “M
 
 msgid "Tu bandeja de referencias cambió (alguien más del proyecto la usó o la vació). Revisa las referencias y vuelve a generar — no se cobró nada."
 msgstr "Your reference tray changed (someone else on the project used or emptied it). Check the references and generate again — nothing was charged."
+
+msgid "Tu clave"
+msgstr "Your password"
+
+msgid "Tu clave (la pedimos otra vez para mover saldo a mano; vale 10 minutos)"
+msgstr "Your password (we ask for it again to move balance by hand; it lasts 10 minutes)"
 
 msgid "Tu conexión anterior se restauró."
 msgstr "Your previous connection was restored."
@@ -22716,6 +22802,10 @@ msgid "lo grave primero"
 msgstr "most serious first"
 
 #, python-format
+msgid "lo que se puede sumar a mano en un día, entre recargas manuales y ajustes positivos de todos los proyectos. Hoy van %(hoy)s de %(tope)s."
+msgstr "what can be added by hand in a day, counting manual top-ups and positive adjustments across all projects. Today: %(hoy)s of %(tope)s."
+
+#, python-format
 msgid "lo que se vende cada mes; el margen de miembro reemplaza al margen a la carta (%(margen)s) mientras el plan está pagado"
 msgstr "what is sold each month; the member markup replaces the pay-as-you-go markup (%(margen)s) while the plan is paid"
 
@@ -23985,6 +24075,14 @@ msgstr "a beat in clip %(i)s doesn't describe what's shown"
 
 msgid "un solo token de usuario del sistema, cifrado en el servidor; nunca vuelve a pantalla"
 msgstr "a single system-user token, encrypted on the server; it never comes back to the screen"
+
+#, python-format
+msgid "una TRM de datos.gov.co que se aleje más de 8 %% de esta no se usa hasta que la aceptes. Hoy: %(valor)s COP por dólar, fijada por %(usuario)s el %(fecha)s."
+msgstr "a datos.gov.co TRM more than 8 %% away from this one is not used until you accept it. Now: %(valor)s COP per dollar, set by %(usuario)s on %(fecha)s."
+
+#, python-format
+msgid "una TRM de datos.gov.co que se aleje más de 8 %% de esta no se usa hasta que la aceptes. Todavía no hay: la primera TRM aceptada queda como referencia."
+msgstr "a datos.gov.co TRM more than 8 %% away from this one is not used until you accept it. There is none yet: the first accepted TRM becomes the reference."
 
 msgid "una por línea; con el link de su Ad Library si lo tienes"
 msgstr "one per line; with its Ad Library link if you have it"

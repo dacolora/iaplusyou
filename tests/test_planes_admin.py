@@ -12,6 +12,8 @@ from sqlalchemy import event
 
 from tests.test_planes import ACEPTACION, CENTAVOS_MES, TRM, WompiFalso
 
+from tests.conftest import PASSWORD_PRUEBA  # noqa: E402 — la clave otra vez (PND-347)
+
 MISMO = {"Sec-Fetch-Site": "same-origin"}
 
 
@@ -812,7 +814,7 @@ def test_el_admin_ve_la_tasa_rechazada_y_la_acepta(http):
     html = c.get("/admin/cobros").get_data(as_text=True)
     assert 'id="aviso-trm-rechazada"' in html and "Aceptar la tasa de hoy (4.400,00 COP/USD)" in html
     assert "4.000,50" in html
-    c.post("/admin/cobros/trm/aceptar", data={"valor": "4400.0"}, headers=MISMO)
+    c.post("/admin/cobros/trm/aceptar", data={"valor": "4400.0", "clave": PASSWORD_PRUEBA}, headers=MISMO)   # PND-347
     with db.conectar() as con:
         guardada = json.loads(con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:trm")).scalar())
         rech = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:trm_rechazada")).scalar()
@@ -833,5 +835,5 @@ def test_aceptar_la_tasa_es_solo_del_admin_del_mismo_sitio_y_del_valor_mostrado(
     assert http.como("admin").post("/admin/cobros/trm/aceptar", data={"valor": "4400.0"},
                                    headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
     c = http.como("admin")
-    c.post("/admin/cobros/trm/aceptar", data={"valor": "5000"}, headers=MISMO)
+    c.post("/admin/cobros/trm/aceptar", data={"valor": "5000", "clave": PASSWORD_PRUEBA}, headers=MISMO)
     assert guardada() is None and any("No hay una tasa rechazada" in m for m in _flashes(c))
