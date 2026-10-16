@@ -14,11 +14,12 @@ def soltar(cliente):
     """Borra las métricas copiadas de las cuentas del proyecto y las deja libres para otro proyecto
     (`cuentas.elegir(cliente, [])`, que se lleva también los análisis «Cómo mejorarlo» de sus anuncios de fuente Meta y,
     después de esas filas, la imagen y el video que copiaron a R2), sus evaluaciones con IA (guardan nombres y métricas
-    de anuncios de Meta; el gasto queda en `gasto`) y las miniaturas que esas evaluaciones copiaron a R2.
+    de anuncios de Meta; el gasto queda en `gasto`), las miniaturas que esas evaluaciones copiaron a R2 y el nombre del
+    anuncio de los aprendizajes guardados desde un análisis de Meta (PND-295: la lección se queda).
 
     El orden importa: primero se leen las claves de R2 (salen de las filas), después se borran las filas (lo que guarda
     los nombres y las métricas) y al final las miniaturas, con un solo cliente de R2: un R2 lento o caído nunca deja
-    nombres ni métricas guardados. Los tres borrados son independientes: si uno falla, los otros se hacen igual.
+    nombres ni métricas guardados. Cada paso es independiente: si uno falla, los otros se hacen igual.
     Nunca lanza: devuelve el tipo del primer error (nunca su texto: podría arrastrar un token), o None si todo se borró.
     La siguiente desconexión reintenta lo que quedó (las claves se vuelven a calcular de las filas que queden)."""
     from meta_rendimiento import analisis, cuentas, datos  # noqa: PLC0415 — tardío: lo llama meta_conexion
@@ -42,6 +43,19 @@ def soltar(cliente):
         datos.borrar_evaluaciones(cliente)
     except Exception as e:  # noqa: BLE001 — ídem; el borrado de arriba no depende de este ni este de aquel
         log.warning("meta rendimiento: no se pudieron borrar las evaluaciones de %s (%s)", cliente, type(e).__name__)
+        fallo = fallo or type(e).__name__
+    try:
+        # PND-295 (decisión 2026-10-13): un aprendizaje que la persona guardó desde un análisis de un anuncio de Meta
+        # se queda (es una nota que guardó a propósito), pero sin el nombre del anuncio, que es dato de Meta. El texto
+        # se rehace en el idioma del proyecto, como se guardan los aprendizajes.
+        import idiomas  # noqa: PLC0415
+        import proyectos  # noqa: PLC0415
+        from doctrina import aprendizajes  # noqa: PLC0415
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            proyectos.reescribir_aprendizajes(cliente, aprendizajes.sin_nombre_de_meta)
+    except Exception as e:  # noqa: BLE001 — ídem: los demás borrados no dependen de este
+        log.warning("meta rendimiento: no se quitaron los nombres de Meta de los aprendizajes de %s (%s)", cliente,
+                    type(e).__name__)
         fallo = fallo or type(e).__name__
     try:
         # Después de las filas y fuera de su camino: lo lento de R2 no retrasa el borrado de lo que guarda los nombres.

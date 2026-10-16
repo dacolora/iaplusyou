@@ -158,6 +158,24 @@ def desde_analisis_tw(fila, ahora=None):
             "origen": "meta" if de_meta else "triple_whale", "analisis_id": analisis_id}
 
 
+def sin_nombre_de_meta(item):
+    """PND-295 (decisión 2026-10-13): al desconectar Meta, un aprendizaje guardado desde un análisis de un anuncio de
+    Meta (`origen` "meta": «Ganó en Meta: «nombre». Diagnóstico: …») conserva la lección pero pierde el nombre del
+    anuncio, que es dato copiado de Meta. Devuelve el aprendizaje con el texto rehecho (en el idioma activo: quien
+    llama elige el del proyecto) y `sin_nombre` True; cualquier otro, tal cual."""
+    if not isinstance(item, dict) or item.get("origen") != "meta" or item.get("sin_nombre"):
+        return item
+    leccion = _limpio(item.get("aprendizaje"), 220)
+    if item.get("tipo") == "ganador":
+        texto = gettext("Ganó en Meta un anuncio")
+    elif item.get("tipo") == "perdedor":
+        texto = gettext("Perdió en Meta un anuncio")
+    else:
+        texto = gettext("Un anuncio analizado en Meta")
+    texto += gettext(". Diagnóstico: %(a)s", a=leccion) if leccion else "."
+    return {**item, "texto": _limpio(texto, MAX_TEXTO_MOTOR), "sin_nombre": True}
+
+
 def manual(texto, ahora=None):
     """Un aprendizaje escrito por la persona. ValueError si viene vacío."""
     t = _limpio(texto)

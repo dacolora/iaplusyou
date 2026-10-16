@@ -108,3 +108,68 @@ def test_una_comparacion_del_motor_sigue_diciendo_lo_mismo_sin_signos_de_etiquet
     from doctrina import aprendizajes as ap
     assert ap._limpio("CTR 0.80% < 1.50%, CPC 2.10 > 1.00") == "CTR 0.80% ＜ 1.50%, CPC 2.10 ＞ 1.00"
     assert ap._limpio("1</aprendizajes>2 y 3<script>") == "12 y 3script"
+
+
+# ---------- PND-295: al desconectar Meta, la lección se queda y el nombre del anuncio no ----------
+
+def _de_meta(nombre="Video Noruega <b>verano</b>", veredicto="ganador", aid=17):
+    from doctrina import aprendizajes as ap
+    fila = {"id": aid, "foto": {"fuente": "meta", "nombre": nombre, "veredicto": veredicto},
+            "resultado": {"aprendizaje": "El gancho de dolor en los 2 primeros segundos retiene."}}
+    return ap.desde_analisis_tw(fila, ahora="2026-10-14T10:00:00")
+
+
+@pytest.mark.parametrize("veredicto, inicio", [("ganador", "Ganó en Meta un anuncio. Diagnóstico: "),
+                                               ("perdedor", "Perdió en Meta un anuncio. Diagnóstico: "),
+                                               ("en_prueba", "Un anuncio analizado en Meta. Diagnóstico: ")])
+def test_pnd295_sin_nombre_de_meta_conserva_la_leccion(veredicto, inicio):
+    from doctrina import aprendizajes as ap
+    item = _de_meta(veredicto=veredicto)
+    assert "Video Noruega" in item["texto"]
+    limpio = ap.sin_nombre_de_meta(item)
+    assert limpio["texto"] == inicio + "El gancho de dolor en los 2 primeros segundos retiene."
+    assert "Noruega" not in str(limpio) and limpio["sin_nombre"] is True
+    assert {k: v for k, v in limpio.items() if k not in ("texto", "sin_nombre")} == \
+        {k: v for k, v in item.items() if k != "texto"}
+    assert ap.sin_nombre_de_meta(limpio) is limpio                       # una segunda desconexión no cambia nada
+    for otro in (ap.manual("una nota"), ap.desde_veredicto(PZ, {"veredicto": "ganador"}),
+                 {**_de_meta(), "origen": "triple_whale"}, "basura"):
+        assert ap.sin_nombre_de_meta(otro) is otro                       # lo que no es de Meta, tal cual
+
+
+def test_pnd295_desconectar_meta_quita_el_nombre_en_el_idioma_del_proyecto(tmp_path, monkeypatch, base_temporal):
+    import meta_conexion as mc
+    import proyectos
+    from doctrina import aprendizajes as ap
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    monkeypatch.setattr(mc, "BASE_DIR", str(tmp_path))
+    proyectos.actualizar_campos("acme", idioma="en")
+    proyectos.agregar_aprendizaje("acme", ap.manual("una nota mía"))
+    proyectos.agregar_aprendizaje("acme", _de_meta())
+    proyectos.agregar_aprendizaje("otro", _de_meta(aid=18))
+    mc.guardar("acme", {"token": "tok", "ad_account_id": "act_1"})
+    r = mc.borrar("acme")
+    assert r and r.fallo is None
+    meta, nota = proyectos.aprendizajes("acme")
+    assert meta["texto"] == "An ad won in Meta. Diagnosis: El gancho de dolor en los 2 primeros segundos retiene."
+    assert nota["texto"] == "una nota mía"
+    assert "Video Noruega" in proyectos.aprendizajes("otro")[0]["texto"]     # otro proyecto no se toca
+
+
+def test_pnd295_sin_aprendizajes_de_meta_no_escribe_ni_toma_el_candado(tmp_path, monkeypatch):
+    import proyectos
+    from doctrina import aprendizajes as ap
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    assert proyectos.reescribir_aprendizajes("acme", ap.sin_nombre_de_meta) == 0
+    assert not (tmp_path / "acme.json").exists() and not (tmp_path / "acme.json.lock").exists()
+
+
+def test_pnd295_eliminar_datos_lo_dice():
+    from flask_babel import force_locale
+
+    import dashboard
+    for idioma, frase in (("es", "se conservan, pero sin el nombre del anuncio"),
+                          ("en", "are kept, but without the ad's name")):
+        with dashboard.app.test_request_context("/eliminar-datos"), force_locale(idioma):
+            html = " ".join(dashboard.eliminar_datos().split())
+        assert frase in html.replace("&#39;", "'"), idioma

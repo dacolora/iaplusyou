@@ -2209,6 +2209,9 @@ msgstr "September 12, 2026"
 msgid "14 días"
 msgstr "14 days"
 
+msgid "15 de octubre de 2026"
+msgstr "October 15, 2026"
+
 msgid "17. mai"
 msgstr "17 May (Norway's Constitution Day)"
 
@@ -9789,6 +9792,9 @@ msgstr "New hooks (first 3 s)"
 msgid "Ganó en %(pais)s: %(quien)s"
 msgstr "Won in %(pais)s: %(quien)s"
 
+msgid "Ganó en Meta un anuncio"
+msgstr "An ad won in Meta"
+
 #, python-format
 msgid "Ganó en Meta: «%(nombre)s»"
 msgstr "Won in Meta: “%(nombre)s”"
@@ -15121,6 +15127,9 @@ msgstr "Losing"
 msgid "Perdió en %(pais)s: %(quien)s"
 msgstr "Lost in %(pais)s: %(quien)s"
 
+msgid "Perdió en Meta un anuncio"
+msgstr "An ad lost in Meta"
+
 #, python-format
 msgid "Perdió en Meta: «%(nombre)s»"
 msgstr "Lost in Meta: “%(nombre)s”"
@@ -19737,6 +19746,9 @@ msgstr "A Creatv administrator has to choose the accounts."
 
 msgid "Un ajuste necesita una nota."
 msgstr "An adjustment needs a note."
+
+msgid "Un anuncio analizado en Meta"
+msgstr "An ad analyzed in Meta"
 
 msgid "Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar."
 msgstr "An ad that has been running for weeks, or that the brand duplicated into many variants, is almost always one that's selling. Leave them empty to not filter."

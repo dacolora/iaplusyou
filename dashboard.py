@@ -1359,20 +1359,22 @@ def eliminar_datos():
         "es": """<p>Para eliminar los datos que CREATV Galadsy guarda de tu cuenta de Meta:</p>
 <ol><li>Entra a tu proyecto en {sitio} › FlowMarketing › <strong>Desconectar</strong>: se borran el token,
 los identificadores de tus cuentas publicitarias, Página e Instagram y las métricas copiadas de las cuentas elegidas
-(gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) al instante.</li>
+(gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) al instante. Los aprendizajes que guardaste a
+propósito desde el análisis de un anuncio de Meta se conservan, pero sin el nombre del anuncio.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
 <p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › CREATV Galadsy › Eliminar.</p>""",
         "en": """<p>To delete the data CREATV Galadsy stores about your Meta account:</p>
 <ol><li>Go to your project at {sitio} › FlowMarketing › <strong>Disconnect</strong>: the token,
 the identifiers of your ad accounts, Page and Instagram, and the metrics copied from the chosen accounts
-(spend, purchases, and the names of campaigns, ad sets and ads) are deleted instantly.</li>
+(spend, purchases, and the names of campaigns, ad sets and ads) are deleted instantly. The learnings you saved on
+purpose from the analysis of a Meta ad are kept, but without the ad's name.</li>
 <li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
 confirmed by email.</li></ol>
 <p>You can also revoke access from Facebook: Settings › Apps and Websites › CREATV Galadsy › Remove.</p>""",
     }[str(get_locale())].format(sitio=escape(_host_plataforma() or request.host))
     return render_template("legal.html", titulo=gettext("Eliminación de datos"),
-                           actualizado=gettext("12 de septiembre de 2026"), cuerpo=cuerpo)
+                           actualizado=gettext("15 de octubre de 2026"), cuerpo=cuerpo)
 
 
 @app.route("/l/<cliente>")
