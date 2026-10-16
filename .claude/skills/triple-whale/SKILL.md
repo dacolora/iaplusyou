@@ -359,7 +359,8 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `data-poll-al-terminar="evento"` and dispatches `trabajo-terminado` instead of reloading (ten analyses would be ten
   reloads); the tab JS (`_tab_rendimiento.html`) repaints only that card. The async «Cómo mejorarlo» never re-POSTs on a failure: it repaints the
   card and shows a message, and paying again takes a fresh click and confirm (rule 1). The analisis routes take
-  `<int(max=2**63-1):aid>` (`rutas.AID_MAX`, B7): a bigger id overflowed SQLite and gave a 500, now a 404. Whole sales
+  `<int(max=2**63-1):aid>` (`rutas.AID_MAX`, B7): a bigger id overflowed SQLite and gave a 500, now a 404; the account
+  evaluation's `idea_crear` and `a_referente` take the same `eid` since PND-189 (2026-10-15). Whole sales
   show without a decimal (`tw_ventas`: «10 ventas», not «10,0»; D2) and «Ya se hizo N piezas con esta mejora» ends
   with the Crear state of the latest one (`panel.ETIQUETAS_PIEZA`, spec §7.1; D3).
 - **Which analysis a card shows (final review A2 and A4, 2026-10-08).** `datos.analisis_de_anuncios` reads ALL rows
