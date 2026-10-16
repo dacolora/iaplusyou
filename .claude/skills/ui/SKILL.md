@@ -83,8 +83,8 @@ lo que tenga más de 14 días (todo lo de ahí es copia de trabajo: el video viv
 lo vuelven a bajar), `cola_limpiar` purga las `tarea` cerradas (7 días; periódicas, 1 día) y
 `db_respaldar` guarda `data/respaldos/creatv_<fecha>.db` (`Connection.backup`, 7 copias). Sigue
 pendiente (no se hizo): borrar en R2 lo rechazado/descartado y las versiones viejas de finales,
-`materiales_limpiar` no borra nada porque los proxies viven en la fila del video (no son `EFIMEROS`),
-`metrica_snapshot` inserta cada 2 h aunque nada cambie.
+`materiales_limpiar` no borra nada porque los proxies viven en la fila del video (no son `EFIMEROS`).
+(`metrica_snapshot` ya no inserta cada 2 h si nada cambió: PND-066, skill `experimentos`.)
 **Tarjetas ligeras y detalle bajo demanda** (spec
 `docs/superpowers/specs/2026-09-28-tarjetas-ligeras-detalle-bajo-demanda-design.md`): el 61 % de
 la página eran los `<template class="generado-detalle">` de Crear y Final edition (1,86 MB de 3,03).

@@ -54,7 +54,8 @@ Cerrar…» y llega `error_lanzamiento`); `lanzador.cerrar` pausa en Meta campa�
 (`_pausar_todo_en_meta`) en CUALQUIER estado con campaña, y `exp_cerrar` deja cerrar un «lanzando» sin tarea viva.
 Pruebas: `tests/test_lanzar_activa.py`. `exp_estado`
 activates/pauses the whole experiment or one country inline. Metrics: `lanzador.refrescar`
-appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) —
+appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) only when something changed
+(PND-066, below) —
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
@@ -392,3 +393,17 @@ R3 (2026-10-08, revisión lote 6B): test_derivaciones.py::test_r3_hermanas_de_la
 
 
 PND-160 (2026-10-09, decisión del lote 8): el encolador comprueba la tarea viva y relee el experimento antes de escribir lanzando, bajo _LANZAMIENTO_LOCK; solo admite armando/error. Enmienda 2026-10-10: este candado propio no espera _ENV_LOCK, que una publicación sostiene durante minutos; una lectura vieja no puede relanzar un corriendo. El segundo POST de la tarjeta responde Ya se está lanzando por JSON o flash sin restaurar el estado anterior ni encolar otra tarea. activar_tras_lanzar conserva su guarda; tests/test_lote8_lanzamiento.py prueba dos POST con una lectura anterior, cola real y Meta falso.
+
+**Una foto solo si cambió algo (PND-066, decisión 2026-10-13; 2026-10-15).** `experimentos.snapshot` compara la foto
+nueva con la última de la pieza (todas las columnas, con los `default` de la tabla para las que faltan, y todo el
+`extra`): si es igual, no agrega fila y anota en la última `extra.confirmado_en` (la hora de esa consulta); con la hora
+anterior a la última (un backfill) agrega como siempre. Toma el lock de la pieza antes de leer. Por qué no cambia ninguna
+cuenta: el Tablero, «Mes a mes» (`_cierres_de_mes`), la serie de 30 días, `snapshots(desde=)` y `snapshots_de` leen «la
+última foto con `tomado_en` <= instante», y la omitida era igual a esa; la primera foto con impresiones o con ventas
+(horas de evidencia del decisor, `_horas_activo`, `_dias_transcurridos`, `primera_venta`) siempre es un cambio. Lo
+único que miraba la hora de la última fila era la frescura: `experimentos.datos_viejos` y la alerta de 6 h
+(`tablero._ultimo_snapshot_experimento`) leen ahora `experimentos.consultado_en(metricas)` = la más nueva entre
+`tomado_en` y `confirmado_en`. Quien agregue un lector de la hora de la última foto para decir «al día» usa
+`consultado_en`, no `tomado_en`. El escritor legado de `ads.py` (Anuncios sueltos, que `exp_refrescar_todos` no
+refresca) sigue insertando siempre. Pruebas: `tests/test_snapshot_solo_si_cambia.py` (dos proyectos con la misma serie
+cada 2 h, uno guardado fila por fila como antes: Tablero, mes a mes, serie, deltas con base y decisor dan lo mismo).
