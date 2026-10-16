@@ -313,6 +313,7 @@ test("nombreDe y detalleAudio: su nombre; sin nombre, qué es", () => {
   assert.equal(etiquetaMas({ tipo: "audio", origen: "subida" }, "Risa"), "Agregar «Risa» como música desde el cabezal");
   // una grabación se borra desde aquí (el servidor ya lo permite); una voz o una locución no
   assert.equal(puedeBorrarse({ origen: "grabacion" }), true);
+  assert.equal(puedeBorrarse({ origen: "triple_whale" }), true);   // PND-230: el original de un gancho
   assert.equal(puedeBorrarse({ origen: "voz" }), false);
   assert.equal(puedeBorrarse({ origen: "locucion" }), false);
 });

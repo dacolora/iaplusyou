@@ -290,4 +290,6 @@ skip a live render, `creative_flow.crear_final`, `edicion_producir` of the FROZE
 and `tareas/triple_whale.tw_gancho_armar` share it, so a task that builds a document produces exactly as the button
 does, after its own `verificar_recortes` and `versionar` (the route keeps its `version_n` CAS and its 409). Materials
 with origen `triple_whale` (an ad's original video, downloaded once and deduped by hash) are in `ORIGENES_BIBLIOTECA`:
-they show in «Medios» and can be reused, but they are not in `ORIGENES_BORRABLES`.
+they show in «Medios» and can be reused, and since PND-230 (2026-10-15) they are in `ORIGENES_BORRABLES` (Python and
+the `biblioteca.js` mirror): up to 60 MB each counted toward the 2 GB quota with no way to free it; a hook that needs
+the original again finds it by `original_hash` or downloads it again (`tareas/triple_whale.py`).

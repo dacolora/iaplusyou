@@ -239,8 +239,9 @@ export function urlPieza(plantilla, cfId) {
 // el logo, una voz de guion ni una canción de Mi música: la creada tiene
 // origen «musica» y la subida trae `mi_musica` (vista_previa.material_para);
 // las dos se borran en Crear › Mi música. Capa 5a (Task 6): una grabación del
-// micrófono SÍ se borra desde aquí (es solo suya, como una subida).
-export const ORIGENES_BORRABLES = ["subida", "crear", "grabacion"];
+// micrófono SÍ se borra desde aquí (es solo suya, como una subida). PND-230: también el video original de un
+// gancho de Triple Whale (cuenta para la cuota; el gancho lo vuelve a bajar si lo necesita).
+export const ORIGENES_BORRABLES = ["subida", "crear", "grabacion", "triple_whale"];
 
 export function puedeBorrarse(m) {
   return Boolean(m) && ORIGENES_BORRABLES.includes(m.origen) && !m.mi_musica;

@@ -584,7 +584,8 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   copy can claim urgency or scarcity without a number («Lageret tømmes raskt») and the verifier cannot see it
   (PND-228), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-233).
   The scene chain still closes a recoverable clip as an error (PND-229; the hooks no longer do, fix C below). The
-  originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-230). The `|precio` filter
+  originals count toward the 2 GB quota and, since PND-230 (2026-10-15), «Medios» deletes them like an upload when no
+  edition uses them (armar downloads the original again if its material is gone). The `|precio` filter
   keeps showing the cost when the margin read fails in ~25 other templates (PND-231). preparar's own failure path does
   not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch
   compare the price seen since 2026-10-15 (PND-236, below). `doctrina.verificar_cifras` does not check
