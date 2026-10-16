@@ -14,7 +14,7 @@ pasaron por `gastos.registrar_seguro`; quedan anotadas aquí con la referencia `
 | `dos_imagenes_es` (2 imágenes de 2048×2048) | end_turn · 9 860 · 237 · 0,0221 · sí (631 caracteres) | end_turn · 214 · 0,0219 · sí (564) | el caso normal |
 | `cinco_imagenes_es` (2 grandes + 3 medianas) | end_turn · 15 283 · 310 · 0,0337 · sí (827) | end_turn · 310 · 0,0337 · sí (816) | el tope de 5 imágenes |
 | `tres_imagenes_en` (proyecto en inglés) | end_turn · 9 219 · 259 · 0,0210 · sí (745) | end_turn · 253 · 0,0210 · sí (738) | otro idioma |
-| `cinco_grandes_es` (4 de 2048 o más + 1 mediana) | end_turn · 21 528 · 311 · 0,0462 · sí (837) | end_turn · 349 · 0,0465 · sí (925) | el más caro posible |
+| `cinco_grandes_es` (4 grandes, de 2048 o más, + 1 mediana) | end_turn · 21 528 · 311 · 0,0462 · sí (837) | end_turn · 349 · 0,0465 · sí (925) | el más caro posible |
 
 **Lo que mostró:**
 
@@ -22,11 +22,12 @@ pasaron por `gastos.registrar_seguro`; quedan anotadas aquí con la referencia `
   de los dos topes. Con este modelo y este prompt el 400 no llegó a cortar ninguna respuesta, pero no dejaba margen al
   pensamiento adaptativo; con 4 000 se paga lo mismo (solo lo usado).
 - **El precio a la vista estaba por debajo de lo que cuesta.** Una imagen grande son ~4 700 tokens de entrada: con
-  cinco imágenes la llamada cuesta 0,034–0,047 y la tarifa `analizar_marca` decía 0,025. Se sube a **0,05** (lo más
-  caro medido, redondeado hacia arriba, como el director). Con Cobros se cobra lo real × margen; la tarifa es el precio
-  que se ve y se reserva antes.
+  cinco imágenes la llamada cuesta 0,034–0,047 y la tarifa `analizar_marca` decía 0,025. Primero se subió a 0,05 (lo
+  más caro medido); la revisión de guardian-gasto del 2026-10-16 pidió el criterio del 2026-10-15: el precio visto es el
+  PEOR caso con los topes. Cinco imágenes grandes (≈ 24 500 de entrada, 0,049) y la salida al tope de 4 000 (0,04):
+  0,089 → **0,09**. Con Cobros se cobra lo real × margen; la tarifa es el precio que se ve y se reserva antes.
 
 **Gasto de esta medición:** US$ 0,2461 (antes 0,1230 · después 0,1231).
 
 **Conclusión:** se cierra. Ningún caso cambia de resultado, el costo por llamada no cambia y el precio que se ve pasa a
-cubrir el caso de cinco imágenes grandes.
+cubrir el caso de cinco imágenes grandes con la salida al tope.

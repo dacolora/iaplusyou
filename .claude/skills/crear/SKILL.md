@@ -299,8 +299,8 @@ detalle vive en la skill `triple-whale` («Cómo mejorarlo» de un anuncio de im
 **Las ayudas con IA las paga el proyecto (PND-299, decisión 2026-10-13, lote 1; Daniel: «de resto todo de cuenta del
 cliente»).** El director («Crear super prompt» y «Rearmar»), «Describir con IA», «Sugerir» sonido y «Analizar
 referencias» de la marca ya no van a `_creatv` ni son gratis: cada botón dice su precio (`precio_de('director')`,
-`precio_describir(refs)` según las imágenes que se mandan, `gastos.TARIFAS` `director` 0,05, `describir_referencias`
-0,004 + 0,0015 por imagen, `sugerir_sonido` 0,002, `analizar_marca` 0,05 (PND-342, medido el 2026-10-15 con cinco imágenes grandes), de lo medido) y el gasto va al proyecto con su
+`precio_describir(refs)` según las imágenes que se mandan, `gastos.TARIFAS` `director` 0,11 (desde 2026-10-16 el peor caso: dos llamadas al tope, PND-240), `describir_referencias`
+0,004 + 0,0015 por imagen, `sugerir_sonido` 0,002, `analizar_marca` 0,09 (PND-342: cinco imágenes grandes y la salida al tope de 4 000), de lo medido o del peor caso con los topes) y el gasto va al proyecto con su
 tipo (`director`, `describir_referencias`, `sugerir_sonido`, `analizar_marca`). `flowplus_director` está en
 `TIPOS_QUE_COBRAN`: `cf_crear_video` (modo director) y `cf_rearmar` exigen antes de tocar la sesión y
 `tareas.director.encolar` reserva `costo_estimado()`; si la reserva falla tras crear la sesión, queda en `error` con la

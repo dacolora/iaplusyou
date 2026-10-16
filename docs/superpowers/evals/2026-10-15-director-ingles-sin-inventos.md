@@ -37,7 +37,8 @@ imágenes. Corridas fuera de la app: no pasaron por `gastos.registrar_seguro`; q
 - **De paso:** en el caso de Seedance Claude puso un id de cámara como tamaño de plano («macro_a_abierto, starts on a
   macro shot…»). No rompe el prompt; queda anotado.
 - **Costo:** 0,0737 antes, 0,0702 tras 239 y 0,0612 tras 239 + 240 (los tres casos); ninguna corrección después del
-  cambio (antes, una). La tarifa `director` (0,05) sigue cubriendo una llamada con corrección.
+  cambio (antes, una). La revisión de guardian-gasto (2026-10-16) pidió que el precio visto cubra el PEOR caso: dos
+  llamadas al tope de 4 000 de salida, ≈ 0,109. La tarifa `director` pasa de 0,05 a 0,11 (se cobra lo real × margen).
 
 **Gasto de esta medición:** US$ 0,2051 (antes 0,0737 · después de 239 0,0702 · después de 240 0,0612).
 
