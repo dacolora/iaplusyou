@@ -1289,6 +1289,13 @@ def activar_manual(cliente, plan_id, ciclo, usuario, nota="", ahora=None):
         usd = _precio_ciclo(plan_, ciclo)
         if not usd:
             raise ErrorPlan(gettext("Ese plan no tiene opción anual"))
+        # Lo que se paga por fuera cuenta en el tope de lo sumado a mano en 24 h (decisión de quien orquesta,
+        # 2026-10-15), con el candado ya tomado: dos activaciones a la vez no pasan juntas el tope.
+        from cobros import recargas  # noqa: PLC0415 — recargas importa libro, que importa este módulo
+        try:
+            recargas.dentro_del_tope(con, int(usd) * 1000)
+        except ValueError as e:
+            raise ErrorPlan(str(e)) from None
         sus = _sus_viva(con, cliente)
         apagada = bool(sus and sus["renovar"] and sus["fuente_pago_id"])
         if sus is None:

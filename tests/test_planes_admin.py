@@ -70,7 +70,10 @@ def http(entorno):
 
 @pytest.fixture()
 def pro(entorno):
-    from cobros import planes
+    from cobros import planes, recargas
+    # Activar a mano cuenta en el tope de lo sumado a mano en 24 h (2026-10-15): estas pruebas activan anuales de
+    # 10 000; el tope lo prueba tests/test_cobros_controles_plata.py.
+    recargas.guardar_tope_manual("100000", "admin")
     return planes.crear_plan("Pro", 1000, 1.25, 25, precio_anual_usd=10000, usuario="admin")
 
 

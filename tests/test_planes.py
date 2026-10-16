@@ -120,9 +120,12 @@ def _tipos(enviados):
 def pro(planes):
     # Los proyectos de estas pruebas cobran: con «Cobrar» apagado la periódica no renueva (revisión final
     # 2026-10-10, test_con_cobrar_apagado_la_periodica_no_cobra_ni_abre_meses).
-    from cobros import libro
+    from cobros import libro, recargas
     for cliente in ("acme", "otro"):
         libro.configurar(cliente, usuario="admin", cobrar=True)
+    # Activar a mano cuenta en el tope de lo sumado a mano en 24 h (2026-10-15): estas pruebas activan anuales de
+    # 10 000; el tope lo prueba tests/test_cobros_controles_plata.py.
+    recargas.guardar_tope_manual("100000", "admin")
     return planes.crear_plan("Pro", 1000, 1.25, 25, precio_anual_usd=10000, usuario="admin")
 
 

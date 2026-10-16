@@ -1548,8 +1548,9 @@ def _milesimas_manual(usd):
 
 # PND-347 (auditoría de seguridad de pagos 2026-10-12, decisión 2026-10-15): la cuenta de admin no tiene segundo factor
 # y con una sesión robada se creaba saldo a mano sin límite. Lo que se SUMA a mano en 24 horas (recargas manuales y
-# ajustes positivos, todos los proyectos juntos) tiene un tope que el admin cambia en /admin/cobros pidiendo su clave
-# (`cuentas.confirmar_clave`). Los ajustes negativos y el saldo de bienvenida no cuentan.
+# ajustes positivos, todos los proyectos juntos, y desde el 2026-10-15 los planes activados a mano) tiene un tope que
+# el admin cambia en /admin/cobros pidiendo su clave (`cuentas.confirmar_clave`). Los ajustes negativos y el saldo de
+# bienvenida no cuentan.
 CLAVE_TOPE_MANUAL = "cobros:tope_manual_dia"   # kv, dólares (único escritor: este módulo)
 TOPE_MANUAL_DIA_DEFECTO = 2000
 
@@ -1568,12 +1569,16 @@ def _tope_manual_milesimas(con):
 def _manual_de_hoy(con):
     """Milésimas sumadas a mano en las últimas 24 horas corridas (no desde las 00:00: a las 23:59 y a las 00:01 no
     pasan dos topes seguidos; auditoría de seguridad de la revisión, 2026-10-15)."""
-    m = db.movimiento_saldo
+    m, pp = db.movimiento_saldo, db.pago_plan
     hoy = (datetime.now() - timedelta(hours=24)).isoformat(timespec="seconds")
-    return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(m.c.milesimas), 0)).where(
+    movimientos = int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(m.c.milesimas), 0)).where(
         m.c.creado_en >= hoy, m.c.milesimas > 0,
         sa.or_(sa.and_(m.c.tipo == "recarga", m.c.concepto == "recarga_manual"),
                sa.and_(m.c.tipo == "ajuste", m.c.concepto == "ajuste")))).scalar() or 0)
+    # Un plan activado a mano (decisión de quien orquesta, 2026-10-15): lo que dice que se pagó por fuera.
+    planes_a_mano = int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(pp.c.usd), 0)).where(
+        pp.c.medio == "manual", pp.c.estado == "aprobado", pp.c.creado_en >= hoy)).scalar() or 0) * 1000
+    return movimientos + planes_a_mano
 
 
 def tope_manual():
@@ -1603,7 +1608,7 @@ def guardar_tope_manual(usd, usuario):
     return int(valor * 1000)
 
 
-def _dentro_del_tope(con, milesimas):
+def dentro_del_tope(con, milesimas):
     """Con el candado tomado ANTES de leer (dos clics a la vez no pasan juntos el tope): lo de hoy más esto no pasa
     del tope diario. Lanza ValueError en palabras; quien llama no escribió nada todavía."""
     if milesimas <= 0:
@@ -1619,7 +1624,7 @@ def _dentro_del_tope(con, milesimas):
 def manual(cliente, usd, usuario, nota, tipo="recarga"):
     """Recarga manual del admin (una transferencia, un pago por fuera) o un
     ajuste (±, nota obligatoria). Devuelve el id del movimiento del libro.
-    Lo que suma pasa por el tope diario (`_dentro_del_tope`, PND-347)."""
+    Lo que suma pasa por el tope diario (`dentro_del_tope`, PND-347)."""
     if tipo not in ("recarga", "ajuste"):
         raise ValueError(gettext("El tipo tiene que ser recarga o ajuste."))
     milesimas = _milesimas_manual(usd)
@@ -1628,7 +1633,7 @@ def manual(cliente, usd, usuario, nota, tipo="recarga"):
         if not nota:
             raise ValueError(gettext("Un ajuste necesita una nota."))
         with db.conectar() as con:
-            _dentro_del_tope(con, milesimas)
+            dentro_del_tope(con, milesimas)
             mov = libro.acreditar(con, cliente, "ajuste", milesimas, "ajuste", usuario=usuario, detalle=nota)
         if milesimas > 0:
             _en_segundo_plano(lambda: avisos.limpiar_aviso_bajo(cliente))
@@ -1637,7 +1642,7 @@ def manual(cliente, usd, usuario, nota, tipo="recarga"):
         raise ValueError(gettext("Una recarga manual es positiva; para descontar, usa un ajuste."))
     ahora = db.ahora()
     with db.conectar() as con:
-        _dentro_del_tope(con, milesimas)
+        dentro_del_tope(con, milesimas)
         rid = int(con.execute(db.recarga.insert().values(
             cliente=cliente, creada_en=ahora, actualizada_en=ahora, medio="manual", estado="aprobada",
             milesimas=milesimas, referencia=f"tmp-{uuid.uuid4().hex[:20]}", usuario=usuario, nota=nota or None,

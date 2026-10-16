@@ -422,3 +422,23 @@ def test_con_la_clave_de_arriba_cambian_y_avisan_a_todos_los_admins(http, entorn
     assert "prendió «Cobrar»" in cuerpos[0] and "pospago" in cuerpos[1] and "1,10" in cuerpos[2]
     assert "2,50" in cuerpos[3] and "US$ 3,00" in cuerpos[4] and "creó el plan «Pro»" in cuerpos[5]
     assert "editó el plan «Pro»" in cuerpos[6] and "US$ 1.200" in cuerpos[6]
+
+
+def test_un_plan_activado_a_mano_cuenta_en_el_tope_de_24_horas(entorno):
+    """Decisión de quien orquesta (2026-10-15): la bolsa de un plan activado a mano entra sin cobro de Wompi, como
+    una recarga manual: cuenta en el mismo tope."""
+    from cobros import libro, planes, recargas
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    libro.configurar("otro", usuario="admin", cobrar=True)
+    pid = planes.crear_plan("Pro", 1000, 1.25, 25, precio_anual_usd=10000, usuario="admin")
+    with pytest.raises(planes.ErrorPlan, match="el tope"):
+        planes.activar_manual("acme", pid, "anual", "admin")                 # 10 000 > 2 000
+    assert planes.suscripcion("acme") is None and libro.saldo("acme") == 0
+    planes.activar_manual("acme", pid, "mensual", "admin")                   # 1 000
+    assert recargas.tope_manual()[0] == 1_000_000
+    with pytest.raises(ValueError, match="el tope"):
+        recargas.manual("otro", 1500, "admin", "transferencia")              # 1 000 + 1 500 > 2 000
+    recargas.manual("otro", 1000, "admin", "transferencia")                  # el tope justo
+    with pytest.raises(planes.ErrorPlan, match="el tope"):
+        planes.activar_manual("otro", pid, "mensual", "admin")
+
