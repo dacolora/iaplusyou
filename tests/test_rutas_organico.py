@@ -224,8 +224,8 @@ def test_org_publicar_rechaza_canal_no_disponible_y_texto_vacio(app, base_tempor
     assert any("Falta el texto para Facebook (Página)" in m for m in _flashes(app["c"]))
     app["c"].post("/cliente/acme/organico/publicar", data={"pieza_id": str(pid)})
     assert any("Marca al menos una plataforma" in m for m in _flashes(app["c"]))
-    app["c"].post("/cliente/acme/organico/publicar", data=dict(FORM_OK, pieza_id="9999"))
-    assert any("no existe en este proyecto" in m for m in _flashes(app["c"]))
+    # PND-037 (2026-10-16): una pieza que no es de este proyecto es un 404 (antes, un aviso).
+    assert app["c"].post("/cliente/acme/organico/publicar", data=dict(FORM_OK, pieza_id="9999")).status_code == 404
     assert org.listar("acme") == [] and app["encolados"] == []
 
 
@@ -613,7 +613,11 @@ def test_final_edition_muestra_bloque_en_final_lista(app, base_temporal):
     assert 'name="volver" value="final"' in html
     assert "window.orgConfirmar" in html and 'name="ep_id"' not in html
     assert "Publicación orgánica" not in _seccion(_html(app), "creativeflowplus")
-    assert "Publicación orgánica" not in app["c"].get(f"/cliente/acme/creative_flow/{cf_id}/detalle").get_data(as_text=True)
+    # PND-037 (2026-10-16): el detalle de Crear del video listo también trae el bloque, pero con SU pieza (la
+    # clon), no la de la final (tests/test_organico_desde_crear.py).
+    crear = app["c"].get(f"/cliente/acme/creative_flow/{cf_id}/detalle").get_data(as_text=True)
+    assert f'name="pieza_id" value="{cf.pieza_id_por_legado("acme", cf_id)}"' in crear
+    assert f'name="pieza_id" value="{pid}"' not in crear
     # Una final en error no lo muestra.
     cf.actualizar_final("acme", fid, estado="error")
     assert "Publicación orgánica" not in app["c"].get(ruta_detalle).get_data(as_text=True)

@@ -71,6 +71,28 @@ before each batch) closes it later. TikTok is asynchronous: `check_status` decid
 
 **Candado común (2026-10-02, PND-114):** la ruta legado `cambiar_estado_ad` opera campaña, conjunto y anuncio mediante `lanzador._con_credenciales`, con `tareas.meta._LOCK`; `_ENV_LOCK` queda para el entorno del flujo viejo, no para configurar las credenciales globales de Meta.
 
+**Publicar en redes desde Crear (PND-037, 2026-10-16; Daniel 2026-10-13: «no debe ser solo para los que vienen de
+Meta», spec `docs/superpowers/specs/2026-10-16-organico-desde-crear-design.md`).** El detalle de una pieza de Crear
+(`cf_detalle`, llega por fetch) trae el mismo `bloque_organico` que Final edition cuando la sesión es un video listo con
+su `pieza` (`item.pieza_id`, la fila `pieza` tipo `video` con `legado_id = cf_id`, la misma de «Probar en Meta»): la ruta
+pone `org_publicable`, `precios` y `_contexto_organico` SOLO en ese caso (nunca para una imagen ni un video sin
+terminar). Las filas nacen `origen="manual"` sin `experimento_pieza_id`. El bloque manda `volver=creativeflowplus` y
+`cf=<id>`; `_volver_org` vuelve a `#creativeflowplus?cf=<id>` (solo si `cf` es `cf_[A-Za-z0-9_-]{1,80}`, `_RE_CF_VOLVER`)
+y el modal reabre el detalle con la barra; al cerrarlo el hash vuelve a `#creativeflowplus`. El aviso de confirmar nombra
+el video (`que=`, lo que escribió la persona recortado a 80, `data-que`; plantilla `ORG_PLANTILLA_CONFIRMAR_PUBLICAR_QUE`,
+reemplazo con función por un «$&»). `org_publicar` y `org_redactar` responden 404 a una pieza que no es del proyecto de
+la ruta ANTES de reservar saldo, crear o encolar (`_pieza_del_proyecto`, para todo origen: antes era un aviso o un 400
+después de reservar); las dos frenan una imagen o una pieza sin video listo (`estado` listo/degradada y `url_video`,
+`_motivo_no_publicable`): `org_publicar` con aviso y `org_redactar` con 400 ANTES de reservar saldo (auditoría
+2026-10-16: redactar cobraba un texto para algo que nunca se publicaría). Sin precio conocido, «Escribir texto con
+IA» dice «precio no disponible» (regla 1). `generador_prompts.caption_organico` mete los datos ajenos entre etiquetas
+con `_sin_cierre`: quita todo cierre de esa etiqueta sin distinguir mayúsculas ni espacios y hasta que no quede ninguno
+(un `replace` único dejaba pasar «</DESCRIPCION>» y «</desc</descripcion>ripcion>»); `regla_fidelidad` también. El enlace «Configuración › Canales orgánicos» (macro `enlace_canales`) cierra el `<dialog>` que lo
+contiene y lleva a `#config-canales-organicos` con `irAConfig` (dentro de un diálogo antes no se veía nada). El JS sigue
+en `org_scripts` (una vez en `cliente.html`; los `on*` del fragmento lo llaman). Pruebas:
+`tests/test_organico_desde_crear.py` (con `publicador._publicar_una` que revienta: nunca se publica de verdad). Falta la
+prueba real con un proyecto con redes conectadas antes de abrirlo a clientes: «hecho sin probar en real».
+
 PND-036 (2026-10-03): organico.crear rechaza tipo imagen antes de insertar una publicación; protege también un POST manual. PND-113: la primera activación del lanzador ajusta end_time antes de activar; se conserva el presupuesto y nunca se activa por actualizar fechas. Ver experimentos para reintentos y reanudación.
 
 **Error del legado (2026-10-07, PND-096):** la tarea `meta_publicar` sigue registrada para filas antiguas.

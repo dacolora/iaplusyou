@@ -402,3 +402,7 @@ le bloqueaban la predicción a la pieza que sí la pagó). (3) Sin precio, el bo
 precio no disponible)», nunca «sin pagar de nuevo». (4) `flowplus_lanzar.lanzar` no relanza una pieza en
 `REINTENTO_CON_CONFIRMACION` sin `confirmado=True` (solo «Reintentar» de Crear lo pasa, tras confirmar con el precio);
 Sprints «Reintentar» lo manda a Crear con un aviso y el director con `auto_lanzar` no la relanza.
+
+**Publicar en redes desde el detalle (PND-037, 2026-10-16):** un video listo de Crear trae «Publicación orgánica»
+(el `bloque_organico` de Final edition) en su detalle; publicar no cobra, «Escribir texto con IA» sí, con su precio.
+Detalle, aislamiento (404) y la vuelta `#creativeflowplus?cf=<id>` en la skill `meta-y-publicacion`.

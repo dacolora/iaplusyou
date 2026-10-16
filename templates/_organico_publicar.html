@@ -1,9 +1,14 @@
-{# Bloque 7: publicación orgánica de una pieza (Experimentos y Final edition).
+{# Bloque 7: publicación orgánica de una pieza (Experimentos, Final edition y,
+   desde PND-037 el 2026-10-16, cualquier video listo de Crear).
    Macros — se importan `with context` para ver canales_org,
-   publicaciones_por_pieza, trabajos_org, plataformas_org y cliente:
+   publicaciones_por_pieza, trabajos_org, plataformas_org, precios y cliente:
 
      {% from "_organico_publicar.html" import bloque_organico with context %}
      {{ bloque_organico(pieza_id, "experimentos", ep_id=pz.id) }}
+     {{ bloque_organico(item.pieza_id, "creativeflowplus", cf_id=item.id, que=texto) }}
+
+   `cf_id` vuelve al detalle de esa sesión de Crear (#creativeflowplus?cf=<id>) y
+   `que` nombra el video en el aviso de confirmar.
 
    El bloque pinta: la lista de publicaciones de la pieza (badge de estado,
    plataforma, enlace, error, «Reintentar»), la barra de progreso si el worker
@@ -13,12 +18,17 @@
    Publicar es público e irreversible: el submit pide confirm() y nada se
    publica sin ese clic.
 
-   En Final edition el bloque vive dentro de un <template> clonado: sus <script>
-   no corren, así que TODO el JS está en window.* (org_scripts, pintado una
-   sola vez en cliente.html) y se llama por atributos onXXX; la barra lleva
-   data-poll-job para que el modal arranque el polling al clonar. #}
+   El bloque llega por fetch (detalle de Crear, de una final, panel de una pieza):
+   sus <script> no correrían, así que TODO el JS está en window.* (org_scripts,
+   pintado una sola vez en cliente.html) y se llama por atributos onXXX; la barra
+   lleva data-poll-job para que el modal arranque el sondeo al insertarlo. #}
 
-{% macro bloque_organico(pieza_id, volver, ep_id=none) %}
+{# A Configuración › Canales orgánicos (apartado Conexiones). PND-037 (2026-10-16): dentro de un <dialog> modal
+   (el detalle de Crear o de una final, el panel de una pieza) antes solo cambiaba la pestaña de debajo y el diálogo
+   tapaba todo; ahora lo cierra y baja a la sección con irAConfig (data-ancla, para el delegado de Experimentos). #}
+{% macro enlace_canales() %}<a href="#config-canales-organicos" data-ir-tab="settings" data-ancla="config-canales-organicos" onclick="var d = this.closest('dialog'); if (d && d.open) d.close(); var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) b.click(); if (window.irAConfig) window.irAConfig('config-canales-organicos'); return false;">{{ _('Configuración › Canales orgánicos') }}</a>{% endmacro %}
+
+{% macro bloque_organico(pieza_id, volver, ep_id=none, cf_id=none, que=none) %}
 {% set pubs = publicaciones_por_pieza.get(pieza_id, []) %}
 {% set trabajo = trabajos_org.get(pieza_id) %}
 {% set vivas = pubs | selectattr("estado", "in", ["en_cola", "publicando", "publicada"]) | map(attribute="plataforma") | list %}
@@ -41,6 +51,7 @@
       {% if not trabajo and not pub.id_externo and pub.plataforma not in vivas %}
       <form method="post" action="{{ url_for('org_reintentar', cliente=cliente, pub_id=pub.id) }}" class="inline" onsubmit='return confirm({{ _("Se vuelve a publicar en %(plataforma)s. Revisa antes que no haya salido ya allá. ¿Reintentar?", plataforma=(pub.nombre_plataforma|traducir))|tojson }});'>
         <input type="hidden" name="volver" value="{{ volver }}">
+        {% if cf_id %}<input type="hidden" name="cf" value="{{ cf_id }}">{% endif %}
         <button class="btn-guardar btn-xs">{{ _('Reintentar') }}</button>
       </form>
       {% endif %}
@@ -63,11 +74,12 @@
   <details class="org-publicar">
     <summary>{{ _('Publicar orgánico') }}</summary>
     <form method="post" action="{{ url_for('org_publicar', cliente=cliente) }}" class="org-form"
-          data-url-redactar="{{ url_for('org_redactar', cliente=cliente) }}"
+          data-url-redactar="{{ url_for('org_redactar', cliente=cliente) }}"{% if que %} data-que="{{ que }}"{% endif %}
           onsubmit="return window.orgConfirmar(this);">
       <input type="hidden" name="pieza_id" value="{{ pieza_id }}">
       {% if ep_id %}<input type="hidden" name="ep_id" value="{{ ep_id }}">{% endif %}
       <input type="hidden" name="volver" value="{{ volver }}">
+      {% if cf_id %}<input type="hidden" name="cf" value="{{ cf_id }}">{% endif %}
       <div class="org-canales">
         {% for c in canales_org %}
         {% set ya = c.plataforma in vivas %}
@@ -82,7 +94,7 @@
       {% set disponibles = canales_org | selectattr("disponible") | rejectattr("plataforma", "in", vivas) | list %}
       {% if disponibles %}
       <div class="org-herramientas">
-        <button type="button" class="btn-guardar btn-xs" onclick="window.orgRedactar(this)">{{ _('Escribir texto con IA') }}{% if precios and precios.caption_organico and precios.caption_organico.usd is not none %} {{ _('≈ %(usd)s', usd=(precios.caption_organico.usd | precio | usd)) }}{% endif %}</button>
+        <button type="button" class="btn-guardar btn-xs" onclick="window.orgRedactar(this)">{{ _('Escribir texto con IA') }}{% if precios and precios.caption_organico and precios.caption_organico.usd is not none %} {{ _('≈ %(usd)s', usd=(precios.caption_organico.usd | precio | usd)) }}{% else %} · {{ _('precio no disponible') }}{% endif %}</button>
         <span class="org-aviso vacio" style="padding:0;"></span>
       </div>
       {% for c in disponibles %}
@@ -100,7 +112,7 @@
         <small class="vacio" style="padding:0;">{{ _('Público e irreversible: revisa el texto antes.') }}</small>
       </div>
       {% else %}
-      <p class="vacio" style="padding:.3rem 0 0;">{{ _('Sin canales para publicar:') }} {% if vivas %}{{ _('ya está en los conectados;') }} {% endif %}{{ _('conecta más en') }} <a href="#settings" data-ir-tab="settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">{{ _('Configuración › Canales orgánicos') }}</a>.</p>
+      <p class="vacio" style="padding:.3rem 0 0;">{{ _('Sin canales para publicar:') }} {% if vivas %}{{ _('ya está en los conectados;') }} {% endif %}{{ _('conecta más en') }} {{ enlace_canales() }}.</p>
       {% endif %}
     </form>
   </details>
@@ -146,8 +158,8 @@
 </form>
 {% endmacro %}
 
-{# Una sola vez por página (cliente.html). Todo en window.* porque en Crear
-   el bloque se clona desde un <template>. #}
+{# Una sola vez por página (cliente.html). Todo en window.* porque el bloque
+   llega por fetch (detalle de Crear o de una final, panel de una pieza). #}
 {% macro org_scripts() %}
 <script>
   var ORG_AVISO_MARCA_PLATAFORMA = {{ _('Marca al menos una plataforma.')|tojson }};
@@ -157,6 +169,7 @@
   var ORG_TEXTO_LISTO = {{ _('Texto listo: revísalo y edítalo si quieres.')|tojson }};
   var ORG_PLANTILLA_FALTA_TEXTO = {{ _('Falta el texto para: %(nombres)s. Escríbelo o pulsa «Escribir texto con IA».', nombres='{nombres}')|tojson }};
   var ORG_PLANTILLA_CONFIRMAR_PUBLICAR = {{ _('Se publica el video en %(nombres)s. Es público y no se puede deshacer desde aquí. ¿Publicar?', nombres='{nombres}')|tojson }};
+  var ORG_PLANTILLA_CONFIRMAR_PUBLICAR_QUE = {{ _('Se publica el video «%(video)s» en %(nombres)s. Es público y no se puede deshacer desde aquí. ¿Publicar?', video='{video}', nombres='{nombres}')|tojson }};
   window.orgToggle = function (cb) {
     var form = cb.closest('form');
     var caja = form && form.querySelector('.org-texto[data-plataforma="' + cb.value + '"]');
@@ -206,7 +219,13 @@
       alert(ORG_PLANTILLA_FALTA_TEXTO.replace('{nombres}', vacias.join(', ')));
       return false;
     }
-    return confirm(ORG_PLANTILLA_CONFIRMAR_PUBLICAR.replace('{nombres}', nombres.join(', ')));
+    // Con `data-que` (Crear, PND-037) el aviso nombra el video. Reemplazo con función: un «$&» del texto de la
+    // persona no se interpreta como patrón.
+    var que = form.dataset.que;
+    var aviso = (que ? ORG_PLANTILLA_CONFIRMAR_PUBLICAR_QUE : ORG_PLANTILLA_CONFIRMAR_PUBLICAR)
+      .replace('{nombres}', function () { return nombres.join(', '); });
+    if (que) aviso = aviso.replace('{video}', function () { return que; });
+    return confirm(aviso);
   };
 </script>
 {% endmacro %}

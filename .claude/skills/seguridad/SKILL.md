@@ -105,3 +105,12 @@ la clave, `dashboard._clave_actual_ok`): un fallo cuenta contra los MISMOS topes
 pasaba la confirmación (auditoría de seguridad de la revisión, 2026-10-15). Por lo mismo, **un admin no se desbloquea a
 sí mismo** en `/admin/cuentas/desbloquear` (ni su usuario ni su IP). Una acción nueva del admin que cree saldo usa
 `rutas._clave_para_mover_plata` y avisa a todos los admins. El detalle está en la skill `cobros` («Los controles de plata del admin»). Pruebas: `tests/test_cobros_controles_plata.py`, `tests/test_rutas_cuentas.py`.
+
+**Publicación orgánica: la pieza es del proyecto de la ruta (PND-037, 2026-10-16).** `org_publicar` y `org_redactar`
+buscan la `pieza` con el `cliente` de la URL (`dashboard._pieza_del_proyecto`) y responden 404 si no es suya, antes de
+reservar saldo, crear filas o encolar; la vuelta a Crear solo lleva un `cf` con forma de id (`_RE_CF_VOLVER`). Detalle en
+la skill `meta-y-publicacion`. Texto ajeno entre etiquetas de un prompt a Claude: quitar su cierre con
+`generador_prompts._sin_cierre` (sin distinguir mayúsculas ni espacios, repetido hasta que no cambie), nunca con un
+`replace` único: «</desc</descripcion>ripcion>» se rearma al quitar el de adentro (auditoría 2026-10-16; otros módulos
+tienen su propio `_sin_cierre` de un solo `replace`: `referentes/recrear.py`, `clasificar.py`, `sugerir.py`,
+`doctrina/diagnostico.py`).
